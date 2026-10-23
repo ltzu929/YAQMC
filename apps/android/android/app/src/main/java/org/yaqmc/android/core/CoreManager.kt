@@ -66,8 +66,18 @@ object CoreManager {
         check(initialized.get() && activeHandle != 0L) { "Rust Core is unavailable" }
         val id = ids.incrementAndGet()
         onResponse?.let { oneShotResponses[id] = it }
-        nativeInvoke(activeHandle, id, origin, method, paramsJson)
+        try {
+            nativeInvoke(activeHandle, id, origin, method, paramsJson)
+        } catch (error: Throwable) {
+            oneShotResponses.remove(id)
+            throw error
+        }
         return id
+    }
+
+    /** Drop a cancelled host request's response closure; the Core operation may still finish. */
+    fun forgetResponse(id: Long) {
+        oneShotResponses.remove(id)
     }
 
     fun shutdown() {

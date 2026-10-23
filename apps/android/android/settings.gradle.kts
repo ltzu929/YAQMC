@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "yaqmc-android"
 include(":app")
+include(":nativeApp")
 
 // Capacitor may be npm-hoisted to the workspace root or kept beside this app.
 val capacitorAndroid = requireNotNull(
