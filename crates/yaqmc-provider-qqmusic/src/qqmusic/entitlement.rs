@@ -617,6 +617,92 @@ mod tests {
     }
 
     #[test]
+    fn unavailable_automatic_source_keeps_the_best_lower_entitled_quality() {
+        let all_qualities = vec![
+            AudioQuality::Standard,
+            AudioQuality::High,
+            AudioQuality::Lossless,
+            AudioQuality::HiRes,
+            AudioQuality::Master,
+        ];
+        for (failed_quality, rights, expected) in [
+            (
+                AudioQuality::Master,
+                all_qualities.clone(),
+                AudioQuality::HiRes,
+            ),
+            (
+                AudioQuality::HiRes,
+                all_qualities.clone(),
+                AudioQuality::Lossless,
+            ),
+            (
+                AudioQuality::Lossless,
+                all_qualities.clone(),
+                AudioQuality::High,
+            ),
+            (AudioQuality::High, all_qualities, AudioQuality::Standard),
+            (
+                AudioQuality::HiRes,
+                vec![AudioQuality::Standard],
+                AudioQuality::Standard,
+            ),
+        ] {
+            let failed = PlaybackSourceSelection {
+                requested_quality: AudioQualityPreference::Automatic,
+                resolved_quality: failed_quality,
+                fallback_reason: None,
+                preview: false,
+                quality_capabilities: Vec::new(),
+            };
+            let preferred = super::super::unavailable_fallback_preference(&failed)
+                .expect("automatic can descend");
+            let entitlement = entitlement(rights);
+            let requested = candidates_for_request(preferred, &entitlement, &all_candidates());
+            assert!(requested.iter().all(|candidate| candidate.preview
+                || (rank(candidate.quality) < rank(failed_quality)
+                    && entitlement.permitted_qualities.contains(&candidate.quality))));
+            let decision = choose_source(
+                preferred,
+                &entitlement,
+                &all_formats(),
+                &all_candidates(),
+                &availability(&["master", "hi-res", "lossless", "high", "standard"]),
+                None,
+            )
+            .expect("best lower authorized source");
+            assert_eq!(decision.candidate.quality, expected);
+        }
+    }
+
+    #[test]
+    fn unavailable_fallback_stops_at_standard_and_preserves_explicit_or_preview_requests() {
+        for (requested_quality, resolved_quality, preview) in [
+            (
+                AudioQualityPreference::Automatic,
+                AudioQuality::Standard,
+                false,
+            ),
+            (AudioQualityPreference::HiRes, AudioQuality::HiRes, false),
+            (
+                AudioQualityPreference::Lossless,
+                AudioQuality::Lossless,
+                false,
+            ),
+            (AudioQualityPreference::Automatic, AudioQuality::High, true),
+        ] {
+            let failed = PlaybackSourceSelection {
+                requested_quality,
+                resolved_quality,
+                fallback_reason: None,
+                preview,
+                quality_capabilities: Vec::new(),
+            };
+            assert!(super::super::unavailable_fallback_preference(&failed).is_none());
+        }
+    }
+
+    #[test]
     fn deterministic_quality_matrix_respects_rights_availability_and_preview() {
         let cases = [
             (

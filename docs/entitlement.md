@@ -36,8 +36,13 @@ Automatic selecting Standard for a free account is the requested outcome, not a 
 An excluded paid quality is removed before the single batched vkey request. Missing rights and a missing source remain
 distinct native errors when no lower or preview source can be selected.
 
-Hi-Res uses the clear `RS01…flac` candidate and is accepted only after the live vkey result proves that resource
-exists. Master and encrypted lossless candidates use the account-bound `GetEVkey/CgiGetEVkey` path. A membership label is
+Hi-Res uses the clear `RS01…flac` candidate. A successful vkey result makes it eligible for preparation, but the CDN
+can still reject the file. After one URL refresh, Automatic descends through lower entitled qualities if the CDN
+continues to return an unavailable/expired response (401, 403, 404, or 410). Each lower quality is tried once; the
+selection retains Automatic and reports `source-unavailable` without marking the decoder unsupported. Explicit
+preferences, network failures, and account cancellation do not trigger this recovery.
+
+Master and encrypted lossless candidates use the account-bound `GetEVkey/CgiGetEVkey` path. A membership label is
 not sufficient proof: YAQMC only reports the selected quality after both the normalized entitlement and the live
 source result permit it. The PlayerBar request applies only to the current song; advancing the queue returns to the
 persisted Settings preference.

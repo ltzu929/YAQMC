@@ -1502,9 +1502,13 @@ impl PlayerService {
         self.publish("player.playback", &buffering);
 
         let mut failed_selection = resolved.selection.clone();
-        let preparation = match self.preparer.prepare(resolved).await {
+        let mut source_guard = resolved.epoch_guard.clone();
+        let mut preparation = match self.preparer.prepare(resolved).await {
             Ok(source) => Ok(source),
             Err(PlaybackSourceError::UrlExpired) if allow_runtime_expiry_retry => {
+                if let Err(error) = source_guard.validate() {
+                    return self.fail_load(generation, &error).await;
+                }
                 let refreshed = match self.resolver.resolve(&song).await {
                     Ok(source) => source,
                     Err(error) => return self.fail_load(generation, &error).await,
@@ -1512,11 +1516,60 @@ impl PlayerService {
                 if generation != self.load_generation.load(Ordering::Acquire) {
                     return Ok(self.snapshot().await);
                 }
+                if let Err(error) = source_guard.validate() {
+                    return self.fail_load(generation, &error).await;
+                }
                 failed_selection = refreshed.selection.clone();
+                source_guard = refreshed.epoch_guard.clone();
                 self.preparer.prepare(refreshed).await
             }
             Err(error) => Err(error),
         };
+        // A successful vkey response does not prove the CDN file is readable.
+        // Refresh once above, then descend through automatic qualities only.
+        // Strict descent bounds recovery even if a provider returns a bad fallback.
+        while matches!(&preparation, Err(PlaybackSourceError::UrlExpired))
+            && failed_selection.requested_quality == AudioQualityPreference::Automatic
+            && !failed_selection.preview
+            && failed_selection.resolved_quality != AudioQuality::Standard
+        {
+            if generation != self.load_generation.load(Ordering::Acquire) {
+                return Ok(self.snapshot().await);
+            }
+            if let Err(error) = source_guard.validate() {
+                return self.fail_load(generation, &error).await;
+            }
+            tracing::warn!(
+                target: "player.source",
+                failed_quality = ?failed_selection.resolved_quality,
+                "refreshed automatic source is unavailable; trying a lower quality"
+            );
+            let fallback = match self
+                .resolver
+                .resolve_unavailable_fallback(&song, &failed_selection)
+                .await
+            {
+                Ok(source) => source,
+                Err(error) => return self.fail_load(generation, &error).await,
+            };
+            if generation != self.load_generation.load(Ordering::Acquire) {
+                return Ok(self.snapshot().await);
+            }
+            if let Err(error) = source_guard.validate() {
+                return self.fail_load(generation, &error).await;
+            }
+            if fallback.selection.requested_quality != AudioQualityPreference::Automatic
+                || quality_rank(fallback.selection.resolved_quality)
+                    >= quality_rank(failed_selection.resolved_quality)
+            {
+                return self
+                    .fail_load(generation, &PlaybackSourceError::UrlExpired)
+                    .await;
+            }
+            failed_selection = fallback.selection.clone();
+            source_guard = fallback.epoch_guard.clone();
+            preparation = self.preparer.prepare(fallback).await;
+        }
         let mut prepared = match preparation {
             Ok(source) => source,
             Err(error)
@@ -2305,6 +2358,16 @@ impl PlayerService {
     }
 }
 
+fn quality_rank(quality: AudioQuality) -> u8 {
+    match quality {
+        AudioQuality::Standard => 1,
+        AudioQuality::High => 2,
+        AudioQuality::Lossless => 3,
+        AudioQuality::HiRes => 4,
+        AudioQuality::Master => 5,
+    }
+}
+
 fn automatic_client_fallback_candidate(selection: &PlaybackSourceSelection) -> bool {
     selection.requested_quality == AudioQualityPreference::Automatic
         && matches!(
@@ -2920,6 +2983,113 @@ mod tests {
 
     struct ExpireOncePreparer {
         calls: Arc<AtomicUsize>,
+    }
+
+    type QualityCalls = Arc<Mutex<Vec<AudioQuality>>>;
+
+    struct UnavailableFallbackResolver {
+        requested: AudioQualityPreference,
+        calls: Arc<Mutex<Vec<AudioQuality>>>,
+        repeat_quality: bool,
+    }
+
+    #[async_trait]
+    impl PlaybackSourceResolver for UnavailableFallbackResolver {
+        async fn resolve(
+            &self,
+            song: &Song,
+        ) -> Result<crate::media::ResolvedPlaybackSource, PlaybackSourceError> {
+            self.calls.lock().unwrap().push(song.quality);
+            let mut source = resolved(song);
+            source.selection.requested_quality = self.requested;
+            Ok(source)
+        }
+
+        async fn resolve_unavailable_fallback(
+            &self,
+            song: &Song,
+            failed: &PlaybackSourceSelection,
+        ) -> Result<crate::media::ResolvedPlaybackSource, PlaybackSourceError> {
+            let quality = if self.repeat_quality {
+                failed.resolved_quality
+            } else {
+                match failed.resolved_quality {
+                    AudioQuality::Master => AudioQuality::HiRes,
+                    AudioQuality::HiRes => AudioQuality::Lossless,
+                    AudioQuality::Lossless => AudioQuality::High,
+                    AudioQuality::High => AudioQuality::Standard,
+                    AudioQuality::Standard => return Err(PlaybackSourceError::UrlExpired),
+                }
+            };
+            self.calls.lock().unwrap().push(quality);
+            if song.id == "slow-fallback" {
+                tokio::time::sleep(Duration::from_millis(120)).await;
+            }
+            let mut source = resolved(song);
+            source.selection.resolved_quality = quality;
+            source.selection.fallback_reason = Some(PlaybackFallbackReason::SourceUnavailable);
+            Ok(source)
+        }
+    }
+
+    struct UnavailableQualityPreparer {
+        playable: Option<AudioQuality>,
+        error: PlaybackSourceError,
+        calls: Arc<Mutex<Vec<AudioQuality>>>,
+    }
+
+    struct CancelExpiredPreparer;
+
+    #[async_trait]
+    impl MediaPreparer for CancelExpiredPreparer {
+        async fn prepare(
+            &self,
+            source: crate::media::ResolvedPlaybackSource,
+        ) -> Result<crate::audio::PreparedPlaybackSource, PlaybackSourceError> {
+            source.epoch_guard.cancellation_token().cancel();
+            Err(PlaybackSourceError::UrlExpired)
+        }
+    }
+
+    #[async_trait]
+    impl MediaPreparer for UnavailableQualityPreparer {
+        async fn prepare(
+            &self,
+            source: crate::media::ResolvedPlaybackSource,
+        ) -> Result<crate::audio::PreparedPlaybackSource, PlaybackSourceError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(source.selection.resolved_quality);
+            if Some(source.selection.resolved_quality) != self.playable {
+                return Err(self.error.clone());
+            }
+            crate::media::PassthroughMediaPreparer.prepare(source).await
+        }
+    }
+
+    fn unavailable_quality_runtime(
+        requested: AudioQualityPreference,
+        playable: Option<AudioQuality>,
+        error: PlaybackSourceError,
+        repeat_quality: bool,
+    ) -> (PlayerService, QualityCalls, QualityCalls) {
+        let resolver_calls = Arc::new(Mutex::new(Vec::new()));
+        let preparer_calls = Arc::new(Mutex::new(Vec::new()));
+        let player = PlayerService::with_runtime(
+            Arc::new(crate::audio::TestAudioEngine::default()),
+            Arc::new(UnavailableFallbackResolver {
+                requested,
+                calls: Arc::clone(&resolver_calls),
+                repeat_quality,
+            }),
+            Arc::new(UnavailableQualityPreparer {
+                playable,
+                error,
+                calls: Arc::clone(&preparer_calls),
+            }),
+        );
+        (player, resolver_calls, preparer_calls)
     }
 
     #[async_trait]
@@ -4523,6 +4693,254 @@ mod tests {
         assert_eq!(snapshot.playback_state, PlaybackState::Playing);
         assert_eq!(resolver_calls.load(Ordering::Acquire), 2);
         assert_eq!(preparer_calls.load(Ordering::Acquire), 2);
+    }
+
+    #[tokio::test]
+    async fn automatic_hires_url_rejection_falls_back_to_lossless_after_one_refresh() {
+        let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+            AudioQualityPreference::Automatic,
+            Some(AudioQuality::Lossless),
+            PlaybackSourceError::UrlExpired,
+            false,
+        );
+        let mut track = song("hires-cdn-rejected", 10_000);
+        track.quality = AudioQuality::HiRes;
+        let snapshot = player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![track],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .expect("automatic recovers with lossless");
+
+        assert_eq!(snapshot.playback_state, PlaybackState::Playing);
+        assert!(snapshot.playback_error.is_none());
+        let selection = snapshot.source_selection.expect("actual selection");
+        assert_eq!(
+            selection.requested_quality,
+            AudioQualityPreference::Automatic
+        );
+        assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
+        assert_eq!(
+            selection.fallback_reason,
+            Some(PlaybackFallbackReason::SourceUnavailable)
+        );
+        let expected = vec![
+            AudioQuality::HiRes,
+            AudioQuality::HiRes,
+            AudioQuality::Lossless,
+        ];
+        assert_eq!(*resolver_calls.lock().unwrap(), expected);
+        assert_eq!(*preparer_calls.lock().unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn automatic_unavailable_quality_recovery_descends_once_per_quality_and_stops() {
+        for playable in [Some(AudioQuality::Standard), None] {
+            let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+                AudioQualityPreference::Automatic,
+                playable,
+                PlaybackSourceError::UrlExpired,
+                false,
+            );
+            let mut track = song("unavailable-ladder", 10_000);
+            track.quality = AudioQuality::Master;
+            let result = player
+                .play_tracks(PlayTracksRequest {
+                    tracks: vec![track],
+                    start_at_id: None,
+                    shuffle: None,
+                })
+                .await;
+            assert_eq!(result.is_ok(), playable.is_some());
+            let snapshot = player.snapshot().await;
+            if playable.is_some() {
+                assert_eq!(snapshot.playback_state, PlaybackState::Playing);
+                assert_eq!(
+                    snapshot.source_selection.unwrap().resolved_quality,
+                    AudioQuality::Standard
+                );
+            } else {
+                assert_eq!(snapshot.playback_error.unwrap().code, "media-url-expired");
+            }
+            let expected = vec![
+                AudioQuality::Master,
+                AudioQuality::Master,
+                AudioQuality::HiRes,
+                AudioQuality::Lossless,
+                AudioQuality::High,
+                AudioQuality::Standard,
+            ];
+            assert_eq!(*resolver_calls.lock().unwrap(), expected);
+            assert_eq!(*preparer_calls.lock().unwrap(), expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn explicit_hires_url_rejection_is_not_hidden_by_a_lower_quality() {
+        let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+            AudioQualityPreference::HiRes,
+            Some(AudioQuality::Lossless),
+            PlaybackSourceError::UrlExpired,
+            false,
+        );
+        let mut track = song("explicit-hires", 10_000);
+        track.quality = AudioQuality::HiRes;
+        assert!(player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![track],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .is_err());
+        let expected = vec![AudioQuality::HiRes, AudioQuality::HiRes];
+        assert_eq!(*resolver_calls.lock().unwrap(), expected);
+        assert_eq!(*preparer_calls.lock().unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn automatic_unavailable_quality_recovery_does_not_mask_other_errors() {
+        for error in [
+            PlaybackSourceError::Network,
+            PlaybackSourceError::AuthenticationExpired,
+            PlaybackSourceError::Cancelled,
+            PlaybackSourceError::CacheFailure,
+        ] {
+            let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+                AudioQualityPreference::Automatic,
+                Some(AudioQuality::Lossless),
+                error,
+                false,
+            );
+            let mut track = song("other-source-error", 10_000);
+            track.quality = AudioQuality::HiRes;
+            let _ = player
+                .play_tracks(PlayTracksRequest {
+                    tracks: vec![track],
+                    start_at_id: None,
+                    shuffle: None,
+                })
+                .await;
+            assert!(!player.snapshot().await.is_playing);
+            assert_eq!(*resolver_calls.lock().unwrap(), vec![AudioQuality::HiRes]);
+            assert_eq!(*preparer_calls.lock().unwrap(), vec![AudioQuality::HiRes]);
+        }
+    }
+
+    #[tokio::test]
+    async fn automatic_unavailable_quality_recovery_rejects_a_non_descending_provider() {
+        let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+            AudioQualityPreference::Automatic,
+            None,
+            PlaybackSourceError::UrlExpired,
+            true,
+        );
+        let mut track = song("repeated-hires", 10_000);
+        track.quality = AudioQuality::HiRes;
+        assert!(player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![track],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .is_err());
+        assert_eq!(
+            *resolver_calls.lock().unwrap(),
+            vec![AudioQuality::HiRes; 3]
+        );
+        assert_eq!(
+            *preparer_calls.lock().unwrap(),
+            vec![AudioQuality::HiRes; 2]
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_source_does_not_refresh_or_try_lower_quality() {
+        let resolver_calls = Arc::new(Mutex::new(Vec::new()));
+        let player = PlayerService::with_runtime(
+            Arc::new(crate::audio::TestAudioEngine::default()),
+            Arc::new(UnavailableFallbackResolver {
+                requested: AudioQualityPreference::Automatic,
+                calls: Arc::clone(&resolver_calls),
+                repeat_quality: false,
+            }),
+            Arc::new(CancelExpiredPreparer),
+        );
+        let mut track = song("cancelled-expired-source", 10_000);
+        track.quality = AudioQuality::HiRes;
+        let _ = player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![track],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await;
+        let snapshot = player.snapshot().await;
+        assert!(!snapshot.is_playing);
+        assert!(snapshot.playback_error.is_none());
+        assert_eq!(*resolver_calls.lock().unwrap(), vec![AudioQuality::HiRes]);
+    }
+
+    #[tokio::test]
+    async fn unavailable_quality_recovery_cannot_restore_a_previous_track() {
+        let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+            AudioQualityPreference::Automatic,
+            Some(AudioQuality::Standard),
+            PlaybackSourceError::UrlExpired,
+            false,
+        );
+        let player = Arc::new(player);
+        let loading_player = Arc::clone(&player);
+        let mut slow = song("slow-fallback", 10_000);
+        slow.quality = AudioQuality::HiRes;
+        let loading = tokio::spawn(async move {
+            loading_player
+                .play_tracks(PlayTracksRequest {
+                    tracks: vec![slow],
+                    start_at_id: None,
+                    shuffle: None,
+                })
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !resolver_calls
+                .lock()
+                .unwrap()
+                .contains(&AudioQuality::Lossless)
+            {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("fallback starts");
+        let mut next = song("next-track", 10_000);
+        next.quality = AudioQuality::Standard;
+        player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![next],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .expect("new track plays");
+        loading.await.unwrap().expect("stale fallback is discarded");
+        let snapshot = player.snapshot().await;
+        assert_eq!(
+            snapshot.queue[snapshot.current_index.unwrap()].id,
+            "next-track"
+        );
+        assert!(snapshot.is_playing);
+        assert_eq!(
+            *preparer_calls.lock().unwrap(),
+            vec![
+                AudioQuality::HiRes,
+                AudioQuality::HiRes,
+                AudioQuality::Standard
+            ]
+        );
     }
 
     #[tokio::test]

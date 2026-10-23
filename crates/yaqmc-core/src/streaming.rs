@@ -347,6 +347,11 @@ pub async fn prepare_progressive(
     );
 
     if is_expired_status(response.status()) {
+        tracing::warn!(
+            target: "stream.range",
+            status = response.status().as_u16(),
+            "initial media URL was rejected by the CDN"
+        );
         return Err(ProgressiveError::UrlExpired);
     }
     match response.status() {
@@ -572,6 +577,11 @@ fn fetch_segment(
         .send()
         .map_err(|_| ProgressiveError::Network)?;
     if is_expired_status(response.status()) {
+        tracing::warn!(
+            target: "stream.range",
+            status = response.status().as_u16(),
+            "media range URL was rejected by the CDN"
+        );
         return Err(ProgressiveError::UrlExpired);
     }
     match response.status() {

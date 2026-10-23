@@ -1743,6 +1743,59 @@ impl PlaybackSourceResolver for QQMusicService {
         })
     }
 
+    async fn resolve_unavailable_fallback(
+        &self,
+        song: &Song,
+        failed: &PlaybackSourceSelection,
+    ) -> Result<ResolvedPlaybackSource, PlaybackSourceError> {
+        let preferred =
+            unavailable_fallback_preference(failed).ok_or(PlaybackSourceError::UrlExpired)?;
+        let provider = song
+            .provider
+            .as_ref()
+            .filter(|provider| provider.provider_id == "qqmusic")
+            .ok_or(PlaybackSourceError::TrackUnavailable)?;
+        let (session, entitlement, epoch_guard) = self
+            .playback_context()
+            .await
+            .map_err(map_provider_source_error)?;
+        let source = self
+            .client
+            .resolve_source(
+                song,
+                preferred,
+                session.as_ref(),
+                &entitlement,
+                epoch_guard,
+                self.account_transport.as_ref(),
+            )
+            .await;
+        if matches!(&source, Err(QQMusicError::AuthenticationExpired)) {
+            self.session_invalid.store(true, Ordering::Release);
+        }
+        let mut source = source.map_err(map_provider_source_error)?;
+        source.selection.requested_quality = AudioQualityPreference::Automatic;
+        if !source.selection.preview {
+            source.selection.fallback_reason = Some(PlaybackFallbackReason::SourceUnavailable);
+        }
+        for capability in &mut source.selection.quality_capabilities {
+            if capability.quality == failed.resolved_quality
+                || failed.quality_capabilities.iter().any(|previous| {
+                    previous.quality == capability.quality
+                        && previous.resource
+                            == yaqmc_provider_api::ResourceCapabilityState::Unavailable
+                })
+            {
+                capability.resource = yaqmc_provider_api::ResourceCapabilityState::Unavailable;
+                capability.playable = false;
+            }
+        }
+        let _ =
+            self.storage
+                .record_playback_snapshot(&provider.provider_id, &provider.track_id, song);
+        Ok(source)
+    }
+
     async fn resolve_client_fallback(
         &self,
         song: &Song,
@@ -1800,6 +1853,21 @@ impl PlaybackSourceResolver for QQMusicService {
             self.storage
                 .record_playback_snapshot(&provider.provider_id, &provider.track_id, song);
         Ok(source)
+    }
+}
+
+fn unavailable_fallback_preference(
+    failed: &PlaybackSourceSelection,
+) -> Option<AudioQualityPreference> {
+    if failed.requested_quality != AudioQualityPreference::Automatic || failed.preview {
+        return None;
+    }
+    match failed.resolved_quality {
+        AudioQuality::Master => Some(AudioQualityPreference::HiRes),
+        AudioQuality::HiRes => Some(AudioQualityPreference::Lossless),
+        AudioQuality::Lossless => Some(AudioQualityPreference::High),
+        AudioQuality::High => Some(AudioQualityPreference::Standard),
+        AudioQuality::Standard => None,
     }
 }
 
