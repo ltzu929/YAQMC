@@ -19,7 +19,7 @@ use std::fmt::Write as _;
 
 /// The origin+path prefix that every generated URL must start with. Anything else
 /// is rejected before the URL is handed to the opener plugin.
-pub const ISSUE_URL_PREFIX: &str = "https://github.com/YAQMC/YAQMC/issues/new";
+pub const ISSUE_URL_PREFIX: &str = "https://github.com/ltzu929/YAQMC/issues/new";
 /// Conservative body cap so the generated URL stays well below the GitHub server
 /// limit and typical browser address bar limit. Anything longer forces the user
 /// into copy-issue-text fallback.
@@ -302,6 +302,18 @@ fn compose_body(
         )
         .ok();
     }
+    writeln!(
+        &mut body,
+        "- Playback: {} · quality={} · source generation={}",
+        snapshot.playback.state,
+        snapshot
+            .playback
+            .selected_quality
+            .as_deref()
+            .unwrap_or("not prepared"),
+        snapshot.playback.source_generation
+    )
+    .ok();
     if !snapshot.recent_errors.is_empty() {
         writeln!(&mut body, "\n**Recent errors (bounded)**").ok();
         for record in snapshot.recent_errors.iter().rev().take(5) {

@@ -328,7 +328,7 @@ pub async fn prepare_progressive(
         .send()
         .await
         .map_err(|error| {
-            tracing::debug!(target: "stream.range", error = %error, "initial progressive media request failed");
+            tracing::warn!(target: "stream.range", timeout = error.is_timeout(), connect = error.is_connect(), "initial progressive media request failed");
             ProgressiveError::Network
         })?;
 

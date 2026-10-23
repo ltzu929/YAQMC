@@ -1502,6 +1502,9 @@ impl PlayerService {
         self.publish("player.playback", &buffering);
 
         let mut failed_selection = resolved.selection.clone();
+        tracing::info!(target: "player.source", requested = ?failed_selection.requested_quality,
+            resolved = ?failed_selection.resolved_quality, preview = failed_selection.preview,
+            "preparing selected playback source");
         let mut source_guard = resolved.epoch_guard.clone();
         let mut preparation = match self.preparer.prepare(resolved).await {
             Ok(source) => Ok(source),
@@ -1528,8 +1531,10 @@ impl PlayerService {
         // A successful vkey response does not prove the CDN file is readable.
         // Refresh once above, then descend through automatic qualities only.
         // Strict descent bounds recovery even if a provider returns a bad fallback.
-        while matches!(&preparation, Err(PlaybackSourceError::UrlExpired))
-            && failed_selection.requested_quality == AudioQualityPreference::Automatic
+        while matches!(
+            &preparation,
+            Err(PlaybackSourceError::UrlExpired | PlaybackSourceError::Network)
+        ) && failed_selection.requested_quality == AudioQualityPreference::Automatic
             && !failed_selection.preview
             && failed_selection.resolved_quality != AudioQuality::Standard
         {
@@ -1542,6 +1547,7 @@ impl PlayerService {
             tracing::warn!(
                 target: "player.source",
                 failed_quality = ?failed_selection.resolved_quality,
+                failure = ?preparation.as_ref().err(),
                 "refreshed automatic source is unavailable; trying a lower quality"
             );
             let fallback = match self
@@ -1567,6 +1573,8 @@ impl PlayerService {
                     .await;
             }
             failed_selection = fallback.selection.clone();
+            tracing::info!(target: "player.source", resolved = ?failed_selection.resolved_quality,
+                "trying automatic quality fallback");
             source_guard = fallback.epoch_guard.clone();
             preparation = self.preparer.prepare(fallback).await;
         }
@@ -1775,6 +1783,13 @@ impl PlayerService {
             return Err(self.cancel_active_source().await);
         }
         let failure = source_failure(error);
+        if let Some(handle) = logging::global() {
+            handle.record_error(logging::ErrorRecord::new(
+                &failure.code,
+                "playback",
+                &failure.message,
+            ));
+        }
         tracing::warn!(
             target: "player.source",
             error_code = failure.code,
@@ -4801,9 +4816,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn automatic_network_failure_falls_back_but_explicit_quality_does_not() {
+        for (requested, should_play) in [
+            (AudioQualityPreference::Automatic, true),
+            (AudioQualityPreference::HiRes, false),
+        ] {
+            let (player, _, calls) = unavailable_quality_runtime(
+                requested,
+                Some(AudioQuality::Lossless),
+                PlaybackSourceError::Network,
+                false,
+            );
+            let mut track = song("network-quality-fallback", 10_000);
+            track.quality = AudioQuality::HiRes;
+            let result = player
+                .play_tracks(PlayTracksRequest {
+                    tracks: vec![track],
+                    start_at_id: None,
+                    shuffle: None,
+                })
+                .await;
+            assert_eq!(result.is_ok(), should_play);
+            assert_eq!(calls.lock().unwrap().len(), if should_play { 2 } else { 1 });
+        }
+    }
+
+    #[tokio::test]
     async fn automatic_unavailable_quality_recovery_does_not_mask_other_errors() {
         for error in [
-            PlaybackSourceError::Network,
             PlaybackSourceError::AuthenticationExpired,
             PlaybackSourceError::Cancelled,
             PlaybackSourceError::CacheFailure,

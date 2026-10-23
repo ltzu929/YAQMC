@@ -53,7 +53,7 @@ import { IssueReporterDialog } from './IssueReporterDialog';
 const samplePreview = {
   title: '[bug] cannot play track',
   body: 'preview body content',
-  url: 'https://github.com/YAQMC/YAQMC/issues/new?title=x',
+  url: 'https://github.com/ltzu929/YAQMC/issues/new?title=x',
   tooLongForBrowser: false,
   includedFields: ['title'],
   template: 'bug-report.yml',
@@ -241,4 +241,27 @@ describe('IssueReporterDialog', () => {
     );
     warn.mockRestore();
   });
+});
+
+it('refreshes the issue draft with the newly exported bundle before opening GitHub', async () => {
+  configureDefaultInvokes();
+  render(<IssueReporterDialog open onClose={vi.fn()} />);
+  await screen.findByText(samplePreview.title);
+  fireEvent.click(screen.getByRole('button', { name: /open github|打开 github/i }));
+  await waitFor(() => expect(openExternalMock).toHaveBeenCalled());
+  expect(invokeMock).toHaveBeenCalledWith(
+    'issue_reporter_preview',
+    expect.objectContaining({
+      draft: expect.objectContaining({ bundleFileName: sampleBundle.path.split(/[\\/]/).pop() }),
+    }),
+  );
+});
+it('keeps GitHub closed when the requested bundle export fails', async () => {
+  configureDefaultInvokes();
+  exportBundleMock.mockRejectedValue(new Error('export failed'));
+  render(<IssueReporterDialog open onClose={vi.fn()} />);
+  await screen.findByText(samplePreview.title);
+  fireEvent.click(screen.getByRole('button', { name: /open github|打开 github/i }));
+  await screen.findByRole('alert');
+  expect(openExternalMock).not.toHaveBeenCalled();
 });

@@ -5366,7 +5366,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "yaqmc-android"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "jni 0.22.4",
  "ndk-context",
@@ -5381,7 +5381,7 @@ dependencies = [
 
 [[package]]
 name = "yaqmc-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -5420,7 +5420,7 @@ dependencies = [
 
 [[package]]
 name = "yaqmc-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5429,7 +5429,7 @@ dependencies = [
 
 [[package]]
 name = "yaqmc-provider-api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "reqwest 0.13.4",
@@ -5442,7 +5442,7 @@ dependencies = [
 
 [[package]]
 name = "yaqmc-provider-qqmusic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "axum",

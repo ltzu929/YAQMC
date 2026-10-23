@@ -60,6 +60,14 @@ export function IssueReporterDialog({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+    setBundle(null);
+    setPreview(null);
+    setError(null);
+    setStatus(null);
+  }, [open]);
+
   const draft = useMemo<IssueDraft>(
     () => ({
       category,
@@ -93,7 +101,7 @@ export function IssueReporterDialog({
     return {
       title: `[${category}] ${summary || 'issue'}`,
       body: `**Summary**\n\n${summary}\n\n**Steps / Details**\n\n${description}\n\nBrowser preview mode — the native runtime is required to compose an issue URL.`,
-      url: 'https://github.com/YAQMC/YAQMC/issues/new',
+      url: 'https://github.com/ltzu929/YAQMC/issues/new',
       tooLongForBrowser: false,
       includedFields: ['title'],
       template: 'bug-report.yml',
@@ -126,36 +134,41 @@ export function IssueReporterDialog({
 
   const effectivePreview = preview ?? browserPreview;
 
-  const handleGenerateBundle = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    setStatus(null);
-    try {
-      const result = await exportDiagnosticsBundle({
-        ...(diagnosticsRequest ?? {}),
-        includeLogs: true,
-        overrideUnresolved: false,
-        description: description || summary,
-        issueCategory: category,
-      });
-      setBundle(result);
-      const name = result.path.split(/[\\/]/).pop() ?? result.path;
-      setStatus(t('issueReporter.bundleReady', { name }));
-      logger.info('issue.bundle', 'bundle exported', {
-        bytes: result.bytes,
-        redactedValues: result.redaction.valuesRedacted,
-      });
-    } catch (caught) {
-      if (caught instanceof DiagnosticsExportAbortedError) {
-        return;
+  const handleGenerateBundle = useCallback(
+    async (manageBusy = true) => {
+      if (manageBusy) setBusy(true);
+      setError(null);
+      setStatus(null);
+      try {
+        const result = await exportDiagnosticsBundle({
+          ...(diagnosticsRequest ?? {}),
+          includeLogs: true,
+          overrideUnresolved: false,
+          description: description || summary,
+          issueCategory: category,
+        });
+        setBundle(result);
+        const name = result.path.split(/[\\/]/).pop() ?? result.path;
+        setStatus(t('issueReporter.bundleReady', { name }));
+        logger.info('issue.bundle', 'bundle exported', {
+          bytes: result.bytes,
+          redactedValues: result.redaction.valuesRedacted,
+        });
+        return result;
+      } catch (caught) {
+        if (caught instanceof DiagnosticsExportAbortedError) {
+          return null;
+        }
+        const message = String(caught);
+        setError(message);
+        logger.warn('issue.bundle', 'bundle export failed', { error: message });
+        return null;
+      } finally {
+        if (manageBusy) setBusy(false);
       }
-      const message = String(caught);
-      setError(message);
-      logger.warn('issue.bundle', 'bundle export failed', { error: message });
-    } finally {
-      setBusy(false);
-    }
-  }, [category, description, diagnosticsRequest, summary, t]);
+    },
+    [category, description, diagnosticsRequest, summary, t],
+  );
 
   const handleRevealBundle = useCallback(async () => {
     if (!bundle) return;
@@ -187,17 +200,24 @@ export function IssueReporterDialog({
     setBusy(true);
     setError(null);
     try {
-      if (includeBundle && !bundle) {
-        await handleGenerateBundle();
+      let exported = bundle;
+      if (includeBundle && !exported) {
+        exported = await handleGenerateBundle(false);
+        if (!exported) return;
       }
-      await openIssueUrl(effectivePreview.url);
-      if (bundle) {
-        try {
-          await revealDiagnosticBundle(bundle.path);
-        } catch (caught) {
-          logger.warn('issue.bundle', 'reveal after open failed', { error: String(caught) });
-        }
+      const next = await previewIssue(
+        {
+          ...draft,
+          bundleFileName: exported?.path.split(/[\\/]/).pop(),
+        },
+        diagnosticsRequest ?? {},
+      );
+      setPreview(next);
+      if (next.tooLongForBrowser) {
+        setError(t('issueReporter.urlTooLong'));
+        return;
       }
+      await openIssueUrl(next.url);
       setStatus(t('issueReporter.opened'));
     } catch (caught) {
       const message = String(caught);
@@ -206,7 +226,7 @@ export function IssueReporterDialog({
     } finally {
       setBusy(false);
     }
-  }, [effectivePreview, bundle, includeBundle, handleGenerateBundle, t]);
+  }, [effectivePreview, bundle, includeBundle, handleGenerateBundle, draft, diagnosticsRequest, t]);
 
   return (
     <dialog
@@ -294,7 +314,7 @@ export function IssueReporterDialog({
         {bundle && (
           <div className="issue-reporter-dialog__bundle">
             <p>
-              <strong>{bundle.path}</strong>
+              <strong>{bundle.path.split(/[\\/]/).pop()}</strong>
             </p>
             <ul>
               <li>{t('issueReporter.bundleBytes', { bytes: formatBytes(bundle.bytes) })}</li>

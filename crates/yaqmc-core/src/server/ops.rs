@@ -92,13 +92,17 @@ fn build_playback_section(snapshot: &PlayerSnapshot) -> PlaybackSection {
     let current = snapshot
         .current_index
         .and_then(|index| snapshot.queue.get(index));
-    let quality_label = current.map(|song| match song.quality {
-        crate::player::AudioQuality::Standard => "standard".to_owned(),
-        crate::player::AudioQuality::High => "high".to_owned(),
-        crate::player::AudioQuality::Lossless => "lossless".to_owned(),
-        crate::player::AudioQuality::HiRes => "hi-res".to_owned(),
-        crate::player::AudioQuality::Master => "master".to_owned(),
-    });
+    let quality_label = snapshot
+        .source_selection
+        .as_ref()
+        .map(|selection| selection.resolved_quality)
+        .map(|quality| match quality {
+            crate::player::AudioQuality::Standard => "standard".to_owned(),
+            crate::player::AudioQuality::High => "high".to_owned(),
+            crate::player::AudioQuality::Lossless => "lossless".to_owned(),
+            crate::player::AudioQuality::HiRes => "hi-res".to_owned(),
+            crate::player::AudioQuality::Master => "master".to_owned(),
+        });
     PlaybackSection {
         state: if snapshot.is_playing {
             "playing"

@@ -46,7 +46,7 @@ import {
 const samplePreview: IssuePreview = {
   title: '[bug] cannot play track',
   body: 'body content',
-  url: 'https://github.com/YAQMC/YAQMC/issues/new?title=x',
+  url: 'https://github.com/ltzu929/YAQMC/issues/new?title=x',
   tooLongForBrowser: false,
   includedFields: ['title'],
   template: 'bug-report.yml',

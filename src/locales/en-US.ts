@@ -1192,7 +1192,7 @@ export const enUS = {
         '1. What did you do?\n2. What did you expect?\n3. What actually happened?',
       includeBundle: 'Include diagnostic bundle (ZIP) — you attach it manually on GitHub',
       generateBundle: 'Generate bundle',
-      revealBundle: 'Reveal bundle',
+      revealBundle: 'Open / share bundle',
       copy: 'Copy issue text',
       open: 'Open GitHub',
       preview: 'Preview',
@@ -1203,7 +1203,7 @@ export const enUS = {
       bundleBytes: 'Size: {{bytes}}',
       bundleRedacted: 'Values redacted: {{count}}',
       bundleHint:
-        'After GitHub opens, drag this ZIP from your file manager into the Issue attachment area.',
+        'Choose Downloads in the save dialog, then attach the saved ZIP to your GitHub issue. You can also share the bundle. It is not uploaded automatically.',
       opened: 'GitHub opened in your browser. YAQMC does not press Submit for you.',
       copied: 'Issue text copied to clipboard.',
     },

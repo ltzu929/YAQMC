@@ -106,3 +106,26 @@ describe('createAndroidBridge', () => {
     expect(second).not.toHaveBeenCalled();
   });
 });
+
+it('exports Android diagnostics through the system save bridge', async () => {
+  const plugin = {
+    invoke: vi
+      .fn()
+      .mockResolvedValue({ value: { path: '/cache/diagnostics/bundle.zip', bytes: 12 } }),
+    prepareDiagnostics: vi.fn().mockResolvedValue({ path: '/cache/diagnostics/bundle.zip' }),
+    saveDiagnostics: vi.fn().mockResolvedValue({ saved: true }),
+    addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
+  };
+  const api = readCapacitorAndroidApi({
+    Capacitor: { getPlatform: () => 'android', Plugins: { YaqmcNative: plugin } },
+  } as unknown as typeof globalThis)!;
+  expect(await api.dialog?.pickSave({ defaultPath: 'YAQMC-diagnostics.zip' })).toBe(
+    '/cache/diagnostics/bundle.zip',
+  );
+  await expect(api.invoke('diagnostics_export_bundle_to', {})).resolves.toMatchObject({
+    bytes: 12,
+  });
+  expect(plugin.saveDiagnostics).toHaveBeenCalledWith({ path: '/cache/diagnostics/bundle.zip' });
+  plugin.saveDiagnostics.mockResolvedValue({ saved: false });
+  await expect(api.invoke('diagnostics_export_bundle_to', {})).rejects.toThrow(/cancelled/);
+});

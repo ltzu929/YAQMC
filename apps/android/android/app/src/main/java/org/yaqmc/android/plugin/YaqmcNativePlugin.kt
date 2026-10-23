@@ -9,6 +9,7 @@ import android.os.Looper
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.media3.common.util.UnstableApi
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -104,6 +105,25 @@ class YaqmcNativePlugin : Plugin(), CoreManager.Callback {
             ?: return call.reject("method is required", "protocol.invalid_params")
         val params = call.getObject("params") ?: JSObject()
         when (method) {
+            "diagnostics_export_bundle_to" -> {
+                runCatching {
+                    diagnosticFile(params.optString("path"), requireExists = false)
+                    invokeCore(call, method, params.toString(), "host")
+                }.onFailure { call.reject("invalid diagnostic export destination", it.asException()) }
+            }
+            "diagnostics_reveal_bundle" -> {
+                runCatching {
+                    val file = diagnosticFile(params.optString("path"))
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.diagnostics", file)
+                    startExternalActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                        type = "application/zip"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri(file.name, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }, "YAQMC"))
+                    call.resolve(JSObject().put("value", JSONObject.NULL))
+                }.onFailure { call.reject("unable to share diagnostic bundle", it.asException()) }
+            }
             "host.coreStatus" -> {
                 call.resolve(
                     JSObject().put(
@@ -219,6 +239,55 @@ class YaqmcNativePlugin : Plugin(), CoreManager.Callback {
             startExternalActivity(chooser)
             call.resolve()
         }.onFailure { call.reject("unable to share", it.asException()) }
+    }
+
+    @PluginMethod
+    fun prepareDiagnostics(call: PluginCall) {
+        runCatching {
+            val directory = File(context.cacheDir, "diagnostics").apply { mkdirs() }
+            val file = File(directory, "YAQMC-diagnostics-${System.currentTimeMillis()}.zip")
+            call.resolve(JSObject().put("path", file.absolutePath))
+        }.onFailure { call.reject("unable to prepare diagnostic export", it.asException()) }
+    }
+
+    private fun diagnosticFile(path: String, requireExists: Boolean = true): File {
+        val file = File(path).canonicalFile
+        require(file.parentFile == File(context.cacheDir, "diagnostics").canonicalFile &&
+            file.name.startsWith("YAQMC-diagnostics-") && file.extension == "zip" && (!requireExists || file.isFile)) {
+            "invalid diagnostic bundle"
+        }
+        return file
+    }
+
+    @PluginMethod
+    fun saveDiagnostics(call: PluginCall) {
+        runCatching {
+            val file = diagnosticFile(call.getString("path").orEmpty())
+            startActivityForResult(call, Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/zip"
+                putExtra(Intent.EXTRA_TITLE, file.name)
+            }, "diagnosticsSaved")
+        }.onFailure { call.reject("unable to save diagnostic bundle", it.asException()) }
+    }
+
+    @ActivityCallback
+    private fun diagnosticsSaved(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        val uri = result.data?.data
+        if (result.resultCode != Activity.RESULT_OK || uri == null) {
+            call.resolve(JSObject().put("saved", false))
+            return
+        }
+        thread(name = "yaqmc-diagnostics-save") {
+            runCatching {
+                val file = diagnosticFile(call.getString("path").orEmpty())
+                val output = context.contentResolver.openOutputStream(uri, "wt")
+                    ?: error("selected destination is not writable")
+                output.use { target -> file.inputStream().use { it.copyTo(target) } }
+            }.onSuccess { call.resolve(JSObject().put("saved", true)) }
+                .onFailure { call.reject("diagnostic bundle could not be saved", it.asException()) }
+        }
     }
 
     @PluginMethod

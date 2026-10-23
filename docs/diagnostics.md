@@ -9,6 +9,13 @@ bundle for maintainer review.
 Diagnostics are **local by default**: nothing is uploaded, and the bundle is
 only created when the user explicitly asks for it.
 
+On Android, generating a bundle opens the system save dialog. Choose Downloads,
+then attach the saved ZIP to an issue in `ltzu929/YAQMC`, or use Open / share bundle.
+Cancelling or failing the export prevents the issue form from opening. Export
+before restarting the app to retain the current session's recent errors.
+Playback logs include requested and attempted qualities, bounded fallback attempts,
+and network failure categories without signed media URLs.
+
 ## What lives inside a diagnostic snapshot
 
 `DiagnosticsSnapshot` is produced by

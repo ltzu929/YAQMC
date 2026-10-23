@@ -34,6 +34,8 @@ interface CapacitorYaqmcPlugin {
   clipboardSet(options: { text: string }): Promise<void>;
   nativeShare(request: HostNativeShareRequest): Promise<void>;
   pickBackgroundImage(): Promise<{ path?: string | null }>;
+  prepareDiagnostics(): Promise<{ path: string }>;
+  saveDiagnostics(options: { path: string }): Promise<{ saved: boolean }>;
   addListener(
     event: 'coreEvent' | 'deepLink' | 'updateAvailable',
     listener: (payload: Record<string, unknown>) => void,
@@ -130,6 +132,11 @@ export function readCapacitorAndroidApi(
         method,
         ...(params === undefined ? {} : { params }),
       });
+      if (method === 'diagnostics_export_bundle_to') {
+        const bundle = response.value as { path: string };
+        const result = await plugin.saveDiagnostics({ path: bundle.path });
+        if (!result.saved) throw new Error('Diagnostic bundle save was cancelled');
+      }
       return adaptAndroidFileValue(capacitor, method, response.value);
     },
     on: (channel, callback) => {
@@ -154,7 +161,10 @@ export function readCapacitorAndroidApi(
       writeText: (text) => plugin.clipboardSet({ text }),
     },
     dialog: {
-      pickSave: async () => null,
+      pickSave: async (options) =>
+        options?.defaultPath === 'YAQMC-diagnostics.zip'
+          ? (await plugin.prepareDiagnostics()).path
+          : null,
       pickFile: async ({ kind }) => {
         if (kind !== 'background-image') return null;
         const result = await plugin.pickBackgroundImage();

@@ -827,12 +827,16 @@ export function SettingsPage() {
     try {
       const bundle = await exportDiagnosticsBundle({
         accountState: accountSnapshot.state,
+        membershipTier: accountSnapshot.entitlement?.tier,
+        membershipStatus: accountSnapshot.entitlement?.membership,
         lyricsPreset: lyricsPresetDiagnostics(preferences.lyricsPresets),
         includeLogs: true,
         overrideUnresolved: false,
       });
       setLastBundle(bundle);
-      setDiagnosticsMessage(t('diagnostics.bundleExported', { path: bundle.path }));
+      setDiagnosticsMessage(
+        t('diagnostics.bundleExported', { path: bundle.path.split(/[\\/]/).pop() ?? bundle.path }),
+      );
     } catch (caught) {
       if (caught instanceof DiagnosticsExportAbortedError) {
         return;
@@ -1828,7 +1832,7 @@ export function SettingsPage() {
               }
             />
           )}
-          {host.fileExport && (
+          {(host.fileExport || android) && (
             <SettingRow
               title={t('diagnostics.exportBundle')}
               description={t('diagnostics.exportBundleDescription')}
@@ -2300,6 +2304,8 @@ export function SettingsPage() {
         onClose={() => setIssueReporterOpen(false)}
         diagnosticsRequest={{
           accountState: accountSnapshot.state,
+          membershipTier: accountSnapshot.entitlement?.tier,
+          membershipStatus: accountSnapshot.entitlement?.membership,
           lyricsPreset: lyricsPresetDiagnostics(preferences.lyricsPresets),
         }}
       />
