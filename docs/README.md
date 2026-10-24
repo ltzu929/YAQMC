@@ -4,6 +4,11 @@
 
 This directory contains the public user, tester, contributor, and release documentation for YAQMC.
 
+The project is planning an Android-only native client, provisionally using Kotlin / Compose with the Rust Core.
+The current phase fully ports the old Android client. Start with the [project plan](project-plan.md) and
+[native parity ledger](native-parity.md), distinguishing confirmed scope, code coverage, and acceptance evidence.
+The architecture, development, and feature roadmap documents below mainly describe the existing multiplatform system.
+
 ## Users
 
 - Getting started: [Android](android.md), [data locations, upgrades, and uninstall](data-locations.md),

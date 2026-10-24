@@ -4,6 +4,11 @@
 
 这里是 YAQMC 面向用户、测试者、贡献者和发布维护者的公开文档。
 
+当前正规划转向 Android 单平台原生客户端，暂定 Kotlin / Compose 界面加 Rust 核心。
+当前阶段先完整移植旧 Android 客户端。开发前先读[项目规划](project-plan.md)和
+[完整移植对齐清单](native-parity.md)，其中区分已确认方向、代码覆盖及待验收事项。
+下列架构、开发与功能路线图文档主要描述既有多平台体系。
+
 ## 用户
 
 - 开始使用：[Android](android.md)、[数据位置、升级及卸载](data-locations.md)、[外观个性化](appearance.md)和

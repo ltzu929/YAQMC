@@ -22,7 +22,7 @@ class NativeModelsTest {
     @Test fun accountPlaylistKeepsCursorAndOriginalTrackPayload() {
         val value = JSONObject("""{"summary":{"title":"我的歌单"},"tracks":{"items":[{"id":"qqmusic:track:1","title":"一首歌","provider":{"providerId":"qqmusic","trackId":"1"}}],"nextCursor":"page-2"}}""")
         val page = NativeModels.detail("account-playlist", value)
-        assertEquals("我的歌单", page.title)
+        assertEquals("我的歌单", page.title.value)
         assertTrue(page.hasMore)
         assertEquals("page-2", page.cursor)
         assertEquals("1", page.tracks.single().json.getJSONObject("provider").getString("trackId"))

@@ -36,7 +36,7 @@ pub(crate) fn map_qmapi_error(error: QmError) -> QQMusicError {
         QmError::QrLogin { .. } => QQMusicError::Protocol,
         // Generic Login is used for server-side business failures and must
         // never be rendered as an authorization refusal.
-        QmError::Login { .. } => QQMusicError::Protocol,
+        QmError::Login { code, .. } => QQMusicError::Login { code },
         QmError::GlobalApi { .. } | QmError::CgiApi { .. } => QQMusicError::SchemaChanged,
         QmError::SignatureRequired | QmError::Protocol { .. } => QQMusicError::Protocol,
         QmError::Deserialize(_) | QmError::ApiData(_) | QmError::JsonPath(_) => {
@@ -103,7 +103,7 @@ mod tests {
                 message: "loginFailed".into(),
                 code: -1,
             }),
-            QQMusicError::Protocol
+            QQMusicError::Login { code: -1 }
         ));
         assert!(matches!(
             map_qmapi_error(QmError::Http {

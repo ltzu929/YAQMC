@@ -386,6 +386,12 @@ pub enum AccountState {
     ProtocolError {
         #[serde(rename = "attemptId")]
         attempt_id: Option<String>,
+        #[serde(
+            default,
+            rename = "upstreamCode",
+            skip_serializing_if = "Option::is_none"
+        )]
+        upstream_code: Option<i64>,
         profile: (),
         entitlement: (),
     },

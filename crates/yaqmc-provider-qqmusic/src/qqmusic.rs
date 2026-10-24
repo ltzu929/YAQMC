@@ -320,6 +320,8 @@ pub enum QQMusicError {
     AuthorizationRejected,
     #[error("the QQ Music protocol response was invalid")]
     Protocol,
+    #[error("QQ Music refused login (business code {code})")]
+    Login { code: i64 },
     #[error("the requested QQ Music playlist is not accessible to this account")]
     Unavailable,
     #[error("the QQ Music operation outcome is unknown")]
@@ -354,7 +356,7 @@ impl QQMusicError {
             Self::UnsupportedOperation => ProviderErrorCode::UnsupportedOperation,
             Self::AuthenticationExpired => ProviderErrorCode::AuthenticationExpired,
             Self::AuthorizationRejected => ProviderErrorCode::AuthorizationRejected,
-            Self::OutcomeUnknown => ProviderErrorCode::ProviderFailure,
+            Self::OutcomeUnknown | Self::Login { .. } => ProviderErrorCode::ProviderFailure,
             Self::Cancelled => ProviderErrorCode::Cancelled,
             Self::MutationInProgress => ProviderErrorCode::MutationInProgress,
             Self::EntitlementUnavailable => ProviderErrorCode::EntitlementUnavailable,
@@ -449,6 +451,7 @@ impl QQMusicService {
         let auth_protocol = Arc::new(TransportQQMusicAuthProtocol::new(
             Arc::clone(&account_transport),
             Arc::clone(&clock),
+            Arc::clone(&storage),
         ));
         let auth = Arc::new(QQMusicAuthService::new(
             auth_protocol,
@@ -1891,6 +1894,7 @@ fn map_provider_source_error(error: QQMusicError) -> PlaybackSourceError {
         | QQMusicError::UnsupportedAccountCollection
         | QQMusicError::UnsupportedOperation
         | QQMusicError::Protocol
+        | QQMusicError::Login { .. }
         | QQMusicError::OutcomeUnknown
         | QQMusicError::MutationInProgress
         | QQMusicError::Storage => PlaybackSourceError::UrlUnavailable,

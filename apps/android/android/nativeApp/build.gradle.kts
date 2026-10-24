@@ -43,6 +43,8 @@ android {
     }
     kotlinOptions { jvmTarget = "21" }
     buildFeatures { compose = true; buildConfig = true }
+    // Both in-app languages must be available offline, including in a future bundle build.
+    bundle { language { enableSplit = false } }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 

@@ -2,6 +2,7 @@ package org.yaqmc.android
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -32,6 +33,7 @@ import androidx.core.view.WindowInsetsCompat
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import org.json.JSONArray
 
 /**
@@ -49,6 +51,9 @@ class OAuthActivity : ComponentActivity() {
     private var retryUrl: String? = null
     private var finished = false
     override fun onCreate(savedInstanceState: Bundle?) {
+        intent.getStringExtra(EXTRA_LANGUAGE)?.takeIf { it in setOf("zh-CN", "en-US") }?.let { language ->
+            applyOverrideConfiguration(Configuration().apply { setLocale(Locale.forLanguageTag(language)) })
+        }
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -420,6 +425,7 @@ class OAuthActivity : ComponentActivity() {
     }
 
     companion object {
+        const val EXTRA_LANGUAGE = "yaqmc.oauth.language"
         const val EXTRA_URL = "org.yaqmc.android.oauth.url"
         const val EXTRA_MOBILE_URL = "org.yaqmc.android.oauth.mobile_url"
         const val EXTRA_NAVIGATION_ALLOWLIST = "org.yaqmc.android.oauth.navigation_allowlist"

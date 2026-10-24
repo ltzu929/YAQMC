@@ -306,11 +306,53 @@ pub(crate) trait QQMusicAuthProtocol: Send + Sync {
 pub(crate) struct TransportQQMusicAuthProtocol {
     transport: Arc<dyn QqTransport>,
     clock: Arc<dyn Clock>,
+    storage: Arc<dyn ProviderStorage>,
+    mobile_client: Mutex<Option<qqmusic_api::Client>>,
 }
 
 impl TransportQQMusicAuthProtocol {
-    pub(crate) fn new(transport: Arc<dyn QqTransport>, clock: Arc<dyn Clock>) -> Self {
-        Self { transport, clock }
+    pub(crate) fn new(
+        transport: Arc<dyn QqTransport>,
+        clock: Arc<dyn Clock>,
+        storage: Arc<dyn ProviderStorage>,
+    ) -> Self {
+        Self {
+            transport,
+            clock,
+            storage,
+            mobile_client: Mutex::new(None),
+        }
+    }
+
+    async fn mobile_login_client(&self) -> Result<qqmusic_api::Client, QQMusicError> {
+        let mut cached = self.mobile_client.lock().await;
+        if let Some(client) = cached.as_ref() {
+            return Ok(client.clone());
+        }
+        // Device identity belongs to the installation, not an account or QR attempt.
+        // Persist before sending requests; failed reads must not silently rotate it.
+        let device: qqmusic_api::Device = match self
+            .storage
+            .get_setting("qqmusic-mobile-device-v1")
+            .map_err(|_| QQMusicError::Storage)?
+        {
+            Some(value) => serde_json::from_str(&value).map_err(|_| QQMusicError::Storage)?,
+            None => {
+                let device = qqmusic_api::Device::random();
+                self.storage
+                    .set_setting(
+                        "qqmusic-mobile-device-v1",
+                        &serde_json::to_string(&device).map_err(|_| QQMusicError::Storage)?,
+                    )
+                    .map_err(|_| QQMusicError::Storage)?;
+                device
+            }
+        };
+        let client = crate::qmapi::qmapi_client_with(None, Some(qqmusic_api::Platform::Android))
+            .map_err(crate::qmapi::cgi::map_qmapi_error)?;
+        client.context().set_device(device);
+        *cached = Some(client.clone());
+        Ok(client)
     }
 
     async fn fetch_entitlement(
@@ -703,13 +745,12 @@ impl QQMusicAuthProtocol for TransportQQMusicAuthProtocol {
         &self,
         cancellation: CancellationToken,
     ) -> Result<AuthChallenge, QQMusicError> {
-        use qqmusic_api::{models::login::QRLoginType, Platform};
+        use qqmusic_api::models::login::QRLoginType;
 
         if cancellation.is_cancelled() {
             return Err(QQMusicError::Cancelled);
         }
-        let client = crate::qmapi::qmapi_client_with(None, Some(Platform::Android))
-            .map_err(crate::qmapi::cgi::map_qmapi_error)?;
+        let client = self.mobile_login_client().await?;
         let qr = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return Err(QQMusicError::Cancelled),
@@ -728,6 +769,13 @@ impl QQMusicAuthProtocol for TransportQQMusicAuthProtocol {
         let mime_type = normalize_image_mime(&qr.mimetype)
             .ok_or(QQMusicError::MalformedResponse)?
             .to_owned();
+        self.storage
+            .set_setting(
+                "qqmusic-mobile-device-v1",
+                &serde_json::to_string(&client.context().device())
+                    .map_err(|_| QQMusicError::Storage)?,
+            )
+            .map_err(|_| QQMusicError::Storage)?;
         let mut launch_url = Url::parse("https://y.qq.com/m/client/qr_code_login/authorize.html")
             .map_err(|_| QQMusicError::Protocol)?;
         launch_url
@@ -3061,6 +3109,10 @@ fn error_state(attempt_id: &str, error: &QQMusicError) -> AccountState {
         },
         _ => AccountState::ProtocolError {
             attempt_id,
+            upstream_code: match error {
+                QQMusicError::Login { code } => Some(*code),
+                _ => None,
+            },
             profile: (),
             entitlement: (),
         },
@@ -3084,6 +3136,10 @@ fn restore_error_state(error: &QQMusicError) -> AccountState {
         }
         _ => AccountState::ProtocolError {
             attempt_id: None,
+            upstream_code: match error {
+                QQMusicError::Login { code } => Some(*code),
+                _ => None,
+            },
             profile: (),
             entitlement: (),
         },
@@ -3934,6 +3990,61 @@ mod tests {
         )
         .await;
         assert!(matches!(result, Err(QQMusicError::Offline)));
+    }
+
+    #[tokio::test]
+    async fn mobile_login_business_failure_survives_worker_and_account_wire_mapping() {
+        let cancellation = CancellationToken::new();
+        let worker = MobileAuthWorker::start(
+            cancellation.clone(),
+            Duration::from_secs(30),
+            Arc::new(super::super::clock::SystemClock),
+            |observer| async move {
+                observer(qqmusic_api::modules::login::MobileLoginEvent::Subscribed);
+                Err(qqmusic_api::QmError::Login {
+                    code: 20279,
+                    message: "synthetic device limit".into(),
+                })
+            },
+        )
+        .await
+        .expect("subscribed worker");
+        let error = match worker.next(cancellation).await {
+            Err(error) => error,
+            Ok(_) => panic!("a business failure must not authenticate"),
+        };
+        assert!(matches!(error, QQMusicError::Login { code: 20279 }));
+        assert_eq!(error.code(), "provider-failure");
+        assert!(!error.retryable());
+        let wire = serde_json::to_value(error_state("synthetic-attempt", &error)).unwrap();
+        assert_eq!(wire["upstreamCode"], 20279);
+        assert!(wire["profile"].is_null());
+        let public: yaqmc_provider_api::AccountState = serde_json::from_value(wire).unwrap();
+        assert!(matches!(
+            public,
+            yaqmc_provider_api::AccountState::ProtocolError {
+                upstream_code: Some(20279),
+                ..
+            }
+        ));
+        let legacy = serde_json::json!({"state":"protocol-error","attemptId":null,"profile":null,"entitlement":null});
+        let public: yaqmc_provider_api::AccountState =
+            serde_json::from_value(legacy.clone()).unwrap();
+        assert!(matches!(
+            public,
+            yaqmc_provider_api::AccountState::ProtocolError {
+                upstream_code: None,
+                ..
+            }
+        ));
+        let local: AccountState = serde_json::from_value(legacy).unwrap();
+        assert!(matches!(
+            local,
+            AccountState::ProtocolError {
+                upstream_code: None,
+                ..
+            }
+        ));
     }
 
     #[tokio::test(start_paused = true)]
@@ -5549,6 +5660,48 @@ mod tests {
         requests: Mutex<Vec<ObservedTransportRequest>>,
     }
 
+    #[tokio::test]
+    async fn mobile_device_identity_survives_retries_and_protocol_recreation() {
+        let storage = Arc::new(StorageService::temporary());
+        let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
+        let transport = Arc::new(ScriptedTransport {
+            responses: Mutex::new(VecDeque::new()),
+            requests: Mutex::new(Vec::new()),
+        });
+        let protocol =
+            TransportQQMusicAuthProtocol::new(transport.clone(), clock.clone(), storage.clone());
+        let first = protocol.mobile_login_client().await.unwrap();
+        let second = protocol.mobile_login_client().await.unwrap();
+        assert_eq!(
+            first.context().device().open_udid,
+            second.context().device().open_udid
+        );
+        let restarted =
+            TransportQQMusicAuthProtocol::new(transport.clone(), clock.clone(), storage.clone());
+        let restored = restarted.mobile_login_client().await.unwrap();
+        assert_eq!(
+            first.context().device().open_udid,
+            restored.context().device().open_udid
+        );
+        assert_eq!(
+            first.context().device().android_id,
+            restored.context().device().android_id
+        );
+        assert_eq!(
+            first.context().device().imei,
+            restored.context().device().imei
+        );
+        storage
+            .set_setting("qqmusic-mobile-device-v1", "invalid saved identity")
+            .unwrap();
+        let damaged = TransportQQMusicAuthProtocol::new(transport.clone(), clock, storage);
+        assert!(matches!(
+            damaged.mobile_login_client().await,
+            Err(QQMusicError::Storage)
+        ));
+        assert!(transport.requests.lock().await.is_empty());
+    }
+
     #[async_trait]
     impl QqTransport for ScriptedTransport {
         async fn execute(
@@ -5657,7 +5810,11 @@ mod tests {
             requests: Mutex::new(Vec::new()),
         });
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
-        let protocol = TransportQQMusicAuthProtocol::new(transport.clone(), clock);
+        let protocol = TransportQQMusicAuthProtocol::new(
+            transport.clone(),
+            clock,
+            Arc::new(StorageService::temporary()),
+        );
 
         let challenge = protocol
             .create_challenge(CancellationToken::new())
@@ -5708,7 +5865,11 @@ mod tests {
             requests: Mutex::new(Vec::new()),
         });
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
-        let protocol = TransportQQMusicAuthProtocol::new(transport.clone(), clock);
+        let protocol = TransportQQMusicAuthProtocol::new(
+            transport.clone(),
+            clock,
+            Arc::new(StorageService::temporary()),
+        );
         let challenge = AuthChallenge {
             qr_bytes: Vec::new(),
             mime_type: String::new(),
@@ -5816,7 +5977,11 @@ mod tests {
             requests: Mutex::new(Vec::new()),
         });
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
-        let protocol = TransportQQMusicAuthProtocol::new(transport.clone(), clock);
+        let protocol = TransportQQMusicAuthProtocol::new(
+            transport.clone(),
+            clock,
+            Arc::new(StorageService::temporary()),
+        );
         let challenge = AuthChallenge {
             qr_bytes: Vec::new(),
             mime_type: String::new(),
@@ -5939,7 +6104,11 @@ mod tests {
             requests: Mutex::new(Vec::new()),
         });
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
-        let protocol = TransportQQMusicAuthProtocol::new(transport.clone(), clock);
+        let protocol = TransportQQMusicAuthProtocol::new(
+            transport.clone(),
+            clock,
+            Arc::new(StorageService::temporary()),
+        );
 
         for provider in [OAuthLoginProvider::Qq, OAuthLoginProvider::Wechat] {
             let session = protocol
@@ -6035,10 +6204,14 @@ mod tests {
             ),
             requests: Mutex::new(Vec::new()),
         });
-        let degraded = TransportQQMusicAuthProtocol::new(degraded_transport, Arc::clone(&clock))
-            .validate_session(&session, CancellationToken::new())
-            .await
-            .expect("profile remains usable");
+        let degraded = TransportQQMusicAuthProtocol::new(
+            degraded_transport,
+            Arc::clone(&clock),
+            Arc::new(StorageService::temporary()),
+        )
+        .validate_session(&session, CancellationToken::new())
+        .await
+        .expect("profile remains usable");
         assert_eq!(degraded.entitlement.tier, EntitlementTier::Unknown);
         assert_eq!(degraded.entitlement.membership, MembershipState::Unknown);
         assert_eq!(
@@ -6050,9 +6223,13 @@ mod tests {
             responses: Mutex::new(vec![profile_response(), Err(QQMusicError::Cancelled)].into()),
             requests: Mutex::new(Vec::new()),
         });
-        let cancelled = TransportQQMusicAuthProtocol::new(cancelled_transport, clock)
-            .validate_session(&session, CancellationToken::new())
-            .await;
+        let cancelled = TransportQQMusicAuthProtocol::new(
+            cancelled_transport,
+            clock,
+            Arc::new(StorageService::temporary()),
+        )
+        .validate_session(&session, CancellationToken::new())
+        .await;
         assert!(matches!(cancelled, Err(QQMusicError::Cancelled)));
     }
 

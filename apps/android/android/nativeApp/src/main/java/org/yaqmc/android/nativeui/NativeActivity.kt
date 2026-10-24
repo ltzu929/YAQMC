@@ -19,6 +19,7 @@ import org.yaqmc.android.core.DeepLinkManager
 import org.yaqmc.android.core.MobileLoginOwner
 import org.yaqmc.android.core.MobileLoginPolicy
 import org.yaqmc.android.media.PlaybackService
+import org.yaqmc.android.R
 
 @UnstableApi
 class NativeActivity : ComponentActivity() {
@@ -36,7 +37,7 @@ class NativeActivity : ComponentActivity() {
         links = DeepLinkInbox.subscribe { target ->
             lifecycleScope.launch {
                 if (target.providerId == "qqmusic") model.navigate(NativeRoute("song", target.entityId))
-                else model.notify("当前安卓版本不支持这个音乐来源")
+                else model.notify(R.string.native_unsupported_provider)
             }
         }
         setContent {
@@ -60,8 +61,9 @@ class NativeActivity : ComponentActivity() {
             oauth = { prepared ->
                 val hosts = prepared.optJSONArray("navigationAllowlist")
                 val prefix = prepared.optJSONObject("callbackMatcher")?.text("urlPrefix").orEmpty()
-                check(hosts != null && hosts.length() > 0 && prefix.isNotBlank()) { "登录页面配置无效" }
+                if (hosts == null || hosts.length() == 0 || prefix.isBlank()) throw CoreFailure("native.login.config", "")
                 oauth.launch(Intent(this, OAuthActivity::class.java).apply {
+                    putExtra(OAuthActivity.EXTRA_LANGUAGE, application.withNativeLanguage(model.preferences.value).resources.configuration.locales[0].toLanguageTag())
                     putExtra(OAuthActivity.EXTRA_URL, prepared.text("url"))
                     putExtra(OAuthActivity.EXTRA_MOBILE_URL, prepared.text("mobileUrl"))
                     putStringArrayListExtra(OAuthActivity.EXTRA_NAVIGATION_ALLOWLIST, ArrayList((0 until hosts.length()).map { hosts.getString(it) }))
@@ -74,14 +76,14 @@ class NativeActivity : ComponentActivity() {
                     .appendQueryParameter("p", JSONObject().put("url", authorization).toString()).build()
                 runCatching {
                     startActivity(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(MobileLoginPolicy.QQ_MUSIC_PACKAGE))
-                }.onFailure { model.notify("未能打开 QQ 音乐。可使用页面中的二维码授权，或选择微信登录。") }
+                }.onFailure { model.notify(R.string.native_qq_unavailable) }
             },
         )
     }
 
     private fun share(track: Track) = model.action {
         val target = model.core.objectResult("catalog_share_song", NativeViewModel.provider(track.providerId).put("id", track.id))
-        val text = listOf("${track.title} — ${track.artists}", target.text("canonicalHttpsUrl")).filter(String::isNotBlank).joinToString("\n")
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, "分享歌曲"))
+        val text = listOf("${track.title.ifBlank { model.localizedString(R.string.native_unknown_song) }} — ${track.artists}", target.text("canonicalHttpsUrl")).filter(String::isNotBlank).joinToString("\n")
+        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, model.localizedString(R.string.native_share_song)))
     }
 }
