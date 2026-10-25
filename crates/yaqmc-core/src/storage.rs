@@ -905,10 +905,7 @@ impl StorageService {
         if kind == "media"
             && matches!(
                 response.status(),
-                StatusCode::UNAUTHORIZED
-                    | StatusCode::FORBIDDEN
-                    | StatusCode::NOT_FOUND
-                    | StatusCode::GONE
+                StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
             )
         {
             return Err(StorageError::UrlExpired);

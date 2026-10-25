@@ -382,6 +382,7 @@ fn map_progressive_error(error: ProgressiveError) -> PlaybackSourceError {
     match error {
         ProgressiveError::Network => PlaybackSourceError::Network,
         ProgressiveError::UrlExpired => PlaybackSourceError::UrlExpired,
+        ProgressiveError::UrlUnavailable => PlaybackSourceError::UrlUnavailable,
         ProgressiveError::InvalidRange | ProgressiveError::RangeUnsupported => {
             PlaybackSourceError::RangeUnsupported
         }
@@ -393,6 +394,7 @@ fn map_progressive_error(error: ProgressiveError) -> PlaybackSourceError {
 fn map_storage_error(error: StorageError) -> PlaybackSourceError {
     match error {
         StorageError::UrlExpired => PlaybackSourceError::UrlExpired,
+        StorageError::Http(404 | 410) => PlaybackSourceError::UrlUnavailable,
         StorageError::Network | StorageError::Http(_) => PlaybackSourceError::Network,
         StorageError::ResponseTooLarge => PlaybackSourceError::ResponseTooLarge,
         StorageError::Initialize
@@ -514,6 +516,20 @@ mod tests {
                 .push((offset, length));
             Ok(self.bytes[start..end].to_vec())
         }
+    }
+
+    #[test]
+    fn missing_full_download_is_not_reported_as_expiration_or_network_failure() {
+        for status in [404, 410] {
+            assert_eq!(
+                map_storage_error(StorageError::Http(status)),
+                PlaybackSourceError::UrlUnavailable
+            );
+        }
+        assert_eq!(
+            map_progressive_error(ProgressiveError::UrlUnavailable),
+            PlaybackSourceError::UrlUnavailable
+        );
     }
 
     #[test]

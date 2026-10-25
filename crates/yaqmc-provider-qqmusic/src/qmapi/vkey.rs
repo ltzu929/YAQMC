@@ -11,6 +11,7 @@ use std::sync::Arc;
 use qqmusic_api::models::song::UrlinfoItem;
 use qqmusic_api::modules::song::{FileTypeLike, SongFileInfo, SongFileType, SpecialSongFileType};
 use qqmusic_api::Platform;
+use serde_json::{json, Value};
 #[cfg(test)]
 use yaqmc_provider_api::PlaybackLocation;
 
@@ -118,16 +119,6 @@ pub(crate) async fn clear_playable_urls(
     if filenames.is_empty() {
         return Ok(HashMap::new());
     }
-    let mut infos = Vec::with_capacity(filenames.len());
-    for filename in filenames {
-        let file_type = clear_file_type(filename).ok_or(QQMusicError::MalformedResponse)?;
-        infos.push(
-            SongFileInfo::new(track_id)
-                .with_media_mid(media_mid)
-                .with_song_type(0)
-                .with_type_ref(file_type),
-        );
-    }
     let credential = match (uin, cookie_header) {
         (Some(uin), Some(cookie)) => {
             Some(credential_from_uin_and_cookie(uin, cookie, None, u64::MAX)?)
@@ -152,9 +143,69 @@ pub(crate) async fn clear_playable_urls(
             );
             classification
         })?;
+    clear_playable_urls_with_client(&client, track_id, media_mid, filenames, credential.as_ref())
+        .await
+}
+
+async fn clear_playable_urls_with_client(
+    client: &qqmusic_api::Client,
+    track_id: &str,
+    media_mid: &str,
+    filenames: &[String],
+    credential: Option<&qqmusic_api::Credential>,
+) -> Result<HashMap<String, String>, QQMusicError> {
+    if filenames.iter().any(|name| clear_file_type(name).is_none()) {
+        return Err(QQMusicError::MalformedResponse);
+    }
+    // The pinned File model drops size_hires. A vkey may authorize a filename
+    // even when that file does not exist, so it cannot override a known zero.
+    let hires_available = if filenames.iter().any(|name| name.starts_with("RS01")) {
+        match client
+            .cgi::<Value>(
+                "music.pf_song_detail_svr",
+                "get_song_detail_yqq",
+                json!({ "song_mid": track_id }),
+                &qqmusic_api::CgiOptions {
+                    platform: Some(Platform::Web),
+                    ..qqmusic_api::CgiOptions::default()
+                },
+            )
+            .await
+        {
+            Ok(detail) => catalog_hires_available(&detail, track_id, media_mid),
+            Err(error) => {
+                tracing::warn!(target: "qqmusic.playback", classification = map_qmapi_error(error).code(),
+                    "Hi-Res catalog lookup failed; resource availability remains unknown");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let filenames = filenames
+        .iter()
+        .filter(|name| hires_available != Some(false) || !name.starts_with("RS01"))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut infos = Vec::with_capacity(filenames.len());
+    for filename in &filenames {
+        let file_type = clear_file_type(filename).ok_or(QQMusicError::MalformedResponse)?;
+        infos.push(
+            SongFileInfo::new(track_id)
+                .with_media_mid(media_mid)
+                .with_song_type(0)
+                .with_type_ref(file_type),
+        );
+    }
+    if hires_available == Some(false) {
+        tracing::info!(target: "qqmusic.playback", "catalog reports no Hi-Res file; omitting unavailable candidate");
+    }
+    if infos.is_empty() {
+        return Ok(HashMap::new());
+    }
     let response = client
         .song
-        .get_song_urls(&infos, &SongFileType::Mp3_128, credential.as_ref())
+        .get_song_urls(&infos, &SongFileType::Mp3_128, credential)
         .await
         .map_err(|error| {
             let classification = map_qmapi_error(error);
@@ -165,7 +216,17 @@ pub(crate) async fn clear_playable_urls(
             );
             classification
         })?;
-    clear_urls_from_items(filenames, response.data)
+    clear_urls_from_items(&filenames, response.data)
+}
+
+fn catalog_hires_available(detail: &Value, track_id: &str, media_mid: &str) -> Option<bool> {
+    let track = detail.get("track_info")?;
+    if track.get("mid")?.as_str()? != track_id
+        || track.pointer("/file/media_mid")?.as_str()? != media_mid
+    {
+        return None;
+    }
+    Some(track.pointer("/file/size_hires")?.as_u64()? > 0)
 }
 
 fn clear_urls_from_items(
@@ -206,6 +267,9 @@ fn clear_urls_from_items(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
+    use qqmusic_api::{ApiTransport, HttpBody, TransportRequest, TransportResponse};
     use yaqmc_provider_api::PlaybackLocation;
 
     use super::*;
@@ -338,5 +402,88 @@ mod tests {
         .expect("missing and rejected candidates are safely unavailable");
 
         assert!(urls.is_empty());
+    }
+
+    struct CatalogVkeyTransport {
+        size_hires: Value,
+        requested_files: Mutex<Vec<String>>,
+    }
+
+    #[async_trait::async_trait]
+    impl ApiTransport for CatalogVkeyTransport {
+        async fn execute(
+            &self,
+            request: TransportRequest,
+        ) -> qqmusic_api::Result<TransportResponse> {
+            let HttpBody::Json(body) = request.body else {
+                panic!("expected CGI JSON")
+            };
+            let req = &body["req_0"];
+            let data = if req["module"] == "music.pf_song_detail_svr" {
+                assert_eq!(req["param"]["song_mid"], "TRACK");
+                json!({"track_info":{"mid":"TRACK","file":{"media_mid":"MEDIA","size_hires":self.size_hires}}})
+            } else {
+                assert_eq!(req["module"], "music.vkey.GetVkey");
+                let filenames = req["param"]["filename"].as_array().expect("filenames");
+                *self.requested_files.lock().unwrap() = filenames
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_owned())
+                    .collect();
+                // Authorize any requested filename, including a nonexistent Hi-Res file.
+                json!({"midurlinfo":filenames.iter().map(|filename| json!({
+                    "filename":filename, "purl":format!("{}?vkey=fixture", filename.as_str().unwrap()), "result":0
+                })).collect::<Vec<_>>()})
+            };
+            Ok(TransportResponse {
+                status: 200,
+                final_url: request.url,
+                headers: Vec::new(),
+                body: serde_json::to_vec(&json!({"code":0,"req_0":{"code":0,"data":data}}))
+                    .unwrap(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn known_absent_hires_is_not_authorized_as_a_phantom_playable_file() {
+        for (size, expected_hires) in [(json!(0), false), (json!(12345), true), (Value::Null, true)]
+        {
+            let transport = Arc::new(CatalogVkeyTransport {
+                size_hires: size,
+                requested_files: Mutex::new(Vec::new()),
+            });
+            let client = qqmusic_api::Client::new_with_transport(
+                None,
+                Some(Platform::Web),
+                transport.clone(),
+            );
+            let requested = vec!["RS01MEDIA.flac".to_owned(), "F000MEDIA.flac".to_owned()];
+            let urls = clear_playable_urls_with_client(&client, "TRACK", "MEDIA", &requested, None)
+                .await
+                .expect("URLs");
+            assert_eq!(urls.contains_key("RS01MEDIA.flac"), expected_hires);
+            assert!(urls.contains_key("F000MEDIA.flac"));
+            assert_eq!(
+                transport
+                    .requested_files
+                    .lock()
+                    .unwrap()
+                    .contains(&requested[0]),
+                expected_hires
+            );
+        }
+    }
+
+    #[test]
+    fn missing_or_unrelated_hires_catalog_data_is_unknown() {
+        for detail in [
+            json!({}),
+            json!({"track_info":{"mid":"TRACK","file":{"media_mid":"MEDIA"}}}),
+            json!({"track_info":{"mid":"OTHER","file":{"media_mid":"MEDIA","size_hires":0}}}),
+            json!({"track_info":{"mid":"TRACK","file":{"media_mid":"OTHER","size_hires":0}}}),
+            json!({"track_info":{"mid":"TRACK","file":{"media_mid":"MEDIA","size_hires":-1}}}),
+        ] {
+            assert_eq!(catalog_hires_available(&detail, "TRACK", "MEDIA"), None);
+        }
     }
 }

@@ -28,6 +28,8 @@ pub enum ProgressiveError {
     Network,
     #[error("the provider media URL expired")]
     UrlExpired,
+    #[error("the provider media file is unavailable")]
+    UrlUnavailable,
     #[error("the server returned an invalid HTTP range response")]
     InvalidRange,
     #[error("the server does not support byte-range playback")]
@@ -346,13 +348,13 @@ pub async fn prepare_progressive(
         "initial media range response received"
     );
 
-    if is_expired_status(response.status()) {
+    if let Some(error) = source_url_error(response.status()) {
         tracing::warn!(
             target: "stream.range",
             status = response.status().as_u16(),
             "initial media URL was rejected by the CDN"
         );
-        return Err(ProgressiveError::UrlExpired);
+        return Err(error);
     }
     match response.status() {
         StatusCode::OK => return Ok(ProgressivePreparation::FullDownloadFallback),
@@ -576,13 +578,13 @@ fn fetch_segment(
         .header(RANGE, format!("bytes={start}-{end}"))
         .send()
         .map_err(|_| ProgressiveError::Network)?;
-    if is_expired_status(response.status()) {
+    if let Some(error) = source_url_error(response.status()) {
         tracing::warn!(
             target: "stream.range",
             status = response.status().as_u16(),
             "media range URL was rejected by the CDN"
         );
-        return Err(ProgressiveError::UrlExpired);
+        return Err(error);
     }
     match response.status() {
         StatusCode::PARTIAL_CONTENT => {
@@ -675,11 +677,12 @@ fn set_error(inner: &ProgressiveInner, error: ProgressiveError) {
     inner.ready.notify_all();
 }
 
-fn is_expired_status(status: StatusCode) -> bool {
-    matches!(
-        status,
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND | StatusCode::GONE
-    )
+fn source_url_error(status: StatusCode) -> Option<ProgressiveError> {
+    match status {
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Some(ProgressiveError::UrlExpired),
+        StatusCode::NOT_FOUND | StatusCode::GONE => Some(ProgressiveError::UrlUnavailable),
+        _ => None,
+    }
 }
 
 fn validate_unsatisfied_range(headers: &HeaderMap, max_bytes: u64) -> Result<(), ProgressiveError> {
@@ -712,6 +715,7 @@ fn parse_content_range(value: &str) -> Option<ContentRange> {
 fn map_storage_error(error: StorageError) -> ProgressiveError {
     match error {
         StorageError::UrlExpired => ProgressiveError::UrlExpired,
+        StorageError::Http(404 | 410) => ProgressiveError::UrlUnavailable,
         StorageError::Network | StorageError::Http(_) => ProgressiveError::Network,
         StorageError::ResponseTooLarge => ProgressiveError::ResponseTooLarge,
         StorageError::Initialize
@@ -739,6 +743,7 @@ mod tests {
         IgnoreRange,
         Unsatisfied,
         ExpireAfterInitial,
+        Reject(StatusCode),
     }
 
     struct TestHttpServer {
@@ -838,6 +843,9 @@ mod tests {
                 .push(value.clone());
         }
 
+        if let ServerMode::Reject(status) = state.mode {
+            return test_response(status, None, Vec::new());
+        }
         if matches!(state.mode, ServerMode::ExpireAfterInitial) && request_index > 0 {
             return test_response(StatusCode::FORBIDDEN, None, Vec::new());
         }
@@ -1139,6 +1147,26 @@ mod tests {
         drop(source);
         assert!(wait_until(Duration::from_secs(2), || !path.exists()));
         assert!(server.request_count() < 5);
+    }
+
+    #[tokio::test]
+    async fn missing_media_is_unavailable_while_denied_links_are_expired() {
+        for (status, expected) in [
+            (StatusCode::NOT_FOUND, ProgressiveError::UrlUnavailable),
+            (StatusCode::GONE, ProgressiveError::UrlUnavailable),
+            (StatusCode::UNAUTHORIZED, ProgressiveError::UrlExpired),
+            (StatusCode::FORBIDDEN, ProgressiveError::UrlExpired),
+        ] {
+            let root = tempfile::tempdir().expect("temp root");
+            let server =
+                TestHttpServer::start(Vec::new(), ServerMode::Reject(status), Duration::ZERO);
+            assert_eq!(
+                prepare_from_server(&server, test_storage(&root), "unavailable")
+                    .await
+                    .err(),
+                Some(expected)
+            );
+        }
     }
 
     #[tokio::test]

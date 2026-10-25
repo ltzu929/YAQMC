@@ -1533,7 +1533,9 @@ impl PlayerService {
         // Strict descent bounds recovery even if a provider returns a bad fallback.
         while matches!(
             &preparation,
-            Err(PlaybackSourceError::UrlExpired | PlaybackSourceError::Network)
+            Err(PlaybackSourceError::UrlExpired
+                | PlaybackSourceError::UrlUnavailable
+                | PlaybackSourceError::Network)
         ) && failed_selection.requested_quality == AudioQualityPreference::Automatic
             && !failed_selection.preview
             && failed_selection.resolved_quality != AudioQuality::Standard
@@ -4708,6 +4710,36 @@ mod tests {
         assert_eq!(snapshot.playback_state, PlaybackState::Playing);
         assert_eq!(resolver_calls.load(Ordering::Acquire), 2);
         assert_eq!(preparer_calls.load(Ordering::Acquire), 2);
+    }
+
+    #[tokio::test]
+    async fn automatic_missing_hires_file_falls_back_without_an_expiry_refresh() {
+        let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
+            AudioQualityPreference::Automatic,
+            Some(AudioQuality::Lossless),
+            PlaybackSourceError::UrlUnavailable,
+            false,
+        );
+        let mut track = song("hires-file-missing", 10_000);
+        track.quality = AudioQuality::HiRes;
+        let snapshot = player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![track],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .expect("automatic recovers from missing media");
+        assert_eq!(snapshot.playback_state, PlaybackState::Playing);
+        let selection = snapshot.source_selection.expect("actual selection");
+        assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
+        assert_eq!(
+            selection.fallback_reason,
+            Some(PlaybackFallbackReason::SourceUnavailable)
+        );
+        let expected = vec![AudioQuality::HiRes, AudioQuality::Lossless];
+        assert_eq!(*resolver_calls.lock().unwrap(), expected);
+        assert_eq!(*preparer_calls.lock().unwrap(), expected);
     }
 
     #[tokio::test]
