@@ -74,7 +74,7 @@ fn attach_message() -> AttachMessage {
         protocol: PROTOCOL_VERSION,
         host: HostIdentity {
             app: "yaqmc".to_owned(),
-            version: "0.1.0".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
         },
         platform: PlatformAttach {
             main_window_handle: None,
@@ -90,10 +90,10 @@ async fn handshake_core_ping_and_stdin_eof_shut_the_server_down() {
     let (mut host_transport, core_transport) = duplex_pair();
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
-    let identity = host_handshake(&mut host_transport, attach_message(), Some("0.1.0"))
+    let identity = host_handshake(&mut host_transport, attach_message(), Some(env!("CARGO_PKG_VERSION")))
         .await
         .expect("host handshake");
-    assert_eq!(identity.version, "0.1.0");
+    assert_eq!(identity.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(identity.channel, "test-channel");
 
     host_transport
@@ -126,7 +126,7 @@ async fn platform_attach_and_shutdown_prepare_then_shutdown_ack() {
     let (mut host_transport, core_transport) = duplex_pair();
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
-    host_handshake(&mut host_transport, attach_message(), Some("0.1.0"))
+    host_handshake(&mut host_transport, attach_message(), Some(env!("CARGO_PKG_VERSION")))
         .await
         .expect("host handshake");
 
@@ -190,7 +190,7 @@ async fn stdio_requests_use_main_assigned_origin_for_dialog_split_io() {
     let (mut host_transport, core_transport) = duplex_pair();
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
-    host_handshake(&mut host_transport, attach_message(), Some("0.1.0"))
+    host_handshake(&mut host_transport, attach_message(), Some(env!("CARGO_PKG_VERSION")))
         .await
         .expect("host handshake");
 
@@ -278,7 +278,7 @@ async fn app_preferences_set_emits_preferences_changed_string_payload() {
     let (mut host_transport, core_transport) = duplex_pair();
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
-    host_handshake(&mut host_transport, attach_message(), Some("0.1.0"))
+    host_handshake(&mut host_transport, attach_message(), Some(env!("CARGO_PKG_VERSION")))
         .await
         .expect("host handshake");
 
