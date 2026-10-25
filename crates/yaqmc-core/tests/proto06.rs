@@ -91,23 +91,11 @@ async fn handshake_core_ping_and_stdin_eof_shut_the_server_down() {
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
     let identity = host_handshake(
-
-
         &mut host_transport,
-
-
         attach_message(),
-
-
         Some(env!("CARGO_PKG_VERSION")),
-
-
     )
-
-
     .await
-
-
     .expect("host handshake");
     assert_eq!(identity.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(identity.channel, "test-channel");
@@ -143,23 +131,11 @@ async fn platform_attach_and_shutdown_prepare_then_shutdown_ack() {
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
     host_handshake(
-
-
         &mut host_transport,
-
-
         attach_message(),
-
-
         Some(env!("CARGO_PKG_VERSION")),
-
-
     )
-
-
     .await
-
-
     .expect("host handshake");
 
     host_transport
@@ -223,23 +199,11 @@ async fn stdio_requests_use_main_assigned_origin_for_dialog_split_io() {
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
     host_handshake(
-
-
         &mut host_transport,
-
-
         attach_message(),
-
-
         Some(env!("CARGO_PKG_VERSION")),
-
-
     )
-
-
     .await
-
-
     .expect("host handshake");
 
     host_transport
@@ -327,23 +291,11 @@ async fn app_preferences_set_emits_preferences_changed_string_payload() {
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
 
     host_handshake(
-
-
         &mut host_transport,
-
-
         attach_message(),
-
-
         Some(env!("CARGO_PKG_VERSION")),
-
-
     )
-
-
     .await
-
-
     .expect("host handshake");
 
     host_transport
