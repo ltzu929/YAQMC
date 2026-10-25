@@ -18,13 +18,14 @@ for (const arg of args)
 const variant = args.has('--debug') ? 'debug' : 'benchmark';
 const toolchain = resolveAndroidToolchain();
 const version = rootVersion(root);
-const nativeDir = args.has('--reuse-core') && process.env.YAQMC_ANDROID_NATIVE_LIB_DIR
-  ? path.resolve(process.env.YAQMC_ANDROID_NATIVE_LIB_DIR)
-  : path.join(
-  android,
-  args.has('--reuse-core') ? 'app' : 'nativeApp',
-  'build/generated/jniLibs',
-);
+const nativeDir =
+  args.has('--reuse-core') && process.env.YAQMC_ANDROID_NATIVE_LIB_DIR
+    ? path.resolve(process.env.YAQMC_ANDROID_NATIVE_LIB_DIR)
+    : path.join(
+        android,
+        args.has('--reuse-core') ? 'app' : 'nativeApp',
+        'build/generated/jniLibs',
+      );
 const commit = spawnSync('git', ['rev-parse', 'HEAD'], {
   cwd: root,
   encoding: 'utf8',
