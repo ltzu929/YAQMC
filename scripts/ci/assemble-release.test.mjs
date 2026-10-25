@@ -55,6 +55,7 @@ test('adds a revision-bound Android APK and unified notes to assembled release a
     sourceDir: android,
     destDir: assembled,
     expectedCommit: commit,
+    expectedVersion: '0.1.0',
   });
 
   assert.equal(result.apkName, 'YAQMC-android-arm64-v8a-v0.1.0.apk');
@@ -85,6 +86,7 @@ test('rejects Android assets with a mismatched commit or checksum', () => {
         sourceDir: tampered.android,
         destDir: tampered.assembled,
         expectedCommit: tampered.commit,
+        expectedVersion: '0.1.0',
       }),
     /checksum does not match/u,
   );
