@@ -142,7 +142,7 @@ class NativeBrowseTest {
             }
             model = NativeViewModel(compose.activity.application as Application, api)
             fakeModel = model
-            compose.activity.setContent { NativeApp(model, login = {}, share = {}, reportDrawn = {}) }
+            compose.activity.setContent { NativeApp(model, login = {}, share = { _, _ -> }, reportDrawn = {}) }
             model.action { model.refreshAccount() }
         }
         compose.waitUntil(5000) { model.page.value.loaded && model.account.value.state == (accountOverride?.getString("state") ?: "authenticated") }

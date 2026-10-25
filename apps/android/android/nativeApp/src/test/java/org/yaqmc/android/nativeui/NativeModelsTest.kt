@@ -28,13 +28,14 @@ class NativeModelsTest {
         assertEquals("1", page.tracks.single().json.getJSONObject("provider").getString("trackId"))
     }
 
-    @Test fun lyricClockAppliesOffsetAndHoldsLastLineAcrossGaps() {
+    @Test fun lyricClockDelaysByDocumentOffsetAndRespectsExplicitGaps() {
         val document = JSONObject("""{"songId":"1","metadata":{"offsetMs":100},"lines":[{"startMs":1000,"endMs":2000,"text":"第一句"},{"startMs":4000,"endMs":4500,"text":"第二句"}]}""")
         val lyrics = NativeModels.lyrics(document)
-        assertEquals(-1, lyrics.activeIndex(899))
-        assertEquals(0, lyrics.activeIndex(900))
-        assertEquals(0, lyrics.activeIndex(3000))
-        assertEquals(1, lyrics.activeIndex(8000))
+        assertEquals(-1, lyrics.activeIndex(1099))
+        assertEquals(0, lyrics.activeIndex(1100))
+        assertEquals(-1, lyrics.activeIndex(3000))
+        assertEquals(1, lyrics.activeIndex(4100))
+        assertEquals(-1, lyrics.activeIndex(4600))
     }
 
     @Test fun unsynchronizedLyricsHaveNoFalseTiming() {

@@ -3,7 +3,9 @@ package org.yaqmc.android.nativeui
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.view.KeyEvent
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
@@ -23,6 +25,53 @@ class NativeShellTest {
     private val compose = createAndroidComposeRule<NativeActivity>()
     private val savedPreferences = NativeDevicePreferences()
     @get:Rule val rules: RuleChain = RuleChain.outerRule(savedPreferences).around(compose)
+
+    @Test fun plainPageTextHasVisibleInkInBothThemes() {
+        openSettings()
+        for (theme in listOf("dark", "light")) {
+            compose.runOnIdle { model().setTheme(theme) }
+            val pixels = compose.onNodeWithText("Settings").captureToImage().toPixelMap()
+            var ink = 0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                val pixel = pixels[x, y]
+                if (if (theme == "dark") pixel.red > 0.8f && pixel.green > 0.8f && pixel.blue > 0.8f
+                    else pixel.red < 0.2f && pixel.green < 0.2f && pixel.blue < 0.2f) ink++
+            }
+            assertTrue("Plain page text needs visible $theme theme ink", ink > 20)
+        }
+    }
+
+    @Test fun appearanceAndPicturePickerSurviveLanguageChanges() {
+        openSettings()
+        val before = compose.runOnIdle { model().player.value }
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Customize appearance"))
+        compose.onNodeWithText("Customize appearance").performClick()
+        for (language in listOf("en-US", "zh-CN")) {
+            compose.runOnIdle { model().setLanguage(language) }
+            compose.onNodeWithTag("appearance-settings").assertIsDisplayed()
+            val imageMode = if (language == "zh-CN") "导入图片" else "Imported image"
+            val choose = if (language == "zh-CN") "选择图片" else "Choose image"
+            compose.onNodeWithTag("appearance-settings").performScrollToNode(hasText(imageMode))
+            compose.onNodeWithText(imageMode).performClick()
+            compose.onNodeWithTag("appearance-settings").performScrollToNode(hasText(choose))
+            compose.onNodeWithText(choose).performClick()
+            val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+            compose.waitUntil(10000) {
+                val owner = automation.rootInActiveWindow?.packageName?.toString().orEmpty()
+                owner.isNotBlank() && owner != context().packageName && owner != "${context().packageName}.test"
+            }
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            compose.onNodeWithText(choose).assertIsDisplayed()
+            compose.runOnIdle { assertEquals("", model().preferences.value.appearance.image) }
+        }
+        compose.runOnIdle {
+            val after = model().player.value
+            assertEquals(before.queue.map { it.id }, after.queue.map { it.id })
+            assertEquals(before.current?.id, after.current?.id)
+            assertEquals(before.playing, after.playing)
+        }
+        capture("batch4-zh-picker-cancelled")
+    }
 
     @Test fun navigationOrderAndLibraryChildSelection() {
         val positions = nativeRootDestinations.map { compose.onNodeWithTag("nav-$it").fetchSemanticsNode().boundsInRoot.left }

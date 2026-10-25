@@ -36,6 +36,7 @@ internal interface NativeCoreApi {
 @UnstableApi
 internal class NativeCore(private val context: Context) : NativeCoreApi {
     override suspend fun invoke(method: String, params: JSONObject, host: Boolean): Any? = withCoreDeadline {
+        if (method == "player_pause" || method == "player_stop") PlaybackService.noteRendererPause()
         var prepared = false
         if (PlaybackService.isPlaybackStartMethod(method)) {
             prepared = suspendCancellableCoroutine { continuation ->

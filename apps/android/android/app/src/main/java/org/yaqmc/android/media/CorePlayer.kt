@@ -232,7 +232,7 @@ class CorePlayer(
         val nextIndex = state.nullableInt("currentIndex") ?: C.INDEX_UNSET
         val nextShuffle = state.optBoolean("shuffle", shuffle)
         val nextRepeat = repeatModeFrom(state.optString("repeat", "off"))
-        val nextPlaylist = mediaItems(state.optJSONArray("queue"))
+        val nextPlaylist = mediaItems(state.optJSONArray("queue"), state.optJSONArray("queueEntries"), nextIndex, nextDuration)
         val nextPhase = CorePlaybackPhase.fromWire(state.optString("playbackState", "idle"))
         val nextProjection = projectPlaybackState(nextPhase, projection.playWhenReady)
         val failure = state.optJSONObject("playbackError")
@@ -289,7 +289,7 @@ class CorePlayer(
         else -> Player.REPEAT_MODE_OFF
     }
 
-    private fun mediaItems(queue: JSONArray?): List<MediaItemData> {
+    private fun mediaItems(queue: JSONArray?, entries: JSONArray?, activeIndex: Int, activeDuration: Long?): List<MediaItemData> {
         if (queue == null) return emptyList()
         return buildList {
             for (index in 0 until queue.length()) {
@@ -322,9 +322,11 @@ class CorePlayer(
                     .setMediaId(id)
                     .setMediaMetadata(metadata)
                     .build()
-                val itemDuration = song.nullableLong("durationMs") ?: C.TIME_UNSET
+                val itemDuration = if (index == activeIndex && activeDuration != null) activeDuration else song.nullableLong("durationMs") ?: C.TIME_UNSET
+                // Media3 timeline UIDs identify queue entries, including repeated copies of a song.
+                val uid = entries?.optJSONObject(index)?.optString("id")?.takeIf(String::isNotBlank) ?: "legacy:$index:$id"
                 add(
-                    MediaItemData.Builder(id)
+                    MediaItemData.Builder(uid)
                         .setMediaItem(item)
                         .setMediaMetadata(metadata)
                         .setIsSeekable(itemDuration > 0)

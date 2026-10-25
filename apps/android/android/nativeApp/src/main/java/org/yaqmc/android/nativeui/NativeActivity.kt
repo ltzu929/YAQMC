@@ -12,6 +12,7 @@ import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import org.json.JSONObject
 import org.yaqmc.android.OAuthActivity
 import org.yaqmc.android.core.DeepLinkInbox
@@ -26,6 +27,7 @@ class NativeActivity : ComponentActivity() {
     private val model: NativeViewModel by viewModels()
     private val deepLinks = DeepLinkManager()
     private var links: AutoCloseable? = null
+    private var shareJob: Job? = null
     private val oauth = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         model.finishOAuth(if (it.resultCode == Activity.RESULT_OK) it.data?.dataString else null)
     }
@@ -53,7 +55,7 @@ class NativeActivity : ComponentActivity() {
     override fun onResume() { super.onResume(); MobileLoginOwner.lifecycle("foreground") }
     override fun onPause() { MobileLoginOwner.lifecycle("background"); super.onPause() }
     override fun onStop() { model.stopObserving(); super.onStop() }
-    override fun onDestroy() { links?.close(); super.onDestroy() }
+    override fun onDestroy() { shareJob?.cancel(); links?.close(); super.onDestroy() }
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); deepLinks.accept(intent) }
 
     private fun login(method: String) {
@@ -81,9 +83,15 @@ class NativeActivity : ComponentActivity() {
         )
     }
 
-    private fun share(track: Track) = model.action {
-        val target = model.core.objectResult("catalog_share_song", NativeViewModel.provider(track.providerId).put("id", track.id))
-        val text = listOf("${track.title.ifBlank { model.localizedString(R.string.native_unknown_song) }} — ${track.artists}", target.text("canonicalHttpsUrl")).filter(String::isNotBlank).joinToString("\n")
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }, model.localizedString(R.string.native_share_song)))
+    private fun share(track: Track, kind: SongShareKind) {
+        if (shareJob?.isActive == true) return
+        shareJob = model.action {
+            val payload = NativeSongShare.resolve(track, kind, model.core)
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TITLE, payload.title)
+                putExtra(Intent.EXTRA_TEXT, payload.text)
+            }, model.localizedString(R.string.native_share_song)))
+        }
     }
 }

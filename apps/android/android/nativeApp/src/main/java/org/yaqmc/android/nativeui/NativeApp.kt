@@ -3,14 +3,13 @@ package org.yaqmc.android.nativeui
 import android.app.Activity
 import android.util.Base64
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -33,22 +33,30 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.view.WindowCompat
 import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import org.json.JSONObject
 import org.yaqmc.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
 @Composable
-internal fun NativeApp(model: NativeViewModel, login: (String) -> Unit, share: (Track) -> Unit, reportDrawn: () -> Unit) {
+internal fun NativeApp(model: NativeViewModel, login: (String) -> Unit, share: (Track, SongShareKind) -> Unit, reportDrawn: () -> Unit) {
     val preferences by model.preferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val localized = remember(context, configuration, preferences.language) { context.withNativeLanguage(preferences) }
-    CompositionLocalProvider(LocalNativeContext provides localized, LocalContext provides localized, LocalConfiguration provides localized.resources.configuration) {
+    val density = LocalDensity.current
+    // A configuration Context no longer points back to the Activity. Retain its picker registry.
+    val activityResults = checkNotNull(LocalActivityResultRegistryOwner.current)
+    CompositionLocalProvider(LocalNativeContext provides localized, LocalContext provides localized, LocalConfiguration provides localized.resources.configuration,
+        LocalActivityResultRegistryOwner provides activityResults,
+        LocalDensity provides Density(density.density, density.fontScale * preferences.appearance.fontScale / 100f)) {
         NativeShell(model, login, share, reportDrawn)
     }
 }
@@ -56,11 +64,14 @@ internal fun NativeApp(model: NativeViewModel, login: (String) -> Unit, share: (
 @OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
 @Composable
-private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: (Track) -> Unit, reportDrawn: () -> Unit) {
+private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: (Track, SongShareKind) -> Unit, reportDrawn: () -> Unit) {
     val preferences by model.preferences.collectAsStateWithLifecycle()
     val account by model.account.collectAsStateWithLifecycle()
     val route by model.route.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
+    val artwork by remember(model) { model.player.map { it.current?.artwork }.distinctUntilChanged() }.collectAsStateWithLifecycle(initialValue = null)
+    var shareTrack by remember { mutableStateOf<Track?>(null) }
+    val openShare: (Track) -> Unit = { shareTrack = it }
     val systemDark = isSystemInDarkTheme()
     val dark = preferences.isDark(systemDark)
     val view = LocalView.current
@@ -71,22 +82,23 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
             isAppearanceLightNavigationBars = !dark
         }
     }
-    val colors = if (dark) darkColorScheme(primary = Color(0xffd5ee8d), onPrimary = Color(0xff171b0d),
-        background = Color(0xff11120f), surface = Color(0xff181a16), onBackground = Color(0xfff0f2e9), onSurface = Color(0xfff0f2e9))
-        else lightColorScheme(primary = Color(0xff708f35), onPrimary = Color.White,
-            background = Color(0xfff5f5f1), surface = Color(0xffffffff), onBackground = Color(0xff1d201a), onSurface = Color(0xff1d201a))
+    val colors = remember(preferences.appearance, dark) { nativeColorScheme(preferences.appearance, dark) }
+    val typography = remember(preferences.appearance.fontFamily) { nativeTypography(preferences.appearance.fontFamily) }
     val roots = nativeRootDestinations.map { it to titleFor(it).resolve() }
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     BackHandler(route.kind != "home") { if (!model.back()) model.navigate(NativeRoute(), root = true) }
-    MaterialTheme(colorScheme = colors) {
+    MaterialTheme(colorScheme = colors, typography = typography) {
+        CompositionLocalProvider(LocalContentColor provides colors.onBackground) {
         val snack = remember { SnackbarHostState() }
         val messageText = message?.resolve()
         LaunchedEffect(messageText) { messageText?.let { snack.showSnackbar(it); model.dismissMessage() } }
+        Box(Modifier.fillMaxSize()) {
+        NativeBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
         Scaffold(
-            containerColor = colors.background,
+            containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snack) },
             topBar = {
-                TopAppBar(title = { Text("YAQMC", fontWeight = FontWeight.Bold) }, navigationIcon = {
+                TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface, scrolledContainerColor = colors.surface), title = { Text("YAQMC", fontWeight = FontWeight.Bold) }, navigationIcon = {
                     if (route.kind !in roots.map { it.first }) IconButton(onClick = { if (!model.back()) model.navigate(NativeRoute(), true) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_back))
                     }
@@ -106,8 +118,8 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
             },
             bottomBar = {
                 Column {
-                    if (route.kind != "player") MiniPlayer(model)
-                    if (!wide) NavigationBar { roots.forEach { (kind, label) ->
+                    if (route.kind != "player") MiniPlayer(model, openShare)
+                    if (!wide) NavigationBar(containerColor = colors.surface) { roots.forEach { (kind, label) ->
                         NavigationBarItem(selected = selectedRoot(route.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
                             icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.testTag("nav-$kind"))
                     } }
@@ -115,7 +127,7 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
             },
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
-                if (wide) NavigationRail(Modifier.fillMaxHeight()) { roots.forEach { (kind, label) ->
+                if (wide) NavigationRail(Modifier.fillMaxHeight(), containerColor = colors.surface) { roots.forEach { (kind, label) ->
                     NavigationRailItem(selected = selectedRoot(route.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
                         icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.weight(1f, fill = false).testTag("nav-$kind"))
                 } }
@@ -123,14 +135,20 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                     when (route.kind) {
                         "library" -> Library(model)
                         "settings" -> Settings(model, login)
-                        "player" -> NowPlaying(model)
-                        "queue" -> Queue(model, share)
-                        else -> Catalog(model, route, share, reportDrawn)
+                        "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics)
+                        "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
+                            { model.setAppearance(NativeAppearancePreferences()); model.setTheme("system") }, model::notify)
+                        "player" -> NowPlaying(model, openShare)
+                        "queue" -> Queue(model, openShare)
+                        else -> Catalog(model, route, openShare, reportDrawn)
                     }
                 }
             }
         }
+        }
         AddToPlaylistDialog(model)
+        shareTrack?.let { SongShareDialog(it, { shareTrack = null }, share) }
+        }
     }
 }
 
@@ -149,36 +167,7 @@ internal fun Artwork(source: Any?, modifier: Modifier = Modifier) {
 
 @UnstableApi
 @Composable
-private fun MiniPlayer(model: NativeViewModel) {
-    val player by model.player.collectAsStateWithLifecycle()
-    val current = player.current ?: return
-    Surface(tonalElevation = 3.dp) {
-        Row(Modifier.fillMaxWidth().clickable { model.navigate(NativeRoute("player")) }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Artwork(current.artwork, Modifier.size(44.dp))
-            Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(current.title.ifBlank { stringResource(R.string.native_unknown_song) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(current.artists, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Transport(if (player.playing) "Ⅱ" else "▶", if (player.playing) stringResource(R.string.native_pause) else stringResource(R.string.native_play)) { model.command("player_toggle") }
-            Transport(">|", stringResource(R.string.native_next)) { model.command("player_next") }
-            IconButton(onClick = { model.navigate(NativeRoute("queue")) }) { Icon(Icons.Default.Menu, stringResource(R.string.native_queue)) }
-        }
-    }
-}
-
-@Composable
-private fun Transport(text: String, label: String, action: () -> Unit) {
-    IconButton(onClick = action, modifier = Modifier.semantics { contentDescription = label }) { Text(text, style = MaterialTheme.typography.titleLarge) }
-}
-
-@UnstableApi
-@Composable
-internal fun TrackRow(track: Track, model: NativeViewModel, share: (Track) -> Unit, play: () -> Unit, remove: (() -> Unit)? = null) {
-    var menu by remember(track.key) { mutableStateOf(false) }
-    val account by model.account.collectAsStateWithLifecycle()
-    val favorites by model.favorites.collectAsStateWithLifecycle()
-    val pending by model.pendingFavorites.collectAsStateWithLifecycle()
-    val favorite = favorites[track.key] ?: track.favorite
+internal fun TrackRow(track: Track, model: NativeViewModel, share: (Track) -> Unit, play: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = play).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Artwork(track.artwork, Modifier.size(48.dp))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
@@ -186,18 +175,7 @@ internal fun TrackRow(track: Track, model: NativeViewModel, share: (Track) -> Un
             EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
         }
         Text(formatTime(track.duration), style = MaterialTheme.typography.labelSmall)
-        Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.native_more_track, track.title.ifBlank { stringResource(R.string.native_unknown_song) })) }
-            NativeDropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text(stringResource(R.string.native_add_queue)) }, onClick = { menu = false; model.command("player_add_to_queue", JSONObject().put("track", track.json)) })
-                DropdownMenuItem(text = { Text(if (track.key in pending) stringResource(R.string.native_working) else if (favorite) stringResource(R.string.native_unfavorite) else stringResource(R.string.native_favorite)) },
-                    enabled = track.key !in pending && (!account.authenticated || (account.canFavorite && track.writable)), onClick = { menu = false; model.favorite(track) })
-                DropdownMenuItem(text = { Text(stringResource(R.string.native_add_playlist)) }, enabled = !account.authenticated || account.canWrite(track), onClick = { menu = false; model.openPicker(track) })
-                DropdownMenuItem(text = { Text(stringResource(R.string.native_song_details)) }, onClick = { menu = false; model.navigate(NativeRoute("song", track.id)) })
-                DropdownMenuItem(text = { Text(stringResource(R.string.native_share)) }, onClick = { menu = false; share(track) })
-                remove?.let { DropdownMenuItem(text = { Text(stringResource(R.string.native_remove_queue)) }, onClick = { menu = false; it() }) }
-            }
-        }
+        TrackMenu(track, model, share)
     }
 }
 
@@ -224,6 +202,7 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
     val busy by model.accountBusy.collectAsStateWithLifecycle()
     val quality by model.quality.collectAsStateWithLifecycle()
     val cache by model.cache.collectAsStateWithLifecycle()
+    val qualityBusy by model.qualityBusy.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.cacheStats() }
@@ -259,10 +238,12 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
         if (account.loginPending) item { TextButton(enabled = !busy, onClick = { model.cancelLogin() }) { Text(stringResource(R.string.native_cancel_login)) } }
         item { Text(stringResource(R.string.native_appearance), style = MaterialTheme.typography.titleLarge) }
         item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark)).forEach { (value, label) -> FilterChip(preferences.theme == value, { model.setTheme(value) }, label = { Text(label) }, modifier = Modifier.testTag("theme-$value")) } } }
+        item { OutlinedButton(onClick = { model.navigate(NativeRoute("appearance-settings")) }) { Text(stringResource(R.string.native_appearance_customize)) } }
         item { Text(stringResource(R.string.native_language), style = MaterialTheme.typography.titleLarge) }
         item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("system" to stringResource(R.string.native_system), "zh-CN" to stringResource(R.string.native_chinese), "en-US" to stringResource(R.string.native_english)).forEach { (value, label) -> FilterChip(preferences.language == value, { model.setLanguage(value) }, label = { Text(label) }, modifier = Modifier.testTag("language-$value")) } } }
         item { Text(stringResource(R.string.native_default_quality), style = MaterialTheme.typography.titleLarge) }
-        item { QualityPicker(quality) { model.changeQuality(it) } }
+        item { QualityPicker(quality, enabled = !qualityBusy) { model.changeQuality(it) } }
+        item { OutlinedButton(onClick = { model.navigate(NativeRoute("lyric-settings")) }) { Text(stringResource(R.string.native_lyric_settings)) } }
         item { Text(cache?.let { stringResource(R.string.native_cache_mb, it) } ?: stringResource(R.string.native_cache_loading)); OutlinedButton(onClick = { confirmClear = true }) { Text(stringResource(R.string.native_clear_cache)) } }
         item { Text("YAQMC Native · ${org.yaqmc.android.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall) }
     }
@@ -273,91 +254,6 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
 @Composable
 internal fun Confirm(title: String, close: () -> Unit, confirm: () -> Unit) {
     NativeAlertDialog(onDismissRequest = close, title = { Text(title) }, confirmButton = { TextButton(onClick = { close(); confirm() }) { Text(stringResource(R.string.native_confirm)) } }, dismissButton = { TextButton(onClick = close) { Text(stringResource(R.string.native_cancel)) } })
-}
-
-@Composable
-private fun QualityPicker(current: String, select: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val choices = listOf("automatic" to stringResource(R.string.native_quality_automatic), "standard" to stringResource(R.string.native_quality_standard), "high" to stringResource(R.string.native_quality_high), "lossless" to stringResource(R.string.native_quality_lossless), "hi-res" to stringResource(R.string.native_quality_hires), "master" to stringResource(R.string.native_quality_master))
-    Box {
-        OutlinedButton(onClick = { open = true }) { Text(choices.find { it.first == current }?.second ?: stringResource(R.string.native_select_quality)) }
-        NativeDropdownMenu(open, { open = false }) { choices.forEach { (value, label) -> DropdownMenuItem(text = { Text(label) }, onClick = { open = false; select(value) }) } }
-    }
-}
-
-@UnstableApi
-@Composable
-private fun Queue(model: NativeViewModel, share: (Track) -> Unit) {
-    val player by model.player.collectAsStateWithLifecycle()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item { Text(stringResource(R.string.native_queue_count, player.queue.size), style = MaterialTheme.typography.headlineMedium) }
-        itemsIndexed(player.queue) { index, track ->
-            TrackRow(track, model, share, play = { model.command("player_play_from_queue", JSONObject().put("index", index)) }, remove = {
-                player.entryIds.getOrNull(index)?.let { model.command("player_remove_queue_entry", JSONObject().put("entryId", it)) }
-            })
-        }
-    }
-}
-
-@UnstableApi
-@Composable
-private fun NowPlaying(model: NativeViewModel) {
-    val player by model.player.collectAsStateWithLifecycle()
-    val lyrics by model.lyrics.collectAsStateWithLifecycle()
-    val track = player.current
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
-    if (track == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.native_select_song)) }; return }
-    val progressLabel = stringResource(R.string.native_progress)
-    val controls: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Artwork(track.artwork, Modifier.size(if (wide) 128.dp else 150.dp))
-            Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) }, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(track.artists, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-            var seeking by remember(track.id) { mutableStateOf<Float?>(null) }
-            Slider(value = seeking ?: player.position.coerceIn(0, player.duration).toFloat(), onValueChange = { seeking = it },
-                valueRange = 0f..player.duration.coerceAtLeast(1).toFloat(), onValueChangeFinished = {
-                    seeking?.let { model.command("player_seek", JSONObject().put("positionMs", it.toLong())) }; seeking = null
-                }, modifier = Modifier.semantics { contentDescription = progressLabel })
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatTime(player.position)); Text(formatTime(player.duration)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Transport("|<", stringResource(R.string.native_previous)) { model.command("player_previous") }
-                FilledTonalButton(onClick = { model.command("player_toggle") }) { Text(if (player.playing) stringResource(R.string.native_pause) else stringResource(R.string.native_play)) }
-                Transport(">|", stringResource(R.string.native_next)) { model.command("player_next") }
-                IconButton(onClick = { model.navigate(NativeRoute("queue")) }) { Icon(Icons.Default.Menu, stringResource(R.string.native_queue)) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = {
-                    val mode = when (player.mode) { "sequential" -> "shuffle"; "shuffle" -> "repeat-one"; else -> "sequential" }
-                    model.command("player_set_primary_playback_mode", JSONObject().put("mode", mode))
-                }) { Text(when (player.mode) { "shuffle" -> stringResource(R.string.native_shuffle); "repeat-one" -> stringResource(R.string.native_repeat_one); else -> stringResource(R.string.native_sequential) }) }
-                QualityPicker(player.quality) { model.changeQuality(it, current = true) }
-            }
-            player.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        }
-    }
-    if (wide) Row(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.weight(0.45f).fillMaxHeight()) { item { controls() } }
-        LyricList(lyrics, player.position, model, Modifier.weight(0.55f))
-    } else Column(Modifier.fillMaxSize()) { controls(); LyricList(lyrics, player.position, model, Modifier.weight(1f)) }
-}
-
-@UnstableApi
-@Composable
-private fun LyricList(lyrics: Lyrics, position: Long, model: NativeViewModel, modifier: Modifier) {
-    val list = rememberLazyListState()
-    val active = lyrics.activeIndex(position)
-    LaunchedEffect(active, lyrics.songId) { if (active >= 0 && !list.isScrollInProgress) list.animateScrollToItem((active - 1).coerceAtLeast(0)) }
-    LazyColumn(modifier.fillMaxHeight(), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        if (lyrics.lines.isEmpty()) item { Text(stringResource(R.string.native_no_lyrics), style = MaterialTheme.typography.titleLarge) }
-        itemsIndexed(lyrics.lines) { index, line ->
-            Column(Modifier.fillMaxWidth().clickable(enabled = line.start != null) { model.command("player_seek", JSONObject().put("positionMs", ((line.start ?: 0) - lyrics.offset).coerceAtLeast(0))) }.padding(vertical = 4.dp)) {
-                Text(line.text, style = MaterialTheme.typography.titleLarge, fontWeight = if (index == active) FontWeight.Bold else FontWeight.Normal,
-                    color = if (index == active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                if (line.translation.isNotBlank()) Text(line.translation, style = MaterialTheme.typography.bodySmall)
-                if (line.romanization.isNotBlank()) Text(line.romanization, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
 }
 
 @Composable

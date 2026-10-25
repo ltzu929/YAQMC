@@ -19,8 +19,11 @@ internal class AudioFocusPolicy {
     private var transientPause = false
     private var resumable = true
 
+    val awaitingFocusGain: Boolean get() = transientPause && resumable && !userPaused
+
     fun onUserPlay() {
         userPaused = false
+        transientPause = false
         resumable = true
     }
 

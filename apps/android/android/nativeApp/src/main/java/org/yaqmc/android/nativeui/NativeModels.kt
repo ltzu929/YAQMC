@@ -70,30 +70,6 @@ internal data class CatalogPage(
     val tracks: List<Track> get() = sections.flatMap { it.tracks }
 }
 
-internal data class PlayerState(
-    val queue: List<Track> = emptyList(),
-    val entryIds: List<String> = emptyList(),
-    val currentIndex: Int = -1,
-    val position: Long = 0,
-    val duration: Long = 0,
-    val playing: Boolean = false,
-    val phase: String = "idle",
-    val mode: String = "sequential",
-    val quality: String = "",
-    val error: String? = null,
-) {
-    val current: Track? get() = queue.getOrNull(currentIndex)
-}
-
-internal data class LyricLine(
-    val start: Long?, val end: Long?, val text: String,
-    val translation: String, val romanization: String, val words: List<LyricWord>,
-)
-internal data class LyricWord(val start: Long, val end: Long, val text: String)
-internal data class Lyrics(val songId: String = "", val offset: Long = 0, val lines: List<LyricLine> = emptyList()) {
-    fun activeIndex(position: Long): Int = lines.indexOfLast { it.start != null && it.start <= position + offset }
-}
-
 /** JSON is decoded only at the existing Core boundary. Track JSON is preserved for playback requests. */
 internal object NativeModels {
     fun tracks(array: JSONArray?): List<Track> = array.objects().map(::Track)
@@ -192,7 +168,7 @@ internal object NativeModels {
                 line.text("translation"), line.text("romanization"), line.optJSONArray("words").objects().map {
                     LyricWord(it.optLong("startMs"), it.optLong("endMs"), it.text("text"))
                 })
-        })
+        }, synchronized = value.text("syncMode") != "unsynchronized", wordSynchronized = value.text("syncMode") == "word")
 }
 
 internal fun formatTime(ms: Long): String = "%d:%02d".format((ms.coerceAtLeast(0) / 60000), (ms.coerceAtLeast(0) / 1000) % 60)

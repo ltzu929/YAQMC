@@ -1,5 +1,6 @@
 package org.yaqmc.android.media
 
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import org.yaqmc.android.BuildConfig
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
@@ -31,6 +33,7 @@ class PlaybackService : MediaSessionService() {
     private var shuttingDown = false
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        if (BuildConfig.DEBUG) android.util.Log.d("YAQMCFocus", "change=$change playbackIntent=${player?.hasPlaybackIntent()}")
         val focusChange = when (change) {
             AudioManager.AUDIOFOCUS_GAIN -> FocusChange.GAIN
             AudioManager.AUDIOFOCUS_LOSS -> FocusChange.LOSS
@@ -39,7 +42,7 @@ class PlaybackService : MediaSessionService() {
             else -> null
         } ?: return@OnAudioFocusChangeListener
         if (focusChange == FocusChange.GAIN) focusHeld = true
-        if (focusChange == FocusChange.LOSS) focusHeld = false
+        if (focusChange != FocusChange.GAIN) focusHeld = false
         applyFocusAction(
             focusPolicy.onFocusChange(
                 focusChange,
@@ -67,12 +70,16 @@ class PlaybackService : MediaSessionService() {
         player = CorePlayer(
             Looper.getMainLooper(),
             ::requestAudioFocus,
-            onUserPause = focusPolicy::onUserPause,
+            onUserPause = ::noteUserPause,
             onUserPlay = focusPolicy::onUserPlay,
             onPlaybackResourcesChanged = ::updatePlaybackResources,
             onStopRequested = ::stopAfterCore,
         )
-        session = MediaSession.Builder(this, player!!).setId("yaqmc").build()
+        val sessionBuilder = MediaSession.Builder(this, player!!).setId("yaqmc")
+        packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
+            sessionBuilder.setSessionActivity(PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+        }
+        session = sessionBuilder.build()
         ContextCompat.registerReceiver(
             this,
             noisyReceiver,
@@ -108,7 +115,7 @@ class PlaybackService : MediaSessionService() {
     private fun prepareForRendererCommand(method: String): Pair<Boolean, Boolean> {
         if (shuttingDown) return false to false
         val shouldStart = method != "player_toggle" || player?.hasPlaybackIntent() != true
-        if (!shouldStart) return true to false
+        if (!shouldStart) { noteUserPause(); return true to false }
         if (!requestAudioFocus()) return false to false
         focusPolicy.onUserPlay()
         player?.noteExternalPlayRequest()
@@ -121,7 +128,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun requestAudioFocus(): Boolean {
-        if (focusHeld) return true
+        if (focusHeld && !focusPolicy.awaitingFocusGain) return true
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -167,12 +174,19 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun updatePlaybackResources(held: Boolean) {
+        // Keep the request registered during a temporary interruption so Android can return GAIN.
+        if (focusPolicy.awaitingFocusGain) { updateWakeLock(false); return }
         if (held && !focusHeld && !requestAudioFocus()) {
             player?.pauseForSystem()
             return
         }
         updateWakeLock(held)
         if (!held) abandonAudioFocus()
+    }
+
+    private fun noteUserPause() {
+        focusPolicy.onUserPause()
+        if (player?.hasPlaybackIntent() != true) abandonAudioFocus()
     }
 
     private fun updateWakeLock(held: Boolean) {
@@ -197,7 +211,6 @@ class PlaybackService : MediaSessionService() {
             "continuation_start",
             "player_play",
             "player_play_from_queue",
-            "player_play_next_queue_entry",
             "player_play_queue_entry",
             "player_play_tracks",
             "player_toggle",
@@ -239,6 +252,10 @@ class PlaybackService : MediaSessionService() {
 
         fun cancelPreparedRendererPlayback() {
             mainHandler.post { active?.cancelPreparedPlayback() }
+        }
+
+        fun noteRendererPause() {
+            mainHandler.post { active?.noteUserPause() }
         }
     }
 }

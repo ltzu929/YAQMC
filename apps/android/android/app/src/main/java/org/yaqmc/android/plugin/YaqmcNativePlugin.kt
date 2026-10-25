@@ -165,6 +165,7 @@ class YaqmcNativePlugin : Plugin(), CoreManager.Callback {
                 if (useQqMusicApp) startMobileLogin(call, params) else startOAuth(call, params, providerScoped = true)
             }
             else -> {
+                if (method == "player_pause" || method == "player_stop") PlaybackService.noteRendererPause()
                 if (PlaybackService.isPlaybackStartMethod(method)) {
                     PlaybackService.prepareRendererPlayback(context, method) { allowed, prepared ->
                         bridge.executeOnMainThread {

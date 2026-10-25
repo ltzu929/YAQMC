@@ -45,6 +45,11 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     val message = _message.asStateFlow()
     private val _quality = MutableStateFlow("automatic")
     val quality = _quality.asStateFlow()
+    private val _qualityBusy = MutableStateFlow(false)
+    val qualityBusy = _qualityBusy.asStateFlow()
+    private val _queueBusy = MutableStateFlow(false)
+    val queueBusy = _queueBusy.asStateFlow()
+    private var continuationNotificationRevision = 0L
     private val _cache = MutableStateFlow<Long?>(null)
     val cache = _cache.asStateFlow()
     private val preferenceStore = NativePreferenceStore(application.getSharedPreferences("native-ui", 0))
@@ -112,6 +117,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
             if (route.value.kind in setOf("favorites", "recent", "account-playlists", "account-playlist")) load(refresh = true)
             _quality.value = core.objectResult("provider_status", provider()).text("preferredQuality", "automatic")
         }
+        action { acceptContinuation(core.objectResult("continuation_snapshot")) }
     }
 
     fun stopObserving() {
@@ -130,6 +136,11 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     override fun onCoreEvent(sequence: Long, channel: String, json: String) {
         when (channel) {
             "player://snapshot" -> snapshots.trySend(json)
+            "api://event" -> viewModelScope.launch {
+                runCatching { JSONObject(json) }.getOrNull()?.let { event ->
+                    if (event.text("type") == "continuation.changed") event.optJSONObject("data")?.let(::acceptContinuation)
+                }
+            }
             "account://changed" -> viewModelScope.launch {
                 accountJob?.cancel()
                 accountJob = action {
@@ -145,17 +156,23 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     private fun acceptPlayer(value: JSONObject) {
+        val revision = value.optLong("snapshotRevision", -1)
+        val previous = _player.value
+        if (revision >= 0 && previous.revision > revision) return
+        if (revision == previous.revision && value.optLong("sampledAtMs") > 0 && value.optLong("sampledAtMs") < previous.sampledAt) return
         val rawQueue = value.optJSONArray("queue")?.toString().orEmpty()
         if (rawQueue != lastQueueJson) {
             lastQueue = NativeModels.tracks(value.optJSONArray("queue"))
             lastQueueJson = rawQueue
         }
-        val index = if (value.isNull("currentIndex")) -1 else value.optInt("currentIndex", -1)
-        val state = PlayerState(lastQueue, value.optJSONArray("queueEntries").objects().map { it.text("id") },
-            index, value.optLong("positionMs"), if (value.isNull("playbackDurationMs")) lastQueue.getOrNull(index)?.duration ?: 0 else value.optLong("playbackDurationMs"),
-            value.optBoolean("isPlaying"), value.text("playbackState", "idle"), value.text("primaryPlaybackMode", "sequential"),
-            value.optJSONObject("sourceSelection")?.text("resolvedQuality").orEmpty(), value.optJSONObject("playbackError")?.text("message"))
-        _player.value = state
+        _player.value = NativePlayback.decode(value, lastQueue)
+    }
+
+    private fun acceptContinuation(value: JSONObject) {
+        val revision = value.optLong("notificationRevision")
+        if (revision <= continuationNotificationRevision) return
+        continuationNotificationRevision = revision
+        if (value.text("terminalReason") == "provider-error") notify(R.string.native_continuation_stopped)
     }
 
     fun navigate(next: NativeRoute, root: Boolean = false) {
@@ -195,7 +212,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "player", "queue")) return
+        if (target.kind in setOf("library", "settings", "lyric-settings", "appearance-settings", "player", "queue")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)
@@ -261,6 +278,40 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     fun command(method: String, params: JSONObject = JSONObject()) = action {
         val result = core.invoke(method, params)
         if (result is JSONObject && result.has("queue")) snapshots.trySend(result.toString())
+        if (method == "continuation_start") {
+            if (result is JSONObject) acceptContinuation(result)
+            snapshots.trySend(core.objectResult("player_snapshot").toString())
+        }
+    }
+
+    fun playQueueEntry(id: String) {
+        val entry = player.value.entries.find { it.id == id } ?: return
+        if (entry.track.providerId != "qqmusic") { notify(R.string.native_unsupported_provider); return }
+        if (player.value.authoritative) command("player_play_queue_entry", JSONObject().put("entryId", id))
+        else command("player_play_from_queue", JSONObject().put("index", entry.index))
+    }
+
+    fun playNextQueueEntry(id: String) = editQueue("player_play_next_queue_entry", id)
+    fun removeQueueEntry(id: String) = editQueue("player_remove_queue_entry", id)
+    fun moveQueueEntry(id: String, targetId: String) {
+        if (id != targetId) editQueue("player_reorder_queue_entry", id, targetId)
+    }
+
+    private fun editQueue(method: String, id: String, targetId: String? = null) {
+        val state = player.value
+        if (_queueBusy.value || !state.authoritative || id !in state.entryIds) return
+        val params = JSONObject().put("entryId", id)
+        if (targetId != null) {
+            val target = state.entryIds.indexOf(targetId)
+            if (target < 0) return
+            params.put("targetIndex", target)
+        }
+        if (method == "player_play_next_queue_entry" && (state.currentEntry?.id == id || state.current == null)) return
+        _queueBusy.value = true
+        action {
+            try { snapshots.trySend(core.objectResult(method, params).toString()) }
+            finally { _queueBusy.value = false }
+        }
     }
 
     fun play(tracks: List<Track>, start: Track? = tracks.firstOrNull(), shuffle: Boolean? = null, continuation: String? = null) {
@@ -288,7 +339,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun playTrack(tracks: List<Track>, track: Track, continuation: String? = null) {
         val current = player.value.current
-        if (current?.key == track.key) command("player_toggle") else play(tracks, track, continuation = continuation)
+        if (current?.key == track.key) command("player_toggle")
+        else play(if (continuation != null) tracks.drop(tracks.indexOf(track).coerceAtLeast(0)) else tracks, track, continuation = continuation)
     }
 
     fun addTracks(tracks: List<Track>) {
@@ -413,13 +465,23 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         }
     }
 
-    fun changeQuality(value: String, current: Boolean = false) = action {
-        val result = core.objectResult(if (current) "provider_set_current_quality" else "provider_set_preferred_quality", provider().put("quality", value))
-        if (current) snapshots.trySend(result.toString()) else _quality.value = result.text("preferredQuality", value)
+    fun changeQuality(value: String, current: Boolean = false) {
+        if (_qualityBusy.value || value !in NativePlayback.qualities) return
+        val state = player.value
+        if (current && (state.current?.providerId != "qqmusic" || state.selection.capabilities.any { it.quality == value && it.unavailable })) return
+        _qualityBusy.value = true
+        action {
+            try {
+                val result = core.objectResult(if (current) "provider_set_current_quality" else "provider_set_preferred_quality", provider().put("quality", value))
+                if (current) snapshots.trySend(result.toString()) else _quality.value = result.text("preferredQuality", value)
+            } finally { _qualityBusy.value = false }
+        }
     }
 
     fun setTheme(value: String) = preferenceStore.setTheme(value)
     fun setLanguage(value: String) = preferenceStore.setLanguage(value)
+    fun setLyrics(value: NativeLyricPreferences) = preferenceStore.setLyrics(value)
+    fun setAppearance(value: NativeAppearancePreferences) = preferenceStore.setAppearance(value)
     fun localizedString(resource: Int): String = getApplication<Application>().withNativeLanguage(preferences.value).getString(resource)
     fun dismissMessage() { _message.value = null }
     fun notify(resource: Int) { _message.value = NativeText(resource) }
@@ -562,6 +624,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
             "native.create.unconfirmed" -> R.string.native_create_unconfirmed
             "core.protocol" -> R.string.native_request_failed
             "audio.focus" -> R.string.native_audio_focus
+            "native.share.invalid" -> R.string.native_share_unavailable
+            "native.share.public" -> R.string.native_share_public_unavailable
             else -> null
         }
         return if (resource != null) NativeText(resource) else error.message?.takeIf(String::isNotBlank)?.let(::NativeText) ?: NativeText(fallback)

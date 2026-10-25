@@ -5,6 +5,35 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NativePreferencesTest {
+    @Test fun appearanceChangesAndResetPreserveLyricsLanguageAndUnknownPreferences() {
+        val storage = MemoryPreferences(mutableMapOf("theme" to "dark", "language" to "zh-CN", "future-setting" to "keep"))
+        val store = NativePreferenceStore(storage)
+        store.setLyrics(NativeLyricPreferences(timingOffsetMs = 850, romanization = "hide"))
+        store.setAppearance(NativeAppearancePreferences().withPalette("ocean").copy(fontScale = 120))
+        assertEquals("ocean", NativePreferenceStore(storage).state.value.appearance.palette)
+        store.setAppearance(NativeAppearancePreferences())
+        val restart = NativePreferenceStore(storage).state.value
+        assertEquals(NativeAppearancePreferences(), restart.appearance)
+        assertEquals(850L, restart.lyrics.timingOffsetMs)
+        assertEquals("hide", restart.lyrics.romanization)
+        assertEquals("zh-CN", restart.language)
+        assertEquals("dark", restart.theme)
+        assertEquals("keep", storage.getString("future-setting", null))
+    }
+
+    @Test fun lyricsSurviveRestartWithoutOverwritingThemeLanguageOrUnknownKeys() {
+        val storage = MemoryPreferences(mutableMapOf("theme" to "dark", "language" to "zh-CN", "future-setting" to "keep"))
+        val settings = NativeLyricPreferences("hide", "show", -850, 1.3f, 500, 1.4f, "fill", false, false, false, true, 0.2f)
+        val store = NativePreferenceStore(storage)
+        store.setLyrics(settings)
+        store.setTheme("light")
+        val restarted = NativePreferenceStore(storage).state.value
+        assertEquals(settings, restarted.lyrics)
+        assertEquals("light", restarted.theme)
+        assertEquals("zh-CN", restarted.language)
+        assertEquals("keep", storage.getString("future-setting", null))
+    }
+
     @Test fun existingNativeThemeSurvivesLanguageChangesAndNewStore() {
         val storage = MemoryPreferences(mutableMapOf("theme" to "dark", "future-setting" to "keep"))
         val store = NativePreferenceStore(storage)

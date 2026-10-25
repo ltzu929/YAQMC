@@ -9,12 +9,21 @@ class AudioFocusPolicyTest {
         val policy = AudioFocusPolicy()
         policy.onUserPlay()
         assertEquals(FocusAction.PAUSE, policy.onFocusChange(FocusChange.LOSS_TRANSIENT, true))
+        assertEquals(true, policy.awaitingFocusGain)
         assertEquals(FocusAction.RESUME, policy.onFocusChange(FocusChange.GAIN, false))
+        assertEquals(false, policy.awaitingFocusGain)
 
         policy.onUserPlay()
         assertEquals(FocusAction.PAUSE, policy.onFocusChange(FocusChange.LOSS_TRANSIENT_CAN_DUCK, true))
         policy.onUserPause()
+        assertEquals(false, policy.awaitingFocusGain)
         assertEquals(FocusAction.NONE, policy.onFocusChange(FocusChange.GAIN, false))
+
+        policy.onUserPlay()
+        policy.onFocusChange(FocusChange.LOSS_TRANSIENT, true)
+        policy.onUserPlay()
+        assertEquals(false, policy.awaitingFocusGain)
+        assertEquals(FocusAction.NONE, policy.onFocusChange(FocusChange.GAIN, true))
     }
 
     @Test

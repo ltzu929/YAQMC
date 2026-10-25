@@ -8,7 +8,10 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-internal data class NativePreferences(val theme: String = "system", val language: String = "system") {
+internal data class NativePreferences(
+    val theme: String = "system", val language: String = "system", val lyrics: NativeLyricPreferences = NativeLyricPreferences(),
+    val appearance: NativeAppearancePreferences = NativeAppearancePreferences(),
+) {
     fun isDark(systemDark: Boolean): Boolean = when (theme) {
         "light" -> false
         "dark" -> true
@@ -32,6 +35,8 @@ internal data class NativePreferences(val theme: String = "system", val language
 internal class NativePreferenceStore(private val storage: SharedPreferences) {
     private val _state = MutableStateFlow(NativePreferences(
         theme = normalizeTheme(read("theme")), language = normalizeLanguage(read("language")),
+        lyrics = NativeLyricPreferences.decode(read("lyrics")),
+        appearance = NativeAppearancePreferences.decode(read("appearance")),
     ))
     val state = _state.asStateFlow()
 
@@ -45,6 +50,18 @@ internal class NativePreferenceStore(private val storage: SharedPreferences) {
         val normalized = normalizeLanguage(value)
         storage.edit { putString("language", normalized) }
         _state.value = _state.value.copy(language = normalized)
+    }
+
+    fun setLyrics(value: NativeLyricPreferences) {
+        val normalized = value.normalized()
+        storage.edit { putString("lyrics", normalized.json()) }
+        _state.value = _state.value.copy(lyrics = normalized)
+    }
+
+    fun setAppearance(value: NativeAppearancePreferences) {
+        val normalized = value.normalized()
+        storage.edit { putString("appearance", normalized.json()) }
+        _state.value = _state.value.copy(appearance = normalized)
     }
 
     private fun read(key: String): String? = try { storage.getString(key, null) } catch (_: ClassCastException) { null }
