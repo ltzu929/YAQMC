@@ -70,4 +70,4 @@ copyFileSync(
   path.join(android, `nativeApp/build/outputs/apk/${variant}/nativeApp-${variant}.apk`),
   destination,
 );
-console.log(`Native Android APK: ${destination}`);
+process.stdout.write(`Native Android APK: ${destination}\n`);
