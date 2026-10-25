@@ -61,11 +61,14 @@ export function IssueReporterDialog({
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    setBundle(null);
-    setPreview(null);
-    setError(null);
-    setStatus(null);
+    if (!open) return undefined;
+    const timer = setTimeout(() => {
+      setBundle(null);
+      setPreview(null);
+      setError(null);
+      setStatus(null);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [open]);
 
   const draft = useMemo<IssueDraft>(
