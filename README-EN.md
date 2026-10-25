@@ -1,3 +1,5 @@
+> 当前仅维护[中文主文档](README.md)。以下英文内容暂留作旧资料，已停止同步，其去留后续决定。
+
 <p align="center">
   <img src="assets/yaqmc-logo.png" width="168" alt="YAQMC logo">
 </p>

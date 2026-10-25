@@ -1,276 +1,39 @@
-<p align="center">
-  <img src="assets/yaqmc-logo.png" width="168" alt="YAQMC 标志">
-</p>
+# YAQMC
 
-<h1 align="center">YAQMC</h1>
+一个面向 Android、适合自己使用的非官方 QQ 音乐客户端。界面采用 Kotlin / Jetpack Compose，阶段性复用 Rust 核心。
 
-<p align="center">
-  <strong>Yet Another Q Music Client</strong><br>
-  一个适用于 Windows、Linux 和 Android 的非官方 QQ 音乐客户端。
-</p>
+## 当前目标与状态
 
-<p align="center">
-  <strong>简体中文</strong> · <a href="README-EN.md">English</a>
-</p>
+希望软件轻量、使用舒服，同时降低个人开发的工程与维护负担。当前先完整移植旧 Android 已开放的功能、交互和设置；具体范围与关键决定见[项目规划](docs/zh-CN/project-plan.md)。
 
-<p align="center">
-  <a href="https://github.com/YAQMC/YAQMC/actions/workflows/ci.yml"><img src="https://github.com/YAQMC/YAQMC/actions/workflows/ci.yml/badge.svg" alt="CI 状态"></a>
-  <img src="https://img.shields.io/badge/Electron-43-47848F?logo=electron&logoColor=white" alt="Electron 43">
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0 或更高版本">
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111" alt="React 19">
-  <img src="https://img.shields.io/badge/Rust-1.88%2B-000?logo=rust&logoColor=white" alt="Rust 1.88 或更高版本">
-</p>
+基础界面、浏览与账号已有实现和部分验证，播放器、队列、歌词个性化、统计维护与正式交付仍有迁移任务。
+实现覆盖与验收结果统一看[迁移对齐清单](docs/zh-CN/native-parity.md)，不以页面存在或构建成功认定迁移完成。
 
-> [!IMPORTANT]
-> YAQMC 与腾讯或 QQ 音乐没有从属或合作关系。项目不会绕过会员、地区限制或歌曲权限。对于服务端已按
-> 当前账号权益下发 URL 与 ekey 的加密音频，YAQMC 只在本地内存中解密播放，不获取未授权内容。
+仓库版本为 `0.1.1`，不表示原生版已经正式发布：
 
-## 发布状态
+- 原生模块为 `:nativeApp`，包名 `org.yaqmc.android.nativeui`，最低 Android 8.0，目前仅构建 ARM64 APK。
+- 默认产物为本地调试签名的 benchmark 比较包，可与旧包 `org.yaqmc.android` 共存，两者数据独立。
+- 现有发布工作流仍产出旧 React / Capacitor Android 包，原生版的正式签名、升级与数据兼容待落实。
 
-`v0.1.0` 是当前目标正式发布线。Tag 发布后，统一发布工作流将从同一个 Git commit 构建 Windows、Linux 和 Android
-产物；Windows 与 Android 包必须通过签名门禁，Linux 包提供 SHA-256 校验。各平台的真机验收范围
-并不相同，下载前仍应阅读对应 Release 说明并确认架构与已验证范围。
+公开安装包见 [Releases](https://github.com/YAQMC/YAQMC/releases)，按具体 Release 核对版本、包名、签名和验证范围。
 
-## 安装
+## 开发入口
 
-如果你只是想安装软件，不需要阅读整份文档。
+日常只维护以下中文文档：
 
-1. 打开 [Releases](https://github.com/YAQMC/YAQMC/releases)。
-2. 按 Release 说明、操作系统和处理器架构选择安装包。
-3. 安装后直接使用访客模式，或者在左下角登录 QQ 音乐账号。
+| 文档                                        | 负责什么                                         |
+| ------------------------------------------- | ------------------------------------------------ |
+| [项目规划](docs/zh-CN/project-plan.md)      | 目标、范围、关键决定、待讨论事项与近期安排       |
+| [开发指南](docs/zh-CN/development.md)       | 工程结构、环境、构建运行、必要检查和工作完成标准 |
+| [迁移对齐清单](docs/zh-CN/native-parity.md) | 迁移期的旧版能力、原生覆盖、验收状态与关键证据   |
 
-### 我应该下载哪个文件？
+本 README 负责项目介绍、当前阶段和入口。[AGENTS.md](AGENTS.md)只为助手提供简短的阅读指引。
+其他现有文档暂时保留，可能描述旧体系，其去留后续再决定；目前不维护成套英文副本。
 
-Windows 用户：
+## 使用边界与许可
 
-- 大多数 Intel/AMD 电脑：选择名字中带 `windows-x64` 的 NSIS `.exe`。
-- Windows ARM 电脑：选择 `windows-arm64`；该包仍需对应 ARM64 真机验收记录。
-- 不想安装：选择对应架构的 portable `.exe`。
-- 不再发布 Windows i686 / 32 位安装包。
+YAQMC 与腾讯或 QQ 音乐没有从属或合作关系，不绕过会员、地区、版权或账号权益。
+不要公开 Cookie、OAuth code、token、vkey/ekey、签名媒体地址或真实账号资料。
 
-Linux 用户：
-
-- 大多数 Intel/AMD 电脑：选择 `linux-x64` 的 AppImage。
-- ARM64 电脑：选择 `linux-arm64`。
-- Debian、Ubuntu 可以使用 `.deb`；Fedora、openSUSE 等系统可以使用 `.rpm`。
-- AppImage 不需要安装，添加可执行权限后即可运行。
-
-Android 用户：
-
-- Android 8.0 或更高版本的 ARM64 手机和平板：选择 `android-arm64-v8a` APK。
-- Android 版仅通过 GitHub Release 侧载，不提供 Google Play 或 32 位 APK。
-- 安装前使用同一 Release 中的 `SHA256SUMS-android.txt` 核对文件。
-
-`AMD64`、`x86_64` 和发布名中的 `x64` 指同一种架构。
-
-## 它能做什么？
-
-### 听歌
-
-- 浏览 QQ 音乐首页、搜索结果、专辑和歌单。
-- 使用原生音频引擎播放、暂停、拖动进度和管理队列。
-- 根据访客或账号实际拥有的权限选择音质，不伪造会员能力。
-- 可以在播放器右侧的音符菜单中临时切换当前歌曲音质；设置页仍负责之后歌曲的默认音质。
-- 支持账号已获授权的 QQ Music `mflac` 流式解密、边下边播和随机拖动；磁盘缓存只保存密文。
-- 桌面端支持媒体快捷键、系统媒体面板、托盘和可选的本地控制 API；Android 端使用系统媒体通知、
-  锁屏和蓝牙控制。
-
-### 登录与账号
-
-- 支持内嵌的 QQ 和微信官方 OAuth 登录页面。
-- 显示 QQ 音乐昵称、头像和已确认的会员信息。
-- 支持收藏、账号歌单和最近播放等账号页面。
-- 登录凭据保存在操作系统安全存储中，不写入项目文件或普通配置文件。
-
-### 歌词
-
-- 支持逐行歌词、逐字歌词、翻译和罗马音。
-- 支持全屏歌词、桌面歌词和顶部的 Lyrics Island。
-- 桌面歌词与 Lyrics Island 锁定后，通过系统托盘或设置页的统一入口解锁，避免悬浮窗误触。
-- 两句歌词之间或歌曲末尾没有新歌词时，会继续显示刚刚唱完的那一句。
-
-### 外观
-
-- 支持浅色、深色和跟随系统主题。
-- 可以分别设置主色与副色，应用内标志会自动跟随这两种颜色。
-- 托盘、任务栏和安装包使用固定的 YAQMC 原生标志。
-- 支持自定义背景、字体和歌词样式。
-- 可从[示例插件](docs/zh-CN/plugin-examples.md)安装本地 `*.yaqmc-plugin`：旧版样式/歌词场景/隔离脚本，以及受 Wasmtime
-  能力沙箱约束的 API v3 音乐平台 Component。全部默认不启用，当前均为未验证发行方的本地旁加载包。
-
-## 第一次使用
-
-启动后会先以访客模式加载公开音乐目录。
-
-需要账号内容时，点击左下角的用户区域，再选择 QQ 或微信登录。登录过程发生在受限制的腾讯页面
-窗口中；YAQMC 不会读取你输入的密码。
-
-登录成功后，左下角会显示 QQ 音乐昵称、头像和会员状态。如果网络暂时失败，应用不会擅自删除已经
-保存在系统安全存储中的会话。
-
-## 歌词锁定与解锁
-
-锁定桌面歌词或 Lyrics Island 后，主歌词窗口会忽略鼠标点击，避免挡住桌面操作。
-
-此时使用设置页或系统托盘中的“解锁全部歌词窗口”恢复交互；锁定后的悬浮窗本身不再显示解锁按钮，
-避免误触。
-
-## 常见问题
-
-### 为什么显示“音乐暂时不可用”？
-
-先确认网络能够访问 QQ 音乐。访客目录和账号恢复是两条独立路径：即使没有登录，公开目录也应该
-能够加载。如果持续失败，推荐通过 **设置 → 关于 → 报告问题** 打开内置的 Issue Reporter：
-应用会自动预填技术信息，并可选生成脱敏诊断包 ZIP，你只需在浏览器里核对并提交 GitHub Issue。
-详细流程见 [GitHub Issue 报告文档](docs/zh-CN/issue-reporting.md)。不要公开上传 Cookie 或账号凭据。
-
-### 为什么登录后没有头像或昵称？
-
-当前版本已经修复账号恢复状态不同步与 QQ 头像域名过滤问题。若旧进程仍显示“正在恢复”，请完全
-退出旧版本后再启动新版；不需要手动清除安全存储。
-
-### Linux Wayland 下为什么有些功能受限？
-
-Wayland 不允许普通应用随意控制其他窗口。全局快捷键、悬浮窗定位和点击穿透能力会受到桌面环境与
-合成器限制。X11 / XWayland 的兼容性通常更完整，具体说明见
-[Linux 使用与测试指南](docs/zh-CN/linux.md)。
-
-### AppImage 打不开怎么办？
-
-```bash
-chmod +x YAQMC*.AppImage
-./YAQMC*.AppImage
-```
-
-如果仍然失败，请另行下载与同一 commit 绑定的
-`YAQMC-linux-x64-tester-<commit>` 测试产物，运行其中的
-`collect-linux-diagnostics.sh`，再将生成的压缩包交给开发者分析。普通 AppImage
-安装包不内含诊断脚本。
-
-## 安全与隐私
-
-- 账号命令只允许主窗口调用，歌词窗口没有账号权限。
-- OAuth 窗口只允许经过审核的腾讯域名和回调地址。
-- 跨域重定向会移除认证信息；写操作不会自动重试。
-- 日志与诊断包在写入磁盘前就会脱敏 Cookie、token、签名 URL 与账号秘密；导出诊断包时还会
-  再扫一次。详见 [安全与隐私](docs/zh-CN/security.md)。
-- 报告问题走内置 Reporter，仅在浏览器打开预填的 GitHub Issue；YAQMC 不索要令牌，也不会自动
-  提交（[GitHub Issue 报告](docs/zh-CN/issue-reporting.md)）。
-- 本地 API 默认关闭，并且只绑定 `127.0.0.1`。
-
-## 项目状态
-
-访客目录、原生播放、歌词窗口、账号恢复、用户资料和登录后的首页目录已经有自动化测试与 Windows
-本地验证。
-
-QMC/MFLAC 解密与随机拖动已经通过外部样本验证。线上“臻品”取源仍以 QQ 音乐实际按当前账号权益
-返回 URL 与 ekey 为前提；本项目不实现或伪造 QQ 音乐客户端的 VMP 签名，因此不把未完成的会员线上
-取源验收写成已验证。
-
-收藏与歌单写操作虽然已经实现，但在合适账号完成真实写入、回读和恢复测试之前，发布说明会继续把
-这部分标为“等待账号所有者验收”。Linux 原生 Wayland 验收也仍然是待完成项。
-
-<details>
-<summary><strong>开发者：本地运行、构建与验证</strong></summary>
-
-### 环境
-
-- 精确使用 Node.js 26.7.0 与其自带 npm
-- Rust 1.88 或更高版本
-- Windows：MSVC 构建工具
-- Debian / Ubuntu：Rust 原生音频所需的 ALSA 开发包；生成 `.rpm` 时还需 `rpm` 与 `fakeroot`
-
-### 运行
-
-所有公开贡献者都可以先运行使用确定性假数据的 renderer：
-
-```powershell
-npm ci
-npm run dev
-```
-
-完整 Electron 桌面端会通过 Git 获取公开的 `qm-api-rs` 精确 pin：
-
-```powershell
-npm run dev:desktop
-```
-
-账号协议、缓存和播放状态由共享 Rust Core 负责；Electron 与 Android 宿主分别提供操作系统安全存储、
-音频和生命周期集成。依赖 pin 与完整说明见[开发环境](docs/zh-CN/development.md)。
-
-### 构建
-
-```powershell
-# 先生成并暂存 release Core，再构建前端与 Electron 主进程/预加载脚本
-cargo build -p yaqmc-core --release --locked
-npm run stage-core -- --profile release
-npm run ci:frontend-build
-npm run build -w @yaqmc/desktop
-
-# 生成当前平台的 Electron 包（不发布）
-npm run package -w @yaqmc/desktop -- --publish never
-```
-
-### 验证
-
-```powershell
-npm run format:check
-npm run check
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --all-targets --locked
-```
-
-被忽略的 Rust 测试可能连接真实服务或播放声音，只应在合适的测试环境中主动运行：
-
-```powershell
-cargo test --workspace -- --ignored --nocapture
-```
-
-### 进一步阅读
-
-- [中文文档总目录](docs/zh-CN/README.md)
-- [Android 使用与构建](docs/zh-CN/android.md)
-- [开发环境](docs/zh-CN/development.md)
-- [数据位置、升级与卸载](docs/zh-CN/data-locations.md)
-- [架构](docs/zh-CN/architecture.md)
-- [播放](docs/zh-CN/playback.md)
-- [流式传输](docs/zh-CN/streaming.md)
-- [平台集成](docs/zh-CN/platform-integration.md)
-- [Linux 运行环境](docs/zh-CN/linux.md)
-- [QQ 音乐提供器](docs/zh-CN/qqmusic-provider.md)
-- [登录与安全存储](docs/zh-CN/authentication.md)
-- [账号资料库](docs/zh-CN/account-library.md)
-- [歌词窗口](docs/zh-CN/lyrics-surfaces.md)
-- [歌词预设](docs/zh-CN/lyrics-presets.md)
-- [插件平台](docs/zh-CN/plugin-platform.md)
-- [示例插件下载](docs/zh-CN/plugin-examples.md)
-- [歌词编排器](docs/zh-CN/lyrics-composer.md)
-- [本地 API](docs/zh-CN/local-api.md)
-- [日志系统](docs/zh-CN/logging.md)与[诊断快照与诊断包](docs/zh-CN/diagnostics.md)
-- [CI、缓存与可下载产物](docs/zh-CN/ci.md)
-- [GitHub Issue 报告](docs/zh-CN/issue-reporting.md)
-- [第三方许可证](THIRD_PARTY_NOTICES.md)与[鸣谢](ACKNOWLEDGEMENTS.md)
-- [官方客户端互操作证据](docs/zh-CN/qqmusic-official-interoperability.md)、
-  [音质分类](docs/zh-CN/audio-quality.md)与[外部 URI 安全](docs/zh-CN/deep-link.md)
-
-</details>
-
-## 参与、支持与鸣谢
-
-- [参与贡献](CONTRIBUTING.md)
-- [问题与使用支持](SUPPORT.md)
-- [安全策略](SECURITY.md)
-- [社区行为准则](CODE_OF_CONDUCT.md)
-- [更新记录](CHANGELOG.md)
-- [鸣谢](ACKNOWLEDGEMENTS.md)与[第三方许可证](THIRD_PARTY_NOTICES.md)
-
-特别感谢 Flechazo 提供 QMC/MFLAC、臻品音质与流式解密链路的公开研究思路，也感谢
-OpenAI Codex 在工程实现、测试、审查、文档和发布流程中的协助。精确研究来源、许可证
-边界和“未复制无许可证源码”的说明均集中在[鸣谢](ACKNOWLEDGEMENTS.md)与
-[QQ 音乐提供器文档](docs/zh-CN/qqmusic-provider.md)。
-
-> [!NOTE]
-> YAQMC 采用 [GPL-3.0-or-later](LICENSE) 许可证；二进制发布的对应源码按
-> [对应源代码交付政策](CORRESPONDING_SOURCE_POLICY.md)提供。打包的 AMLL 组件采用
-> `AGPL-3.0-only`，具体边界见[第三方许可证](THIRD_PARTY_NOTICES.md)。
+项目采用 [GPL-3.0-or-later](LICENSE)。许可证、第三方声明和对应源码交付资料保持各自职责，见
+[第三方许可证](THIRD_PARTY_NOTICES.md)、[对应源代码交付政策](CORRESPONDING_SOURCE_POLICY.md)和[鸣谢](ACKNOWLEDGEMENTS.md)。

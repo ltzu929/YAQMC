@@ -1,115 +1,88 @@
-# 开发环境
+# 开发指南
 
-> **简体中文** | [English](../development.md)
+方向、范围与关键决定看[项目规划](project-plan.md)，能力覆盖和验收看[迁移对齐清单](native-parity.md)。本文维护实际开发所需的结构、命令与工作方式。
 
-YAQMC 由共享的 React renderer、Rust Core 和两个原生宿主组成。Electron 使用
-Main/preload 与受监管的 Core 子进程；Android 通过 JNI 在 Capacitor 宿主中嵌入
-Core。浏览器开发固定使用确定性 fake provider。
+## 工程结构与当前边界
 
-## 必需工具链
+| 位置                             | 用途                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `apps/android/android/nativeApp` | 当前 Kotlin / Compose 原生界面与测试                                        |
+| `apps/android/android/app`       | 旧 Capacitor Android 客户端；原生模块仍复用其中部分宿主源码、资源与混淆配置 |
+| `crates/yaqmc-android`           | Rust JNI 桥，与宿主 `CoreManager` 通信                                      |
+| `crates/yaqmc-core`              | 播放、队列、推荐会话、持久化等共享能力                                      |
+| `crates/yaqmc-provider-qqmusic`  | QQ 音乐提供器适配及精确固定的 `qqmusic-api` 依赖                            |
+| `src`、`apps/desktop`            | 保留的旧 React / Electron 体系，按需核对旧行为                              |
 
-- 精确使用 Node.js **26.7.0** 及其自带 npm；
-- Rust **1.88.0 或更高版本**（CI 使用 1.88.0 验证 workspace）；
-- Windows：MSVC 构建工具；
-- Debian/Ubuntu：原生音频所需 ALSA 开发头；若生成全部 Linux 包格式，还需
-  `rpm` 与 `fakeroot`。
-- Android：JDK 21、Android SDK/Build Tools 36、NDK 28.2.13676358 和
-  cargo-ndk 4.1.2；推荐 Android Studio 2025.2.1 或更高版本。
+当前调用链为 Compose → `NativeViewModel` / repository → `NativeCore` → `CoreManager` → JNI → Rust Core。
+Media3 负责系统媒体投影，Rust 负责实际播放与时钟；界面和宿主不另建播放事实源。主题与语言保存在 `native-ui` SharedPreferences。
+原生 APK 不打包旧 Web 界面，但 Gradle settings 仍依赖 npm 安装的 Capacitor 模块。
 
-Node 版本同时钉在 `package.json`、`package-lock.json` 与 `.node-version`。
-解释 JavaScript/TypeScript 失败前先检查 `node --version`。
+## 环境与构建
 
-## 公开检出
+需要 Node.js **26.7.0** 与其自带 npm、Rust **1.88.0 或更高版本**、JDK **21**、Android SDK / Build Tools **36**、NDK **28.2.13676358** 和 cargo-ndk **4.1.2**。
+Windows 使用 MSVC；Gradle 使用仓库 wrapper。Node 版本以 `.node-version` 和 `package.json` 为准；先检查 `node --version`。
+可用 `YAQMC_JAVA_HOME` 指定 JDK，`ANDROID_SDK_ROOT` / `ANDROID_HOME` 指定 SDK。
 
-React renderer 与确定性 fake provider 不会构建原生生产依赖：
-
-```powershell
-npm ci
-npm run dev
-```
-
-该模式可用于界面、状态管理、本地化和组件开发；它有意不提供原生音频、keyring、磁盘缓存、托盘、
-系统媒体会话或真实 QQ 音乐传输。
-
-## 原生提供器 pin
-
-生产提供器无条件链接公开 crate `qqmusic-api`：
-`https://github.com/YAQMC/qm-api-rs.git`，精确 revision 为
-`7d0f6e18b1d1d89a06cc5964e9c057acb0926ea5`。
-
-桌面开发启动器为 Cargo 设置 `CARGO_NET_GIT_FETCH_WITH_CLI=true`。访问辅助脚本只核对 manifest pin
-与可选的相邻 checkout，不修改 Git 配置：
-
-```powershell
-node scripts/ci/qm-api-rs-access.mjs --check
-```
-
-若存在相邻的 `../qm-api-rs` 检出，该命令还会要求其 HEAD 与生产 pin 完全一致。
-
-## 完整桌面端运行
+以下命令在仓库根目录执行：
 
 ```powershell
 npm ci
-npm run dev:desktop
+# 重编 ARM64 release Rust Core，构建优化比较包，并运行原生 JVM 单元测试
+node scripts/build-android-native.mjs
+# 开发包
+node scripts/build-android-native.mjs --debug
 ```
 
-`dev:desktop` 会编译 debug `yaqmc-core`、暂存完整性清单、启动 Vite、监听
-Electron Main/preload 并启动 Electron。它不是 QA profile，可能使用正常应用
-数据目录。
+默认输出 `release-android/YAQMC-<version>-android-native-benchmark.apk`，使用 Android debug key；benchmark 与 debug 均仅 ARM64。
+包名为 `org.yaqmc.android.nativeui`，可与旧包共存。正式签名、旧包升级与数据兼容待落实；不要跨包复制凭据。
+本地安装使用 `adb install -r '<APK 路径>'`，遇到设备确认时由用户处理。
 
-## 接近发布配置的本机构建
-
-调用 electron-builder 前必须先构建并暂存 Core：
+只改 Kotlin 时可以复用兼容的 Core：
 
 ```powershell
-npm ci
-cargo build -p yaqmc-core --release --locked
-npm run stage-core -- --profile release
-npm run ci:frontend-build
-npm run build -w @yaqmc/desktop
-npm run package -w @yaqmc/desktop -- --publish never
+# 此目录需包含 arm64-v8a/libyaqmc_core.so
+$env:YAQMC_ANDROID_NATIVE_LIB_DIR = '<已构建的 JNI 输出目录>'
+node scripts/build-android-native.mjs --reuse-core
 ```
 
-这只生成当前主机架构。跨架构包必须使用对应 Rust target 与 CI 打包矩阵；修改
-文件名不会改变二进制架构。本机构建必须始终保留 `--publish never`。
+未指定目录时，`--reuse-core` 查找旧 `app/build/generated/jniLibs`，不会自动使用上次 `nativeApp` 输出。
+修改 Rust 后应重编或明确使用本次产物；同一 Gradle 工程避免重叠构建。
+`npm run android:build:debug` / `android:build:release` 面向旧 `:app`，`npm run dev` 面向旧 React 假数据界面，均不能替代原生构建与验收。
 
-## Android 构建
+## 必要检查
 
-Android debug 构建同时包含 ARM64 和 x86_64 模拟器库；公开的 Release APK
-仅包含 ARM64。
+按改动影响选择检查，不要求每次修改都跑完整矩阵：
+
+| 改动                 | 检查                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| 文档、入口与模板     | `npm run docs:check`；对改动文件执行 Prettier 检查                                  |
+| 文档检查脚本         | 对应 `node --test`、ESLint 与文档检查                                               |
+| 原生界面、状态、偏好 | 相关 JVM 单元测试、lint、构建及对应真机场景                                         |
+| Rust / JNI / 协议    | 受影响 crate 的 fmt / clippy / test、契约与原生包回归；共享影响扩大时检查 workspace |
+| 账号、系统媒体、交付 | 对应真机 / 真实账号验证；签名、升级和数据兼容分别检查                               |
 
 ```powershell
-npm ci
-npm run android:check
-npm run android:build:debug
+node scripts/run-android-gradle.mjs :nativeApp:testDebugUnitTest :app:testDebugUnitTest :nativeApp:lintDebug
+node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
 ```
 
-Release 签名只通过 CI 的 `release-signing` Environment 注入。本地 Release
-构建也必须使用同样的四个 `ANDROID_RELEASE_*` 环境变量，禁止将其写入受 Git
-跟踪的 Gradle 文件。详见 [Android 指南](android.md)。
-
-## 验证
+设备测试先安装主包与测试包，测试包使用 `adb install -r -t '<测试 APK 路径>'`。隔离和壳层回归可排除在线提供器测试：
 
 ```powershell
-npm run provider:enforce
-npm run provenance:enforce
-npm run format:check
-npm run docs:check
-npm run lint
-npm run typecheck
-npm test
-npm run ci:test-scripts
-npm run ci:verify-workspace
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --all-targets --locked
-npm run contracts:check
-npm run android:check
+adb shell am instrument -w -r -e notClass org.yaqmc.android.nativeui.NativeProviderSmokeTest org.yaqmc.android.nativeui.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-被忽略的 Rust 测试可能连接真实服务或产生可听音频，不能在 CI 中运行，也不能
-使用维护者未授权的账号/profile。Electron smoke、E2E、性能与验收必须使用仓库
-QA sandbox 工具，禁止复用生产 profile。
+`NativeProviderSmokeTest` 访问真实服务，只做只读检查，执行时单独说明。模拟 Core、在线只读、真实账号写入和系统媒体验收分别记账。
+真实写入使用明确授权的测试账号与目标；被忽略的 Rust LIVE 测试可能访问服务或产生声音，不默认运行。
 
-继续阅读：[CI 与打包](ci.md)、[数据位置与卸载](data-locations.md)和
-[整体架构](architecture.md)。
+## 每项工作的完成标准
+
+开始前核对规划、对应迁移编号和旧 Android 实际行为，写清目标、范围、假设与可观察的验收条件。
+方向未明确时先整理上下文，只询问真正影响方向的缺口；目标和授权清楚时直接推进。普通任务在任务说明中记录即可，不另建文档。
+
+实现保持聚焦，覆盖受影响的正常、空数据、失败、取消、过期响应、权限与保存路径；保留已确认返回行为。
+按风险验证，如实说明命令、结果和未覆盖范围。代码、构建通过、模拟响应和真机通过不能互相替代。
+
+完成后只更新受影响的主文档：范围或决定进规划，构建和工作方式进本指南，能力状态及关键验证结论进对齐清单。
+文档仅维护中文，应用文案仍遵循已有语言能力。旧参考文档、英文副本暂留，其去留另议；不自动增加报告、进度页、规范文件或新审批步骤。
+不提交账号秘密、原始诊断包或无关改动；账号保护、日志脱敏、播放权益与许可证边界继续适用。
