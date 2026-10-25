@@ -49,6 +49,16 @@ node scripts/build-android-native.mjs --reuse-core
 修改 Rust 后应重编或明确使用本次产物；同一 Gradle 工程避免重叠构建。
 `npm run android:build:debug` / `android:build:release` 面向旧 `:app`，`npm run dev` 面向旧 React 假数据界面，均不能替代原生构建与验收。
 
+## GitHub Actions 原生安装包
+
+[Android Native APK](../../.github/workflows/android-native-ci.yml) 在相关 Pull Request、`main` 更新或手动触发时运行，使用固定的 Android / Rust 工具链：
+- 执行 `npm ci`、`node scripts/build-android-native.mjs`（含 ARM64 Rust Core、benchmark APK、原生 JVM 测试）；
+- 执行 `nativeApp:lintDebug` 和共享 Android 宿主 JVM 测试；
+- 使用 Android SDK `apksigner` 验证 APK 签名，生成 SHA-256 校验文件；
+- 成功后在该次 Actions 运行的 **Artifacts** 中保存 `YAQMC-native-benchmark-arm64-<commit>`，含可侧载 APK 和校验文件，保留 14 天；测试报告单独保存 7 天。
+
+这是独立包名 `org.yaqmc.android.nativeui` 的**调试密钥签名比较包**，不使用正式签名密钥。CI 环境按运行生成的默认 debug keystore 可能不同，因此不同 CI 运行产物不保证直接覆盖升级；若 Android 报签名冲突，先确认备份数据，再卸载之前的 `nativeui` 测试包后安装。不要因此卸载旧客户端 `org.yaqmc.android`。模拟器的 UI 测试、在线账号验证和音频硬件 / 视觉真机验收不属于此工作流已通过的范围。
+
 ## 必要检查
 
 按改动影响选择检查，不要求每次修改都跑完整矩阵：
