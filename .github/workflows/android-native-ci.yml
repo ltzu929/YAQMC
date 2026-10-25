@@ -47,6 +47,12 @@ jobs:
       - uses: ./.github/actions/setup-android
       - name: Install workspace dependencies
         run: npm ci
+      - name: Diagnose repository formatter drift
+        shell: bash
+        run: |
+          npx prettier --write docs/zh-CN/development.md scripts/build-android-native.mjs src/locales/zh-CN.ts
+          git diff -- docs/zh-CN/development.md scripts/build-android-native.mjs src/locales/zh-CN.ts
+          git checkout -- docs/zh-CN/development.md scripts/build-android-native.mjs src/locales/zh-CN.ts
       - name: Build native ARM64 benchmark APK and run JVM tests
         run: node scripts/build-android-native.mjs
       - name: Run native Android lint and shared-host tests
