@@ -25,7 +25,7 @@ set -e
 adb logcat -d -v brief -t 1500 > "$output/logcat-tail.txt" 2>/dev/null || true
 adb pull /sdcard/Android/data/org.yaqmc.android.nativeui/files "$output/screenshots" >/dev/null 2>&1 || true
 
-if [ "$test_status" -ne 0 ] || ! grep -Eq '^OK \\([0-9]+ tests?\\)' "$output/instrumentation.txt" || grep -Eq 'FAILURES!!!|INSTRUMENTATION_RESULT: shortMsg=' "$output/instrumentation.txt"; then
+if [ "$test_status" -ne 0 ] || ! grep -Eq '^OK \([0-9]+ tests?\)' "$output/instrumentation.txt" || grep -Eq 'FAILURES!!!|INSTRUMENTATION_RESULT: shortMsg=' "$output/instrumentation.txt"; then
   echo "Native emulator instrumentation did not pass" >&2
   exit 1
 fi
