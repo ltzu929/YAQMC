@@ -57,6 +57,7 @@ node scripts/build-android-native.mjs --reuse-core
 2. `android-emulator`：在 PR 或手动执行且 ARM64 job 成功后，独立构建 x86_64 Rust Core 和 Debug APK，在 Android 15 / API 35 模拟器上运行指定的离线 Compose UI 测试：`NativePlaybackTest` 与 `NativePersonalizationUiTest`，使用模拟数据，不进行线上登录 / 账号写入。测试失败时保留 instrument 输出与有界日志，成功时也尽力提取屏幕截图；这并非真实播放器 / QQ 接口验收。普通 `main` push 不运行模拟器，以减少重复计算。
 
 在 GitHub 仓库的 **Actions → Android Native APK → 具体运行记录 → Summary → Artifacts** 下载：
+
 - `YAQMC-native-benchmark-arm64-<commit>`：优化、可侧载的 `YAQMC-<version>-android-native-benchmark.apk` 与 `SHA256SUMS-native.txt`；成功产出时保留 **14 天**。
 - `YAQMC-native-test-reports-<commit>`、`YAQMC-native-emulator-evidence-<commit>`：JVM / Lint 报告、模拟器测试记录与可获取的截图；有报告时保留 **7 天**。
 
