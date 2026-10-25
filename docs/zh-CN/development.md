@@ -49,15 +49,26 @@ node scripts/build-android-native.mjs --reuse-core
 修改 Rust 后应重编或明确使用本次产物；同一 Gradle 工程避免重叠构建。
 `npm run android:build:debug` / `android:build:release` 面向旧 `:app`，`npm run dev` 面向旧 React 假数据界面，均不能替代原生构建与验收。
 
-## GitHub Actions 原生安装包
+## GitHub Actions 原生安装包与模拟器
 
-[Android Native APK](../../.github/workflows/android-native-ci.yml) 在相关 Pull Request、`main` 更新或手动触发时运行，使用固定的 Android / Rust 工具链：
-- 执行 `npm ci`、`node scripts/build-android-native.mjs`（含 ARM64 Rust Core、benchmark APK、原生 JVM 测试）；
-- 执行 `nativeApp:lintDebug` 和共享 Android 宿主 JVM 测试；
-- 使用 Android SDK `apksigner` 验证 APK 签名，生成 SHA-256 校验文件；
-- 成功后在该次 Actions 运行的 **Artifacts** 中保存 `YAQMC-native-benchmark-arm64-<commit>`，含可侧载 APK 和校验文件，保留 14 天；测试报告单独保存 7 天。
+[Android Native APK](../../.github/workflows/android-native-ci.yml) 是 **Kotlin / Compose 原生版** 的 CI；旧 `CI` / `Electron Release` 绿灯不能代替它。工作流在涉及 Android / Rust / 构建脚本的 Pull Request、`main` 更新及手动触发时运行：
 
-这是独立包名 `org.yaqmc.android.nativeui` 的**调试密钥签名比较包**，不使用正式签名密钥。CI 环境按运行生成的默认 debug keystore 可能不同，因此不同 CI 运行产物不保证直接覆盖升级；若 Android 报签名冲突，先确认备份数据，再卸载之前的 `nativeui` 测试包后安装。不要因此卸载旧客户端 `org.yaqmc.android`。模拟器的 UI 测试、在线账号验证和音频硬件 / 视觉真机验收不属于此工作流已通过的范围。
+1. `android-native`：安装 Node 26.7.0、JDK 21、Rust 1.88.0、SDK 36 / NDK 28.2.13676358 / cargo-ndk 4.1.2，`npm ci`，构建 ARM64 Rust Core 和优化 benchmark APK，运行原生及共享宿主 JVM 测试、Lint；核对 APK 的签名、包名、ARM64 JNI 库和 SHA-256。
+2. `android-emulator`：在 PR 或手动执行且 ARM64 job 成功后，独立构建 x86_64 Rust Core 和 Debug APK，在 Android 15 / API 35 模拟器上运行指定的离线 Compose UI 测试：`NativePlaybackTest` 与 `NativePersonalizationUiTest`，使用模拟数据，不进行线上登录 / 账号写入。测试失败时保留 instrument 输出与有界日志，成功时也尽力提取屏幕截图；这并非真实播放器 / QQ 接口验收。普通 `main` push 不运行模拟器，以减少重复计算。
+
+在 GitHub 仓库的 **Actions → Android Native APK → 具体运行记录 → Summary → Artifacts** 下载：
+- `YAQMC-native-benchmark-arm64-<commit>`：优化、可侧载的 `YAQMC-<version>-android-native-benchmark.apk` 与 `SHA256SUMS-native.txt`；成功产出时保留 **14 天**。
+- `YAQMC-native-test-reports-<commit>`、`YAQMC-native-emulator-evidence-<commit>`：JVM / Lint 报告、模拟器测试记录与可获取的截图；有报告时保留 **7 天**。
+
+Android 原生包名是 `org.yaqmc.android.nativeui`，可与旧版 `org.yaqmc.android` 共存。这是 CI 使用临时 **debug keystore** 签名的测试包，**并非正式签名发行包**；不同 CI 构建不保证能够覆盖安装。签名冲突时应先备份测试版数据，再仅卸载 `nativeui` 包。别把此测试包当成已解决正式升级 / 数据兼容（T06）的依据。
+
+**本地复现：** 常规 ARM64 使用前述 `node scripts/build-android-native.mjs`；模拟器专用 x86_64 使用 `YAQMC_ANDROID_NATIVE_ABI=x86_64` 与 `YAQMC_ANDROID_NATIVE_LIB_DIR=<包含 x86_64/libyaqmc_core.so 的目录>`，先通过 `cargo ndk -P 26 -t x86_64 -o <目录> build --release --locked -p yaqmc-android` 构建 JNI，再运行 `node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest`。环境变量仅作用于本次进程，不要用于 ARM64 发布 APK。模拟器运行的测试范围见 [run-native-emulator-smoke.sh](../../scripts/ci/run-native-emulator-smoke.sh)。
+
+## 跨对话接手与任务交付
+
+新对话先阅读仓库根目录 `AGENTS.md`，再核对[项目规划](project-plan.md)和[迁移对齐清单](native-parity.md)。以 **当前 `main` 分支和未合并 PR** 为准，不能假设上次提到的任务已经合并、构建成功或真机通过。
+
+开发顺序固定为：确认迁移编号和旧版行为 → 独立分支修改源码及针对性测试 → PR 检查 `Android Native APK` 结果与 Artifacts → 必要时读取失败日志并修复 → 提供 APK 供用户真机验收 → 更新本指南（环境或工作方式）、项目规划（范围/决定）或迁移清单（实现与验证结论）。未经授权不合并 PR、不发布正式包、不操作真实账号写入；不用“构建成功”代替“设备上正常”。下次继续时优先检查尚未通过的 CI 和未合并 PR，避免重复创建任务。
 
 ## 必要检查
 
