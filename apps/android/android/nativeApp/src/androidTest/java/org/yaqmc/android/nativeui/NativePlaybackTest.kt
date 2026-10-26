@@ -2,7 +2,6 @@ package org.yaqmc.android.nativeui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -173,12 +172,12 @@ class NativePlaybackTest {
     }
 
     private fun install(route: String) {
-        compose.runOnIdle {
+        compose.runOnUiThread {
             model = NativeViewModel(compose.activity.application as Application, core)
-            compose.activity.setContent { NativeApp(model, login = {}, share = { track, kind -> shares += track to kind }, reportDrawn = {}) }
             model.navigate(NativeRoute(route), root = true)
             model.onCoreEvent(1, "player://snapshot", core.snapshot().toString())
         }
+        compose.setContent { NativeApp(model, login = {}, share = { track, kind -> shares += track to kind }, reportDrawn = {}) }
         compose.waitUntil(5000) { model.player.value.current != null }
     }
     private fun publish(value: JSONObject) {

@@ -3,7 +3,6 @@ package org.yaqmc.android.nativeui
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +40,7 @@ class NativePersonalizationUiTest {
             LyricLine(3000, 4000, "Goodnight", "晚安", "goodnight"),
         )))
         val seeks = mutableListOf<Long>()
-        compose.activity.setContent { MaterialTheme(colorScheme = lightColorScheme(primary = Color.Red)) {
+        compose.setContent { MaterialTheme(colorScheme = lightColorScheme(primary = Color.Red)) {
             LyricList(document.value, clock, NativeLyricPreferences(translation = "hide", timingOffsetMs = 500, blur = false), seeks::add,
                 Modifier.fillMaxWidth().height(420.dp).padding(top = 24.dp))
         } }
@@ -75,7 +74,7 @@ class NativePersonalizationUiTest {
         val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
         store.setLyrics(NativeLyricPreferences(timingOffsetMs = 350))
         val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
-        compose.activity.setContent {
+        compose.setContent {
             CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized, LocalConfiguration provides localized.resources.configuration,
                 LocalActivityResultRegistryOwner provides compose.activity) {
             val state by store.state.collectAsState()
