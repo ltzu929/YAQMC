@@ -76,6 +76,7 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
     var confirmDelete by remember(active.id) { mutableStateOf(false) }
     val builtin = active.id.startsWith("builtin.")
     val copyLabel = stringResource(R.string.native_preset_copy_suffix)
+    val activeName = nativePresetName(active)
     LazyColumn(
         Modifier.fillMaxSize().testTag("lyric-presets"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -112,7 +113,7 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
-                    change(settings.duplicate("custom.${UUID.randomUUID()}", nativePresetName(active) + " " + copyLabel ))
+                    change(settings.duplicate("custom.${UUID.randomUUID()}", activeName + " " + copyLabel))
                 }, enabled = settings.custom.size < 24, modifier = Modifier.testTag("preset-duplicate")) {
                     Text(stringResource(R.string.native_preset_duplicate))
                 }
