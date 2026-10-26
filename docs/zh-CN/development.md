@@ -49,6 +49,22 @@ node scripts/build-android-native.mjs --reuse-core
 修改 Rust 后应重编或明确使用本次产物；同一 Gradle 工程避免重叠构建。
 `npm run android:build:debug` / `android:build:release` 面向旧 `:app`，`npm run dev` 面向旧 React 假数据界面，均不能替代原生构建与验收。
 
+## 跨对话接手与任务交付
+
+2026-10-26 确认采用：**网页端 GPT 修改文件、提交代码及创建 PR，本地 Codex 拉取审查，按改动在本机验证和构建。** Android 验证与安装包交付由本机完成，使用已有本机签名配置。仓库原有通用 CI 的结果可作为补充证据。
+
+用户已确认当前使用的网页端具备提交代码和创建 PR 的能力，本项目按此能力通过独立分支 / PR 交付源码及相关测试。网页端无需为这一分工搭建 Android 编译或签名环境。
+
+新对话先阅读仓库根目录 `AGENTS.md`，再核对[项目规划](project-plan.md)和[迁移对齐清单](native-parity.md)。以 **当前 `main`、开发分支、未合并 PR 和本地改动** 为准，不能假设上次提到的任务已经合并、构建成功或真机通过。
+
+`main` 保存已审查且经用户确认合入的改动。后续每项任务从最新 `main` 创建独立开发分支；网页端与本地 Codex 围绕同一个任务分支协作，通过 PR 交付。
+
+网页端开工提示需明确仓库、分支或提交，并要求先阅读上述入口与主文档；不能假定普通聊天会自动加载 `AGENTS.md`。先确认迁移编号与旧版行为，再在独立分支修改源码及相关测试、提交代码并创建 PR。交付时提供基准提交、分支及 PR 链接、改动目标和未验证项；如未执行编译或测试，应明确说明。
+
+本地 Codex 先检查工作区并拉取远端分支，审查实际差异，再按本指南的必要检查选择测试、Lint、构建及真机场景。需要安装包时，使用前述原生构建入口和已有本机签名；当前 debug / benchmark 使用本机 Android debug keystore，需保留同一密钥。正式签名、旧包升级和数据兼容仍按 T06 单独验收。
+
+审查问题、验证结果与剩余真机场景直接在当前任务或 PR 中说明；只更新受影响的主文档。文件修改、本地检查、构建与真机验收分别记录实际结果。未经授权不合并 PR、不发布正式包、不卸载应用、不迁移数据或操作真实账号写入。
+
 ## 必要检查
 
 按改动影响选择检查，不要求每次修改都跑完整矩阵：
@@ -71,6 +87,16 @@ node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assemble
 ```powershell
 adb shell am instrument -w -r -e notClass org.yaqmc.android.nativeui.NativeProviderSmokeTest,org.yaqmc.android.nativeui.NativePlaybackLiveTest org.yaqmc.android.nativeui.test/androidx.test.runner.AndroidJUnitRunner
 ```
+
+上述默认运行器会启动真实应用。仅验证离线播放器 UI 与个性化时，先设置 `$env:YAQMC_ANDROID_OFFLINE_UI_TESTS = '1'` 构建并安装测试 APK，再使用专用 `NativeOfflineTestRunner`。该运行器使用普通 `Application` 和轻量 `ComponentActivity`，每项测试前后断言真实 Core 未初始化；恢复其他设备测试前需移除该变量并重新构建、安装测试 APK：
+
+```powershell
+adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest org.yaqmc.android.nativeui.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner
+```
+
+本地 x86_64 模拟器设置 `YAQMC_ANDROID_NATIVE_ABI=x86_64`。纯离线测试可将 `YAQMC_ANDROID_NATIVE_LIB_DIR` 指向事先创建的独立空目录，并使用上述离线运行器；这种 APK 不包含 Rust Core，不能用于真实播放。真实 Core 验证需提供匹配 ABI 的 JNI 库；恢复常规 ARM64 构建前移除模拟器及离线测试环境变量，并重新构建 APK。
+
+离线套件的执行范围与已有结果见[迁移对齐清单](native-parity.md)的验证摘要，不能扩展为真实播放、账号或真机验收。
 
 `NativeProviderSmokeTest` 访问真实服务，只做只读检查，执行时单独说明。模拟 Core、在线只读、真实账号写入和系统媒体验收分别记账。
 `NativePlaybackLiveTest` 会短暂播放并修改本地队列、播放设置和听歌记录；需显式添加 `-e livePlayback true` 并单独运行该类。

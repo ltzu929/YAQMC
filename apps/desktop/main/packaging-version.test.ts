@@ -7,9 +7,6 @@ import { describe, expect, it } from 'vitest';
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(desktopRoot, '../..');
 
-/** Handshake identity used by protocol e2e and supervisor unit tests. */
-const HANDSHAKE_VERSION = '0.1.0';
-
 type PackageJson = {
   version: string;
   dependencies?: Record<string, string>;
@@ -30,13 +27,12 @@ function cargoPackageVersion(relativePath: string): string {
 }
 
 describe('PACK-04 handshake version equality', () => {
-  it('keeps root, desktop, core, and the handshake constant equal', () => {
+  it('keeps root, desktop and core package versions equal', () => {
     const root = readJson('package.json').version;
     const desktop = readJson('apps/desktop/package.json').version;
     const core = cargoPackageVersion('crates/yaqmc-core/Cargo.toml');
-    expect(root).toBe(HANDSHAKE_VERSION);
-    expect(desktop).toBe(HANDSHAKE_VERSION);
-    expect(core).toBe(HANDSHAKE_VERSION);
+    expect(desktop).toBe(root);
+    expect(core).toBe(root);
   });
 
   it('handshake uses app.getVersion() as both host and expected core version', () => {

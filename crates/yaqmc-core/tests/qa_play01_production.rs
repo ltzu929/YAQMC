@@ -91,7 +91,7 @@ fn attach_message() -> AttachMessage {
         protocol: PROTOCOL_VERSION,
         host: HostIdentity {
             app: "yaqmc-qa-play01".to_owned(),
-            version: "0.1.0".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
         },
         platform: PlatformAttach {
             main_window_handle: None,
@@ -164,7 +164,13 @@ async fn spawn_core_with_credentials(root: &std::path::Path, isolate_credentials
         *captured.lock().expect("stderr log") = log;
     });
     let mut transport = PipeTransport::new(stdout, stdin);
-    if let Err(error) = host_handshake(&mut transport, attach_message(), Some("0.1.0")).await {
+    if let Err(error) = host_handshake(
+        &mut transport,
+        attach_message(),
+        Some(env!("CARGO_PKG_VERSION")),
+    )
+    .await
+    {
         tokio::time::sleep(Duration::from_millis(100)).await;
         panic!(
             "handshake: {error}; stderr={}",

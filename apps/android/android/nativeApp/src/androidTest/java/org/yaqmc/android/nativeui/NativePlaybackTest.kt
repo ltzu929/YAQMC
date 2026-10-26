@@ -1,7 +1,7 @@
 package org.yaqmc.android.nativeui
 
 import android.app.Application
-import androidx.activity.compose.setContent
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -23,8 +23,8 @@ import org.junit.rules.RuleChain
 /** Playback UI and failures use an isolated Core; no real account writes or audio. */
 @UnstableApi
 class NativePlaybackTest {
-    private val compose = createAndroidComposeRule<NativeActivity>()
-    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences()).around(compose)
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences(ComponentActivity::class.java)).around(compose)
     private val core = PlaybackCore()
     private lateinit var model: NativeViewModel
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()
@@ -172,12 +172,12 @@ class NativePlaybackTest {
     }
 
     private fun install(route: String) {
-        compose.runOnIdle {
+        compose.runOnUiThread {
             model = NativeViewModel(compose.activity.application as Application, core)
-            compose.activity.setContent { NativeApp(model, login = {}, share = { track, kind -> shares += track to kind }, reportDrawn = {}) }
             model.navigate(NativeRoute(route), root = true)
             model.onCoreEvent(1, "player://snapshot", core.snapshot().toString())
         }
+        compose.setContent { NativeApp(model, login = {}, share = { track, kind -> shares += track to kind }, reportDrawn = {}) }
         compose.waitUntil(5000) { model.player.value.current != null }
     }
     private fun publish(value: JSONObject) {

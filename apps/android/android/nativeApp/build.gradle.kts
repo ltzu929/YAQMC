@@ -14,8 +14,13 @@ android {
         versionCode = (System.getenv("YAQMC_VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("YAQMC_VERSION_NAME") ?: "0.1.1"
         buildConfigField("String", "YAQMC_BUILD_COMMIT", "\"${System.getenv("YAQMC_BUILD_COMMIT") ?: "unknown"}\"")
-        ndk { abiFilters += "arm64-v8a" }
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Normal installable builds remain ARM64. Local x86_64 emulators use a matching JNI ABI.
+        val nativeAbi = System.getenv("YAQMC_ANDROID_NATIVE_ABI") ?: "arm64-v8a"
+        require(nativeAbi in setOf("arm64-v8a", "x86_64")) { "Unsupported native ABI: $nativeAbi" }
+        ndk { abiFilters += nativeAbi }
+        testInstrumentationRunner = if (System.getenv("YAQMC_ANDROID_OFFLINE_UI_TESTS") == "1")
+            "org.yaqmc.android.nativeui.NativeOfflineTestRunner"
+        else "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         debug { versionNameSuffix = "-native-debug" }

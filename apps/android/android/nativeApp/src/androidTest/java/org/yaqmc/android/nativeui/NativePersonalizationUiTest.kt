@@ -2,7 +2,7 @@ package org.yaqmc.android.nativeui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import androidx.activity.compose.setContent
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -29,9 +29,22 @@ import org.junit.rules.TemporaryFolder
 /** Isolated presentation and app-private files; no provider calls or playback commands. */
 @UnstableApi
 class NativePersonalizationUiTest {
-    private val compose = createAndroidComposeRule<NativeActivity>()
+    private val compose = createAndroidComposeRule<ComponentActivity>()
     private val files = TemporaryFolder()
-    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences()).around(files).around(compose)
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences(ComponentActivity::class.java)).around(files).around(compose)
+
+    @Test fun openingLyricsMidTrackShowsCurrentLine() {
+        val clock = mutableLongStateOf(50000L)
+        val document = Lyrics("initial", lines = List(24) { index ->
+            LyricLine(index * 5000L, (index + 1) * 5000L, "Initial line $index")
+        })
+        compose.setContent { MaterialTheme {
+            LyricList(document, clock, NativeLyricPreferences(blur = false, spring = false), {},
+                Modifier.fillMaxWidth().height(420.dp))
+        } }
+        compose.onNodeWithText("Initial line 10").assertIsDisplayed()
+        compose.onNodeWithTag("lyric-line-10").assertIsSelected()
+    }
 
     @Test fun timingVisibilityAndSeekingUseOneDocumentAndPreserveWordText() {
         val clock = mutableLongStateOf(1500)
@@ -40,7 +53,7 @@ class NativePersonalizationUiTest {
             LyricLine(3000, 4000, "Goodnight", "晚安", "goodnight"),
         )))
         val seeks = mutableListOf<Long>()
-        compose.activity.setContent { MaterialTheme(colorScheme = lightColorScheme(primary = Color.Red)) {
+        compose.setContent { MaterialTheme(colorScheme = lightColorScheme(primary = Color.Red)) {
             LyricList(document.value, clock, NativeLyricPreferences(translation = "hide", timingOffsetMs = 500, blur = false), seeks::add,
                 Modifier.fillMaxWidth().height(420.dp).padding(top = 24.dp))
         } }
@@ -74,7 +87,7 @@ class NativePersonalizationUiTest {
         val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
         store.setLyrics(NativeLyricPreferences(timingOffsetMs = 350))
         val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
-        compose.activity.setContent {
+        compose.setContent {
             CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized, LocalConfiguration provides localized.resources.configuration,
                 LocalActivityResultRegistryOwner provides compose.activity) {
             val state by store.state.collectAsState()

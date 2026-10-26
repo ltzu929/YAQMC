@@ -42,16 +42,17 @@ function writeMiniRepo(root, versions) {
 test('root package.json declares the sync-version script', () => {
   const pkg = JSON.parse(readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'));
   assert.equal(pkg.scripts['sync-version'], 'node scripts/sync-version.mjs');
-  assert.equal(pkg.version, '0.1.0');
+  assert.equal(typeof pkg.version, 'string');
+  assert.ok(pkg.version.length > 0);
 });
 
-test('check mode accepts the live repo when versions already match 0.1.0', () => {
+test('check mode accepts the live repo when workspace versions already match', () => {
+  const version = readRootVersion(repositoryRoot);
   const result = syncVersions({ repoRoot: repositoryRoot, check: true });
-  assert.equal(result.version, '0.1.0');
-  assert.equal(readRootVersion(repositoryRoot), '0.1.0');
+  assert.equal(result.version, version);
   assert.equal(result.updates.length, 0);
   for (const manifest of workspaceCrateManifests(repositoryRoot)) {
-    assert.equal(readCargoPackageVersion(readFileSync(manifest, 'utf8')), '0.1.0');
+    assert.equal(readCargoPackageVersion(readFileSync(manifest, 'utf8')), version);
   }
 });
 

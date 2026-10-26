@@ -1170,7 +1170,8 @@ export const zhCN = {
       bundleReady: '诊断包已就绪: {{name}}',
       bundleBytes: '大小: {{bytes}}',
       bundleRedacted: '已脱敏值: {{count}}',
-      bundleHint: '在保存窗口选择下载目录。打开 GitHub Issue 后，点击附件按钮选择保存的 ZIP；也可以分享诊断包。诊断包不会自动上传。',
+      bundleHint:
+        '在保存窗口选择下载目录。打开 GitHub Issue 后，点击附件按钮选择保存的 ZIP；也可以分享诊断包。诊断包不会自动上传。',
       opened: '已在浏览器中打开 GitHub。YAQMC 不会代替你点击提交。',
       copied: 'Issue 文本已复制到剪贴板。',
     },
