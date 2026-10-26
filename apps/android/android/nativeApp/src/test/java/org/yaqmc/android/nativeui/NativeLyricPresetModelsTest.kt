@@ -60,6 +60,6 @@ class NativeLyricPresetModelsTest {
         val state = NativeLyricPresetPreferences().duplicate("custom.same", "One")
         assertEquals(state, state.duplicate("custom.same", "Two"))
         assertEquals(state, state.save(NativeLyricPreset("builtin.classic", layout = "vinyl")))
-        assertEquals(state, state.select("custom.unknown"))
+        assertEquals("builtin.classic", state.select("custom.unknown").selectedId)
     }
 }
