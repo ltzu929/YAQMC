@@ -90,10 +90,10 @@ internal fun NativeLyricPresetPreview(
             // Row layouts allocate controls on the left. Immersive layouts allocate lyrics above.
             val handleWidth = if (horizontal) 24.dp else 80.dp
             val handleHeight = if (horizontal) 80.dp else 24.dp
-            val x = if (horizontal) maxWidth * (1f - displayedFraction) - handleWidth / 2
-                else maxWidth / 2 - handleWidth / 2
-            val y = if (horizontal) maxHeight / 2 - handleHeight / 2
-                else maxHeight * displayedFraction - handleHeight / 2
+            val x = if (horizontal) maxWidth * (1f - displayedFraction) - handleWidth / 2f
+                else maxWidth / 2f - handleWidth / 2f
+            val y = if (horizontal) maxHeight / 2f - handleHeight / 2f
+                else maxHeight * displayedFraction - handleHeight / 2f
             Box(Modifier.offset(x = x, y = y).size(handleWidth, handleHeight)
                 .testTag("preset-divider-handle")
                 .clip(RoundedCornerShape(12.dp))
