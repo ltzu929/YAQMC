@@ -482,6 +482,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     fun setLanguage(value: String) = preferenceStore.setLanguage(value)
     fun setLyrics(value: NativeLyricPreferences) = preferenceStore.setLyrics(value)
     fun setAppearance(value: NativeAppearancePreferences) = preferenceStore.setAppearance(value)
+    fun setLyricPresets(value: NativeLyricPresetPreferences) = preferenceStore.setLyricPresets(value)
     fun localizedString(resource: Int): String = getApplication<Application>().withNativeLanguage(preferences.value).getString(resource)
     fun dismissMessage() { _message.value = null }
     fun notify(resource: Int) { _message.value = NativeText(resource) }
