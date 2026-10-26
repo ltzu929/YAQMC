@@ -132,8 +132,8 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
         title = { Text(stringResource(R.string.native_preset_delete)) },
         text = { Text(nativePresetName(active)) },
-        confirmButton = { TextButton(onClick = { change(settings.deleteCustom()); confirmDelete = false }) {
+        confirmButton = { TextButton(onClick = { change(settings.deleteCustom()); confirmDelete = false }, modifier = Modifier.testTag("preset-confirm-delete")) {
             Text(stringResource(R.string.native_preset_delete))
         } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.native_cancel)) } })
+        dismissButton = { TextButton(onClick = { confirmDelete = false }, modifier = Modifier.testTag("preset-cancel-delete")) { Text(stringResource(R.string.native_cancel)) } })
 }
