@@ -131,4 +131,39 @@ class NativePersonalizationUiTest {
         assertEquals(image, NativeBackgroundAssets(image.parentFile!!).resolve(reference))
         assertFalse(image.parentFile!!.listFiles().orEmpty().any { it.name.endsWith(".tmp") })
     }
+
+    @Test fun presetChooserPreviewAndCopyRemainOfflineAndSurviveRestart() {
+        val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
+        store.setLyrics(NativeLyricPreferences(timingOffsetMs = 275, translation = "hide"))
+        val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
+                LocalConfiguration provides localized.resources.configuration) {
+                val state by store.state.collectAsState()
+                MaterialTheme { NativeLyricPresets(state.lyricPresets, store::setLyricPresets) }
+            }
+        }
+        compose.onNodeWithTag("preset-builtin.immersive").performClick()
+        compose.onNodeWithTag("lyric-preset-preview").assertIsDisplayed()
+        compose.runOnIdle { assertEquals("immersive", store.state.value.lyricPresets.current().layout) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-duplicate"))
+        compose.onNodeWithTag("preset-duplicate").performClick()
+        compose.runOnIdle {
+            assertTrue(store.state.value.lyricPresets.selectedId.startsWith("custom."))
+            assertEquals("immersive", store.state.value.lyricPresets.current().layout)
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-delete"))
+        compose.onNodeWithTag("preset-delete").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { assertEquals(1, store.state.value.lyricPresets.custom.size) }
+        compose.onNodeWithTag("preset-delete").performClick()
+        compose.onNodeWithText("Delete my layout").last().performClick()
+        compose.runOnIdle {
+            val restarted = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0)).state.value
+            assertEquals("builtin.classic", restarted.lyricPresets.selectedId)
+            assertTrue(restarted.lyricPresets.custom.isEmpty())
+            assertEquals(275L, restarted.lyrics.timingOffsetMs)
+            assertEquals("hide", restarted.lyrics.translation)
+        }
+    }
 }
