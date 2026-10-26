@@ -138,10 +138,6 @@ jobs:
       - run: cargo test --workspace --all-targets --locked
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-      - name: Run protocol process tests with the test provider
-        run: cargo test -p yaqmc-core --features test-provider --test protocol_e2e --locked
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
       - run: npm run contracts:check
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')

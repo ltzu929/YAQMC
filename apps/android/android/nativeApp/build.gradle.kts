@@ -14,7 +14,7 @@ android {
         versionCode = (System.getenv("YAQMC_VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("YAQMC_VERSION_NAME") ?: "0.1.1"
         buildConfigField("String", "YAQMC_BUILD_COMMIT", "\"${System.getenv("YAQMC_BUILD_COMMIT") ?: "unknown"}\"")
-        // Normal installable builds remain ARM64. CI's x86_64 emulator uses a matching JNI ABI.
+        // Normal installable builds remain ARM64. Local x86_64 emulators use a matching JNI ABI.
         val nativeAbi = System.getenv("YAQMC_ANDROID_NATIVE_ABI") ?: "arm64-v8a"
         require(nativeAbi in setOf("arm64-v8a", "x86_64")) { "Unsupported native ABI: $nativeAbi" }
         ndk { abiFilters += nativeAbi }
