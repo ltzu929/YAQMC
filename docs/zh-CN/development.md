@@ -51,10 +51,10 @@ node scripts/build-android-native.mjs --reuse-core
 
 ## GitHub Actions 原生安装包与模拟器
 
-[Android Native APK](../../.github/workflows/android-native-ci.yml) 是 **Kotlin / Compose 原生版** 的 CI；旧 `CI` / `Electron Release` 绿灯不能代替它。工作流在涉及 Android / Rust / 构建脚本的 Pull Request、`main` 更新及手动触发时运行：
+[Android Native APK](../../.github/workflows/android-native-ci.yml) 是 **Kotlin / Compose 原生版** 的 CI；旧 `CI` / `Electron Release` 绿灯不能代替它。工作流在涉及 Android / Rust / 构建脚本 / `packages/yaqmc-client/fixtures` 共享协议样例的 Pull Request、`main` 更新及手动触发时运行：
 
 1. `android-native`：安装 Node 26.7.0、JDK 21、Rust 1.88.0、SDK 36 / NDK 28.2.13676358 / cargo-ndk 4.1.2，`npm ci`，构建 ARM64 Rust Core 和优化 benchmark APK，运行原生及共享宿主 JVM 测试、Lint；核对 APK 的签名、包名、ARM64 JNI 库和 SHA-256。
-2. `android-emulator`：在 PR 或手动执行且 ARM64 job 成功后，独立构建 x86_64 Rust Core 和 Debug APK，在 Android 15 / API 35 模拟器上运行指定的离线 Compose UI 测试：`NativePlaybackTest` 与 `NativePersonalizationUiTest`，使用模拟数据，不进行线上登录 / 账号写入。测试失败时保留 instrument 输出与有界日志，成功时也尽力提取屏幕截图；这并非真实播放器 / QQ 接口验收。普通 `main` push 不运行模拟器，以减少重复计算。
+2. `android-emulator`：在 PR 或手动执行且 ARM64 job 成功后，独立构建 x86_64 Rust Core 和 Debug APK，在 Android 15 / API 35 模拟器上运行指定的离线 Compose UI 测试：`NativePlaybackTest` 与 `NativePersonalizationUiTest`。构建测试 APK 时设置 `YAQMC_ANDROID_OFFLINE_UI_TESTS=1`，选用专用 `NativeOfflineTestRunner`，使用普通 `Application` 和轻量 `ComponentActivity`，在应用启动时即隔离真实 Core；每项测试前后断言 Core 未初始化。UI 使用模拟数据，不进行线上登录 / 账号写入。测试失败时保留 instrument 输出与有界日志，成功时也尽力提取屏幕截图；这并非真实播放器 / QQ 接口验收。未设置该变量时默认运行器仍保留真实应用启动行为。普通 `main` push 不运行模拟器，以减少重复计算。
 
 在 GitHub 仓库的 **Actions → Android Native APK → 具体运行记录 → Summary → Artifacts** 下载：
 
@@ -63,7 +63,7 @@ node scripts/build-android-native.mjs --reuse-core
 
 Android 原生包名是 `org.yaqmc.android.nativeui`，可与旧版 `org.yaqmc.android` 共存。这是 CI 使用临时 **debug keystore** 签名的测试包，**并非正式签名发行包**；不同 CI 构建不保证能够覆盖安装。签名冲突时应先备份测试版数据，再仅卸载 `nativeui` 包。别把此测试包当成已解决正式升级 / 数据兼容（T06）的依据。
 
-**本地复现：** 常规 ARM64 使用前述 `node scripts/build-android-native.mjs`；模拟器专用 x86_64 使用 `YAQMC_ANDROID_NATIVE_ABI=x86_64` 与 `YAQMC_ANDROID_NATIVE_LIB_DIR=<包含 x86_64/libyaqmc_core.so 的目录>`，先通过 `cargo ndk -P 26 -t x86_64 -o <目录> build --release --locked -p yaqmc-android` 构建 JNI，再运行 `node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest`。环境变量仅作用于本次进程，不要用于 ARM64 发布 APK。模拟器运行的测试范围见 [run-native-emulator-smoke.sh](../../scripts/ci/run-native-emulator-smoke.sh)。
+**本地复现：** 常规 ARM64 使用前述 `node scripts/build-android-native.mjs`；模拟器专用 x86_64 使用 `YAQMC_ANDROID_NATIVE_ABI=x86_64`、`YAQMC_ANDROID_OFFLINE_UI_TESTS=1` 与 `YAQMC_ANDROID_NATIVE_LIB_DIR=<包含 x86_64/libyaqmc_core.so 的目录>`，先通过 `cargo ndk -P 26 -t x86_64 -o <目录> build --release --locked -p yaqmc-android` 构建 JNI，再运行 `node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest`。环境变量仅作用于本次进程，不要用于 ARM64 发布 APK。模拟器运行的测试范围见 [run-native-emulator-smoke.sh](../../scripts/ci/run-native-emulator-smoke.sh)。
 
 ## 跨对话接手与任务交付
 
@@ -92,6 +92,12 @@ node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assemble
 
 ```powershell
 adb shell am instrument -w -r -e notClass org.yaqmc.android.nativeui.NativeProviderSmokeTest,org.yaqmc.android.nativeui.NativePlaybackLiveTest org.yaqmc.android.nativeui.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+上述默认运行器会启动真实应用。仅验证离线播放器 UI 与个性化时，先设置 `$env:YAQMC_ANDROID_OFFLINE_UI_TESTS = '1'` 构建并安装测试 APK，再使用与 CI 相同的专用运行器；恢复其他设备测试前需移除该变量并重新构建、安装测试 APK：
+
+```powershell
+adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest org.yaqmc.android.nativeui.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner
 ```
 
 `NativeProviderSmokeTest` 访问真实服务，只做只读检查，执行时单独说明。模拟 Core、在线只读、真实账号写入和系统媒体验收分别记账。

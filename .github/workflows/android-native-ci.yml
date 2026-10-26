@@ -6,6 +6,7 @@ on:
       - '.github/workflows/android-native-ci.yml'
       - '.github/actions/setup-android/**'
       - 'apps/android/**'
+      - 'packages/yaqmc-client/fixtures/**'
       - 'crates/**'
       - 'scripts/**'
       - 'Cargo.toml'
@@ -18,6 +19,7 @@ on:
       - '.github/workflows/android-native-ci.yml'
       - '.github/actions/setup-android/**'
       - 'apps/android/**'
+      - 'packages/yaqmc-client/fixtures/**'
       - 'crates/**'
       - 'scripts/**'
       - 'Cargo.toml'
@@ -98,6 +100,7 @@ jobs:
     timeout-minutes: 100
     env:
       YAQMC_ANDROID_NATIVE_ABI: x86_64
+      YAQMC_ANDROID_OFFLINE_UI_TESTS: '1'
       YAQMC_ANDROID_NATIVE_LIB_DIR: ${{ github.workspace }}/apps/android/android/nativeApp/build/generated/jniLibs
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

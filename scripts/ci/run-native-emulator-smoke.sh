@@ -9,7 +9,7 @@ output="artifacts/android-emulator"
 mkdir -p "$output"
 apk="apps/android/android/nativeApp/build/outputs/apk/debug/nativeApp-debug.apk"
 test_apk="apps/android/android/nativeApp/build/outputs/apk/androidTest/debug/nativeApp-debug-androidTest.apk"
-test_package="org.yaqmc.android.nativeui.test/androidx.test.runner.AndroidJUnitRunner"
+test_package="org.yaqmc.android.nativeui.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner"
 test_classes="org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest"
 
 adb wait-for-device

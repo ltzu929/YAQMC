@@ -1,6 +1,7 @@
 package org.yaqmc.android.nativeui
 
 import android.app.Application
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
@@ -23,8 +24,8 @@ import org.junit.rules.RuleChain
 /** Playback UI and failures use an isolated Core; no real account writes or audio. */
 @UnstableApi
 class NativePlaybackTest {
-    private val compose = createAndroidComposeRule<NativeActivity>()
-    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences()).around(compose)
+    private val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences(ComponentActivity::class.java)).around(compose)
     private val core = PlaybackCore()
     private lateinit var model: NativeViewModel
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()

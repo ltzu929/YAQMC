@@ -18,7 +18,9 @@ android {
         val nativeAbi = System.getenv("YAQMC_ANDROID_NATIVE_ABI") ?: "arm64-v8a"
         require(nativeAbi in setOf("arm64-v8a", "x86_64")) { "Unsupported native ABI: $nativeAbi" }
         ndk { abiFilters += nativeAbi }
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = if (System.getenv("YAQMC_ANDROID_OFFLINE_UI_TESTS") == "1")
+            "org.yaqmc.android.nativeui.NativeOfflineTestRunner"
+        else "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
         debug { versionNameSuffix = "-native-debug" }

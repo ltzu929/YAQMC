@@ -2,6 +2,7 @@ package org.yaqmc.android.nativeui
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.foundation.layout.*
@@ -29,9 +30,9 @@ import org.junit.rules.TemporaryFolder
 /** Isolated presentation and app-private files; no provider calls or playback commands. */
 @UnstableApi
 class NativePersonalizationUiTest {
-    private val compose = createAndroidComposeRule<NativeActivity>()
+    private val compose = createAndroidComposeRule<ComponentActivity>()
     private val files = TemporaryFolder()
-    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences()).around(files).around(compose)
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences(ComponentActivity::class.java)).around(files).around(compose)
 
     @Test fun timingVisibilityAndSeekingUseOneDocumentAndPreserveWordText() {
         val clock = mutableLongStateOf(1500)
