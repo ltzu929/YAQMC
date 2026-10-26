@@ -292,4 +292,24 @@
     <string name="native_material_opaque">Opaque</string>
     <string name="native_material_translucent">Translucent</string>
     <string name="native_appearance_reset">Reset appearance</string>
+    <string name="native_preset_title">Lyric layouts</string>
+    <string name="native_preset_select">Choose a preset</string>
+    <string name="native_preset_classic">Classic</string>
+    <string name="native_preset_immersive">Immersive</string>
+    <string name="native_preset_vinyl">Vinyl</string>
+    <string name="native_preset_custom">My layout</string>
+    <string name="native_preset_sample_title">Hear Together</string>
+    <string name="native_preset_sample_artist">YAQMC Studio</string>
+    <string name="native_preset_sample_lyric">Sing along with the music</string>
+    <string name="native_preset_sample_second">Let the melody carry on</string>
+    <string name="native_preset_name">Preset name</string>
+    <string name="native_preset_layout">Layout style</string>
+    <string name="native_preset_lyrics_share">Lyrics area (wide screen)</string>
+    <string name="native_preset_artwork_size">Artwork size</string>
+    <string name="native_preset_apply">Save changes</string>
+    <string name="native_preset_duplicate">Duplicate</string>
+    <string name="native_preset_copy_suffix">copy</string>
+    <string name="native_preset_reset">Restore built-in layout</string>
+    <string name="native_preset_delete">Delete my layout</string>
+    <string name="native_preset_scope">Layout editing currently supports style, relative width and artwork size. Free positioning and layer editing are not yet available.</string>
 </resources>
