@@ -5,6 +5,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NativePreferencesTest {
+
+    @Test fun presetChangesSurviveRestartWithoutTouchingLyricsOrOtherPreferences() {
+        val storage = MemoryPreferences(mutableMapOf("theme" to "dark", "language" to "zh-CN", "future-setting" to "keep"))
+        val store = NativePreferenceStore(storage)
+        store.setLyrics(NativeLyricPreferences(timingOffsetMs = 350))
+        store.setLyricPresets(NativeLyricPresetPreferences().select("builtin.vinyl")
+            .duplicate("custom.test-persist", "My vinyl"))
+        store.setLyrics(NativeLyricPreferences(timingOffsetMs = -200))
+        val restarted = NativePreferenceStore(storage).state.value
+        assertEquals("custom.test-persist", restarted.lyricPresets.selectedId)
+        assertEquals("vinyl", restarted.lyricPresets.current().layout)
+        assertEquals(-200L, restarted.lyrics.timingOffsetMs)
+        assertEquals("dark", restarted.theme)
+        assertEquals("zh-CN", restarted.language)
+        assertEquals("keep", storage.getString("future-setting", null))
+    }
+
     @Test fun appearanceChangesAndResetPreserveLyricsLanguageAndUnknownPreferences() {
         val storage = MemoryPreferences(mutableMapOf("theme" to "dark", "language" to "zh-CN", "future-setting" to "keep"))
         val store = NativePreferenceStore(storage)
