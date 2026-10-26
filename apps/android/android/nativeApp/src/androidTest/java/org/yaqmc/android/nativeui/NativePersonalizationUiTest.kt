@@ -169,6 +169,7 @@ class NativePersonalizationUiTest {
 
     @Test fun draggableWidescreenPreviewIsUndoableAndPersistsOnlyAfterSaving() {
         val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
+        store.setLyricPresets(NativeLyricPresetPreferences())
         val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
         compose.setContent {
             CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
