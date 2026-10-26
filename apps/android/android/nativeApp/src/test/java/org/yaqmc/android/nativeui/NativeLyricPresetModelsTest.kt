@@ -62,4 +62,36 @@ class NativeLyricPresetModelsTest {
         assertEquals(state, state.save(NativeLyricPreset("builtin.classic", layout = "vinyl")))
         assertEquals("builtin.classic", state.select("custom.unknown").selectedId)
     }
+
+    @Test fun draftHistoryKeepsUndoRedoSeparateFromSavedPreferences() {
+        val factory = NativeLyricPresetPreferences().current()
+        val start = NativeLyricPresetEditHistory(factory)
+        val first = start.edit(factory.copy(lyricsFraction = 0.6f))
+        val second = first.edit(factory.copy(lyricsFraction = 0.7f))
+        assertEquals(0.7f, second.current.lyricsFraction)
+        assertEquals(2, second.undoSteps.size)
+        assertTrue(second.redoSteps.isEmpty())
+        val undone = second.undo()
+        assertEquals(0.6f, undone.current.lyricsFraction)
+        assertEquals(0.7f, undone.redo().current.lyricsFraction)
+        assertEquals(first, undone.edit(undone.current))
+        val branched = undone.edit(factory.copy(artworkScale = 1.2f))
+        assertTrue(branched.redoSteps.isEmpty())
+        assertEquals(branched, branched.redo())
+        assertEquals(factory, NativeLyricPresetPreferences().current())
+    }
+
+    @Test fun historyIsBoundedAndDraggingSnapsOnlyCommittedFraction() {
+        val factory = NativeLyricPresetPreferences().current()
+        val history = (0..30).fold(NativeLyricPresetEditHistory(factory)) { state, index ->
+            state.edit(factory.copy(name = "step-$index"))
+        }
+        assertEquals(24, history.undoSteps.size)
+        assertEquals("step-30", history.current.name)
+        assertEquals("step-29", history.undo().current.name)
+        assertEquals(0.5f, nativeSnapLyricsFraction(0.492f))
+        assertEquals(0.35f, nativeSnapLyricsFraction(-9f))
+        assertEquals(0.75f, nativeSnapLyricsFraction(9f))
+        assertEquals(0.55f, nativeSnapLyricsFraction(Float.NaN))
+    }
 }
