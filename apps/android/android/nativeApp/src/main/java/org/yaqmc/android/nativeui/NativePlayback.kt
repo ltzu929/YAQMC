@@ -309,24 +309,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
         }
     }
     val lyricSeek: (Long) -> Unit = { model.command("player_seek", JSONObject().put("positionMs", it)) }
-    if (preset.layout == "immersive") {
-        // Keep the actual player and Core clock: the editor preview is never mounted here.
-        Column(Modifier.fillMaxSize().testTag("player-layout-immersive")) {
-            LyricList(lyrics, lyricClock, preferences.lyrics, lyricSeek, Modifier.weight(preset.lyricsFraction))
-            Column(Modifier.weight(1f - preset.lyricsFraction).verticalScroll(rememberScrollState())
-                .testTag("player-controls")) { controls() }
-        }
-    } else if (wide) Row(Modifier.fillMaxSize().testTag("player-layout-${preset.layout}")) {
-        Column(Modifier.weight(1f - preset.lyricsFraction).fillMaxHeight()
-            .verticalScroll(rememberScrollState()).testTag("player-controls")) { controls() }
-        LyricList(lyrics, lyricClock, preferences.lyrics, lyricSeek, Modifier.weight(preset.lyricsFraction))
-    } else BoxWithConstraints(Modifier.fillMaxSize().testTag("player-layout-${preset.layout}")) {
-        // Classic preserves the existing 72%-height controls cap by default.
-        val maxControlsHeight = maxHeight * (0.72f - (preset.lyricsFraction - 0.55f) * 0.5f)
-        Column {
-            Column(Modifier.heightIn(max = maxControlsHeight).verticalScroll(rememberScrollState())
-                .testTag("player-controls")) { controls() }
-            LyricList(lyrics, lyricClock, preferences.lyrics, lyricSeek, Modifier.weight(1f))
-        }
+    NativeLyricLayout(preset, wide, Modifier.testTag("player-layout-${preset.layout}"), controls) { modifier ->
+        LyricList(lyrics, lyricClock, preferences.lyrics, lyricSeek, modifier)
     }
 }

@@ -26,6 +26,85 @@ class NativeShellTest {
     private val savedPreferences = NativeDevicePreferences()
     @get:Rule val rules: RuleChain = RuleChain.outerRule(savedPreferences).around(compose)
 
+    @Test fun lyricPresetEditsSaveCancelAndSurviveRecreationWithoutChangingPlayback() {
+        openSettings()
+        val before = readyPlayer()
+        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Lyrics"))
+        compose.onNodeWithText("Lyrics", useUnmergedTree = false).performClick()
+        compose.onNodeWithTag("open-lyric-presets").performClick()
+        compose.onNodeWithTag("preset-builtin.vinyl").performClick()
+        fun reveal(tag: String) = compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag(tag))
+        reveal("preset-duplicate")
+        compose.onNodeWithTag("preset-duplicate").performClick()
+        val copiedId = compose.runOnIdle { model().preferences.value.lyricPresets.selectedId }
+        assertTrue(copiedId.startsWith("custom."))
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement("Device layout")
+        reveal("preset-save")
+        compose.onNodeWithTag("preset-save").performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasSetTextAction())
+        compose.onNode(hasSetTextAction()).performTextReplacement("Discarded name")
+        reveal("preset-save")
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle { assertEquals("Device layout", model().preferences.value.lyricPresets.current().name) }
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithTag("lyric-presets").assertIsDisplayed()
+        compose.runOnIdle {
+            val persisted = NativePreferenceStore(context().getSharedPreferences("native-ui", 0)).state.value.lyricPresets
+            assertEquals(copiedId, persisted.selectedId)
+            assertEquals("Device layout", persisted.current().name)
+            assertEquals("vinyl", persisted.current().layout)
+        }
+        reveal("preset-delete")
+        compose.onNodeWithTag("preset-delete").performClick()
+        compose.onNodeWithTag("preset-cancel-delete").performClick()
+        compose.runOnIdle { assertEquals(copiedId, model().preferences.value.lyricPresets.selectedId) }
+        compose.onNodeWithTag("preset-delete").performClick()
+        compose.onNodeWithTag("preset-confirm-delete").performClick()
+        compose.runOnIdle { assertTrue(model().preferences.value.lyricPresets.custom.isEmpty()) }
+        val after = readyPlayer()
+        assertEquals(before.entries.map { it.id }, after.entries.map { it.id })
+        assertEquals(before.currentEntry?.id, after.currentEntry?.id)
+        assertEquals(before.playing, after.playing)
+        capture("pr2-device-preset-editor")
+    }
+
+    @Test fun livePlayerPresetsMatchPreviewAcrossPortraitAndLandscape() {
+        val previous = compose.activity.requestedOrientation
+        val before = readyPlayer()
+        assertNotNull("Select a song before running the device layout check", before.current)
+        try {
+            for (wide in listOf(false, true)) {
+                compose.activityRule.scenario.onActivity {
+                    it.requestedOrientation = if (wide) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+                compose.waitUntil(10_000) { (compose.activity.resources.configuration.screenWidthDp >= 600) == wide }
+                for (preset in nativeBuiltinLyricPresets) {
+                    compose.runOnIdle { model().navigate(NativeRoute("lyric-settings")) }
+                    compose.onNodeWithTag("open-lyric-presets").performClick()
+                    compose.onNodeWithTag("preset-${preset.id}").performClick()
+                    compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
+                    compose.onNodeWithTag("lyric-preset-preview").assertIsDisplayed()
+                    if (preset.layout == "classic") capture("pr2-device-preview-${if (wide) "wide" else "phone"}")
+                    compose.runOnIdle { model().navigate(NativeRoute("player")) }
+                    compose.onNodeWithTag("player-layout-${preset.layout}").assertIsDisplayed()
+                    val controls = compose.onNodeWithTag("player-controls").fetchSemanticsNode().boundsInRoot
+                    val lyrics = compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot
+                    if (preset.layout == "immersive") assertTrue(lyrics.bottom <= controls.top + 1f)
+                    else if (wide) assertTrue(controls.right <= lyrics.left + 1f)
+                    else assertTrue(controls.bottom <= lyrics.top + 1f)
+                    capture("pr2-device-${preset.layout}-${if (wide) "wide" else "phone"}")
+                }
+            }
+            val after = readyPlayer()
+            assertEquals(before.entries.map { it.id }, after.entries.map { it.id })
+            assertEquals(before.currentEntry?.id, after.currentEntry?.id)
+            assertEquals(before.playing, after.playing)
+        } finally {
+            compose.activityRule.scenario.onActivity { it.requestedOrientation = previous }
+        }
+    }
+
     @Test fun plainPageTextHasVisibleInkInBothThemes() {
         openSettings()
         for (theme in listOf("dark", "light")) {
@@ -168,6 +247,11 @@ class NativeShellTest {
     }
 
     private fun openSettings() = compose.onNodeWithContentDescription("Open account settings:", substring = true).performClick()
+    private fun readyPlayer(): PlayerState {
+        val viewModel = compose.runOnIdle { model() }
+        compose.waitUntil(15_000) { viewModel.player.value.revision >= 0 }
+        return compose.runOnIdle { viewModel.player.value }
+    }
     private fun model() = ViewModelProvider(compose.activity)[NativeViewModel::class.java]
     private fun back() { compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }; compose.waitForIdle() }
     private fun context() = InstrumentationRegistry.getInstrumentation().targetContext

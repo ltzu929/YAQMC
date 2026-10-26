@@ -212,7 +212,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "lyric-settings", "appearance-settings", "player", "queue")) return
+        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)

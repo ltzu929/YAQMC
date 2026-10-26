@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,13 +29,14 @@ internal fun nativePresetName(preset: NativeLyricPreset): String = when (preset.
 /** Offline fixture: never requests provider data and never touches the player's queue. */
 @Composable
 internal fun NativeLyricPresetPreview(preset: NativeLyricPreset) {
-    Surface(Modifier.fillMaxWidth().height(198.dp).testTag("lyric-preset-preview"),
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    Surface(Modifier.fillMaxWidth().height(if (wide) 198.dp else 280.dp).testTag("lyric-preset-preview"),
         shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         val title = stringResource(R.string.native_preset_sample_title)
         val artist = stringResource(R.string.native_preset_sample_artist)
         val sample = stringResource(R.string.native_preset_sample_lyric)
-        val lyrics: @Composable () -> Unit = {
-            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.Center) {
+        val lyrics: @Composable (Modifier) -> Unit = { modifier ->
+            Column(modifier.fillMaxSize().testTag("lyrics-viewport").padding(10.dp), verticalArrangement = Arrangement.Center) {
                 Text(sample, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                 Text(stringResource(R.string.native_preset_sample_second), style = MaterialTheme.typography.bodySmall)
             }
@@ -46,26 +48,14 @@ internal fun NativeLyricPresetPreview(preset: NativeLyricPreset) {
                 Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
         }
-        if (preset.layout == "immersive") {
-            Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Box(Modifier.weight(preset.lyricsFraction), contentAlignment = Alignment.Center) { lyrics() }
-                Row(Modifier.fillMaxWidth().weight(1f - preset.lyricsFraction),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    cover()
-                    Column { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis); Text(artist, style = MaterialTheme.typography.bodySmall) }
-                }
+        NativeLyricLayout(preset, wide, controls = {
+            Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                cover()
+                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
             }
-        } else {
-            Row(Modifier.fillMaxSize().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f - preset.lyricsFraction), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    cover()
-                    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                    Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
-                }
-                Box(Modifier.weight(preset.lyricsFraction), contentAlignment = Alignment.Center) { lyrics() }
-            }
-        }
+        }, lyrics = lyrics)
     }
 }
 
