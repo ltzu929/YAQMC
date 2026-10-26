@@ -1,10 +1,19 @@
 package org.yaqmc.android.nativeui
 
 import android.app.Application
+import android.content.res.Configuration
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import androidx.test.platform.app.InstrumentationRegistry
@@ -29,6 +38,68 @@ class NativePlaybackTest {
     private lateinit var model: NativeViewModel
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()
     @After fun clear() { compose.runOnIdle { if (::model.isInitialized) model.viewModelScope.cancel() } }
+
+    @Test fun openingPresetSettingsDoesNotLoadAProviderPage() {
+        install("lyric-settings")
+        compose.onNodeWithTag("open-lyric-presets").performClick()
+        compose.onNodeWithTag("lyric-presets").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals("lyric-presets", model.route.value.kind)
+            assertFalse(core.calls.any { it.first == "provider_lyric-presets" })
+        }
+    }
+
+    @Test fun presetPreviewAndLivePlayerUsePhoneAndWidePartitions() {
+        val preset = mutableStateOf(nativeBuiltinLyricPresets.first())
+        val wide = mutableStateOf(false)
+        val preview = mutableStateOf(true)
+        compose.runOnUiThread {
+            model = NativeViewModel(compose.activity.application as Application, core)
+            model.onCoreEvent(1, "player://snapshot", core.snapshot().toString())
+        }
+        compose.setContent {
+            val configuration = Configuration(compose.activity.resources.configuration).apply {
+                screenWidthDp = if (wide.value) 720 else 360
+            }
+            CompositionLocalProvider(LocalConfiguration provides configuration) {
+                MaterialTheme {
+                    Box(Modifier.fillMaxWidth().height(280.dp)) {
+                        if (preview.value) NativeLyricPresetPreview(preset.value) else NowPlaying(model, {})
+                    }
+                }
+            }
+        }
+        compose.waitUntil(5000) { model.player.value.current != null }
+        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) {
+            val selected = builtin.copy(lyricsFraction = 0.65f)
+            for (showPreview in listOf(true, false)) {
+                compose.runOnIdle {
+                    wide.value = isWide
+                    preset.value = selected
+                    preview.value = showPreview
+                    model.setLyricPresets(NativeLyricPresetPreferences().select(selected.id).save(selected))
+                }
+                val controls = compose.onNodeWithTag("player-controls").fetchSemanticsNode().boundsInRoot
+                val lyrics = compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot
+                val layout = compose.onNodeWithTag(if (showPreview) "lyric-preset-preview" else "player-layout-${selected.layout}")
+                    .fetchSemanticsNode().boundsInRoot
+                val case = "${selected.layout}, wide=$isWide, preview=$showPreview"
+                if (selected.layout == "immersive") {
+                    assertTrue(case, lyrics.bottom <= controls.top + 1f)
+                    assertEquals(case, selected.lyricsFraction, lyrics.height / layout.height, 0.02f)
+                } else if (isWide) {
+                    assertTrue(case, controls.right <= lyrics.left + 1f)
+                    assertEquals(case, selected.lyricsFraction, lyrics.width / layout.width, 0.02f)
+                } else {
+                    assertTrue(case, controls.bottom <= lyrics.top + 1f)
+                    assertEquals(case, layout.width, lyrics.width, 1f)
+                    val cap = 0.72f - (selected.lyricsFraction - 0.55f) * 0.5f
+                    assertTrue(case, controls.height / layout.height <= cap + 0.02f)
+                }
+            }
+        }
+        assertFalse(core.calls.any { it.first.startsWith("player_") })
+    }
 
     @Test fun queueSeparatesCurrentAndUsesCoreShuffleOrderAndEntryActions() {
         install("queue")

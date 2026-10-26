@@ -5,6 +5,10 @@ import android.content.ComponentName
 import android.content.Intent
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.ViewModelProvider
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -26,12 +30,14 @@ import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import org.yaqmc.android.media.PlaybackService
 
 /** Explicit opt-in: plays audio and changes the local queue, then restores it. */
 @UnstableApi
 class NativePlaybackLiveTest {
-    @get:Rule val preferences: org.junit.rules.TestRule = NativeDevicePreferences()
+    private val compose = createEmptyComposeRule()
+    @get:Rule val rules: org.junit.rules.TestRule = RuleChain.outerRule(compose).around(NativeDevicePreferences())
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
 
@@ -214,6 +220,7 @@ class NativePlaybackLiveTest {
                     it.navigate(NativeRoute("player"))
                 }
             }
+            compose.waitForIdle()
             receipt.put("stage", "wait-for-model-document")
             withTimeout(15000) { while (model.lyrics.value.songId != track.id || model.lyrics.value.lines.isEmpty()) delay(100) }
             // Verify the document actually shown, rather than a second provider request that may differ.
@@ -232,8 +239,8 @@ class NativePlaybackLiveTest {
             fun texts(node: android.view.accessibility.AccessibilityNodeInfo?): List<String> = if (node == null) emptyList()
                 else listOfNotNull(node.text?.toString()) + (0 until node.childCount).flatMap { texts(node.getChild(it)) }
             try {
-                withTimeout(15000) {
-                    while (texts(instrumentation.uiAutomation.rootInActiveWindow).none { document.lines[target].text.trim() in it }) delay(150)
+                compose.waitUntil(15000) {
+                    runCatching { compose.onNodeWithText(document.lines[target].text.trim()).assertIsDisplayed(); true }.getOrDefault(false)
                 }
             } catch (error: Throwable) {
                 val root = instrumentation.uiAutomation.rootInActiveWindow
@@ -247,9 +254,25 @@ class NativePlaybackLiveTest {
             delay(500)
             assertTrue(kotlin.math.abs(NativePlayback.decode(core.objectResult("player_snapshot")).position - before) < 100)
             saveScreenshot("batch4-live-lyrics-paused.png")
+            for (preset in nativeBuiltinLyricPresets) {
+                withContext(Dispatchers.Main) { model.setLyricPresets(model.preferences.value.lyricPresets.select(preset.id)) }
+                receipt.put("stage", "visible-lyrics-${preset.layout}")
+                compose.onNodeWithTag("player-layout-${preset.layout}").assertIsDisplayed()
+                compose.waitUntil(15000) {
+                    runCatching { compose.onNodeWithText(document.lines[target].text.trim()).assertIsDisplayed(); true }.getOrDefault(false)
+                }
+                saveScreenshot("pr2-live-lyrics-${preset.layout}.png")
+            }
+            receipt.put("presetLayoutsWithVisibleCurrentLine", JSONArray(nativeBuiltinLyricPresets.map { it.layout }))
             receipt.put("stage", "resume-playback")
             core.invoke("player_play")
             awaitPlayer(core) { it.playing && it.position > before + 700 }
+            for (preset in nativeBuiltinLyricPresets) {
+                val position = NativePlayback.decode(core.objectResult("player_snapshot")).position
+                withContext(Dispatchers.Main) { model.setLyricPresets(model.preferences.value.lyricPresets.select(preset.id)) }
+                awaitPlayer(core) { it.playing && it.position > position + 400 }
+            }
+            receipt.put("presetChangesKeepPlaying", true)
             core.invoke("player_pause")
             val final = awaitPlayer(core) { !it.playing }
             assertEquals(initial.entries.map { it.id }, final.entries.map { it.id })

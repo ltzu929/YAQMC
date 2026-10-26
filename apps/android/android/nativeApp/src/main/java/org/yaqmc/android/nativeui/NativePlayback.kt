@@ -2,6 +2,7 @@ package org.yaqmc.android.nativeui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -261,13 +263,15 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val pending by model.pendingFavorites.collectAsStateWithLifecycle()
     val track = player.current
     val preferences by model.preferences.collectAsStateWithLifecycle()
+    val preset = preferences.lyricPresets.current()
     val lyricClock = rememberLyricClock(player)
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     if (track == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.native_select_song)) }; return }
     val progressLabel = stringResource(R.string.native_progress)
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Artwork(track.artwork, Modifier.size(if (wide) 128.dp else 150.dp))
+            Artwork(track.artwork, Modifier.size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
+                .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
             Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) }, Modifier.clickable(enabled = track.providerId == "qqmusic") { model.navigate(NativeRoute("song", track.id)) },
                 style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (track.providerId == "qqmusic") EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
@@ -304,14 +308,8 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
             if (player.phase.endsWith("error") && player.retryable) TextButton(onClick = { model.command("player_play") }) { Text(stringResource(R.string.native_retry)) }
         }
     }
-    if (wide) Row(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(0.45f).fillMaxHeight().verticalScroll(rememberScrollState())) { controls() }
-        LyricList(lyrics, lyricClock, preferences.lyrics, { model.command("player_seek", JSONObject().put("positionMs", it)) }, Modifier.weight(0.55f))
-    } else BoxWithConstraints(Modifier.fillMaxSize()) {
-        val maxControlsHeight = maxHeight * 0.72f
-        Column {
-            Column(Modifier.heightIn(max = maxControlsHeight).verticalScroll(rememberScrollState()).testTag("player-controls")) { controls() }
-            LyricList(lyrics, lyricClock, preferences.lyrics, { model.command("player_seek", JSONObject().put("positionMs", it)) }, Modifier.weight(1f))
-        }
+    val lyricSeek: (Long) -> Unit = { model.command("player_seek", JSONObject().put("positionMs", it)) }
+    NativeLyricLayout(preset, wide, Modifier.testTag("player-layout-${preset.layout}"), controls) { modifier ->
+        LyricList(lyrics, lyricClock, preferences.lyrics, lyricSeek, modifier)
     }
 }

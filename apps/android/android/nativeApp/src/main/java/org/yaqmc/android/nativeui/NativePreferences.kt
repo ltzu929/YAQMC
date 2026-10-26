@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 internal data class NativePreferences(
     val theme: String = "system", val language: String = "system", val lyrics: NativeLyricPreferences = NativeLyricPreferences(),
     val appearance: NativeAppearancePreferences = NativeAppearancePreferences(),
+    val lyricPresets: NativeLyricPresetPreferences = NativeLyricPresetPreferences(),
 ) {
     fun isDark(systemDark: Boolean): Boolean = when (theme) {
         "light" -> false
@@ -37,6 +38,7 @@ internal class NativePreferenceStore(private val storage: SharedPreferences) {
         theme = normalizeTheme(read("theme")), language = normalizeLanguage(read("language")),
         lyrics = NativeLyricPreferences.decode(read("lyrics")),
         appearance = NativeAppearancePreferences.decode(read("appearance")),
+        lyricPresets = NativeLyricPresetPreferences.decode(read("lyric-presets")),
     ))
     val state = _state.asStateFlow()
 
@@ -62,6 +64,12 @@ internal class NativePreferenceStore(private val storage: SharedPreferences) {
         val normalized = value.normalized()
         storage.edit { putString("appearance", normalized.json()) }
         _state.value = _state.value.copy(appearance = normalized)
+    }
+
+    fun setLyricPresets(value: NativeLyricPresetPreferences) {
+        val normalized = value.normalized()
+        storage.edit { putString("lyric-presets", normalized.json()) }
+        _state.value = _state.value.copy(lyricPresets = normalized)
     }
 
     private fun read(key: String): String? = try { storage.getString(key, null) } catch (_: ClassCastException) { null }

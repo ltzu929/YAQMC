@@ -292,4 +292,24 @@
     <string name="native_material_opaque">不透明</string>
     <string name="native_material_translucent">半透明</string>
     <string name="native_appearance_reset">重置外观</string>
+    <string name="native_preset_title">歌词布局与预设</string>
+    <string name="native_preset_select">选择预设</string>
+    <string name="native_preset_classic">经典</string>
+    <string name="native_preset_immersive">沉浸</string>
+    <string name="native_preset_vinyl">黑胶</string>
+    <string name="native_preset_custom">我的布局</string>
+    <string name="native_preset_sample_title">一起听见</string>
+    <string name="native_preset_sample_artist">YAQMC Studio</string>
+    <string name="native_preset_sample_lyric">跟着音乐一起歌唱</string>
+    <string name="native_preset_sample_second">让旋律继续流淌</string>
+    <string name="native_preset_name">预设名称</string>
+    <string name="native_preset_layout">布局样式</string>
+    <string name="native_preset_lyrics_share">歌词区域比例（宽屏）</string>
+    <string name="native_preset_artwork_size">封面大小</string>
+    <string name="native_preset_apply">保存修改</string>
+    <string name="native_preset_duplicate">复制预设</string>
+    <string name="native_preset_copy_suffix">副本</string>
+    <string name="native_preset_reset">恢复内置布局</string>
+    <string name="native_preset_delete">删除自定义布局</string>
+    <string name="native_preset_scope">当前可编辑布局类型、分区比例与封面大小。自由定位、图层编排仍未实现。</string>
 </resources>

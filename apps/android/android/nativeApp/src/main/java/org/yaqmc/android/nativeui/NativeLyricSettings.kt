@@ -14,9 +14,10 @@ import java.util.Locale
 import org.yaqmc.android.R
 
 @Composable
-internal fun NativeLyricSettings(settings: NativeLyricPreferences, change: (NativeLyricPreferences) -> Unit) {
+internal fun NativeLyricSettings(settings: NativeLyricPreferences, change: (NativeLyricPreferences) -> Unit, openPresets: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().testTag("lyric-settings"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { Text(stringResource(R.string.native_lyric_settings), style = MaterialTheme.typography.headlineMedium) }
+        item { OutlinedButton(onClick = openPresets, modifier = Modifier.testTag("open-lyric-presets")) { Text(stringResource(R.string.native_preset_title)) } }
         item { PreferenceChoices(stringResource(R.string.native_lyric_translation), settings.translation, secondaryChoices()) { change(settings.copy(translation = it)) } }
         item { PreferenceChoices(stringResource(R.string.native_lyric_romanization), settings.romanization, secondaryChoices()) { change(settings.copy(romanization = it)) } }
         item {
