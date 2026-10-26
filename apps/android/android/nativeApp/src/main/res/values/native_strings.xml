@@ -304,12 +304,18 @@
     <string name="native_preset_sample_second">Let the melody carry on</string>
     <string name="native_preset_name">Preset name</string>
     <string name="native_preset_layout">Layout style</string>
-    <string name="native_preset_lyrics_share">Lyrics area (wide screen)</string>
+    <string name="native_preset_lyrics_share">Lyrics area</string>
+    <string name="native_preset_preview_mode">Preview aspect</string>
+    <string name="native_preset_preview_device">Phone</string>
+    <string name="native_preset_preview_wide">Widescreen 16:9</string>
+    <string name="native_preset_drag_hint">Drag the divider to resize the lyrics area (Classic and Vinyl: widescreen only). Undo is available before saving.</string>
+    <string name="native_preset_undo">Undo</string>
+    <string name="native_preset_redo">Redo</string>
     <string name="native_preset_artwork_size">Artwork size</string>
     <string name="native_preset_apply">Save changes</string>
     <string name="native_preset_duplicate">Duplicate</string>
     <string name="native_preset_copy_suffix">copy</string>
     <string name="native_preset_reset">Restore built-in layout</string>
     <string name="native_preset_delete">Delete my layout</string>
-    <string name="native_preset_scope">Layout editing currently supports style, relative width and artwork size. Free positioning and layer editing are not yet available.</string>
+    <string name="native_preset_scope">Changes affect playback only after saving. Free positioning and layer editing are not yet available.</string>
 </resources>
