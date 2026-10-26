@@ -135,7 +135,8 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                     when (route.kind) {
                         "library" -> Library(model)
                         "settings" -> Settings(model, login)
-                        "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics)
+                        "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics) { model.navigate(NativeRoute("lyric-presets")) }
+                        "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
                         "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
                             { model.setAppearance(NativeAppearancePreferences()); model.setTheme("system") }, model::notify)
                         "player" -> NowPlaying(model, openShare)
