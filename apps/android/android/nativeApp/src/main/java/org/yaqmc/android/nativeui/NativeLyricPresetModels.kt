@@ -126,3 +126,30 @@ internal data class NativeLyricPresetPreferences(
         }.getOrDefault(NativeLyricPresetPreferences())
     }
 }
+
+/** One edit gesture or completed form change is one undo step; drafts never write preferences. */
+internal data class NativeLyricPresetEditHistory(
+    val current: NativeLyricPreset,
+    val undoSteps: List<NativeLyricPreset> = emptyList(),
+    val redoSteps: List<NativeLyricPreset> = emptyList(),
+) {
+    fun edit(next: NativeLyricPreset): NativeLyricPresetEditHistory =
+        if (next == current) this
+        else copy(current = next, undoSteps = (undoSteps + current).takeLast(24), redoSteps = emptyList())
+
+    fun undo(): NativeLyricPresetEditHistory =
+        if (undoSteps.isEmpty()) this
+        else copy(current = undoSteps.last(), undoSteps = undoSteps.dropLast(1),
+            redoSteps = (redoSteps + current).takeLast(24))
+
+    fun redo(): NativeLyricPresetEditHistory =
+        if (redoSteps.isEmpty()) this
+        else copy(current = redoSteps.last(), redoSteps = redoSteps.dropLast(1),
+            undoSteps = (undoSteps + current).takeLast(24))
+}
+
+/** The editor snaps to the center only when a drag is committed, not on every pointer move. */
+internal fun nativeSnapLyricsFraction(value: Float): Float {
+    val fraction = value.finiteOr(0.55f).coerceIn(0.35f, 0.75f)
+    return if (kotlin.math.abs(fraction - 0.5f) <= 0.02f) 0.5f else fraction
+}
