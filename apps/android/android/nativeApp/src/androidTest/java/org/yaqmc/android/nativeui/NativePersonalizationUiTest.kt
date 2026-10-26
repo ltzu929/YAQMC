@@ -154,10 +154,10 @@ class NativePersonalizationUiTest {
         }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-delete"))
         compose.onNodeWithTag("preset-delete").performClick()
-        compose.onAllNodesWithText("Cancel").onLast().performClick()
+        compose.onNodeWithTag("preset-cancel-delete").performClick()
         compose.runOnIdle { assertEquals(1, store.state.value.lyricPresets.custom.size) }
         compose.onNodeWithTag("preset-delete").performClick()
-        compose.onAllNodesWithText("Delete my layout").onLast().performClick()
+        compose.onNodeWithTag("preset-confirm-delete").performClick()
         compose.runOnIdle {
             val restarted = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0)).state.value
             assertEquals("builtin.classic", restarted.lyricPresets.selectedId)
