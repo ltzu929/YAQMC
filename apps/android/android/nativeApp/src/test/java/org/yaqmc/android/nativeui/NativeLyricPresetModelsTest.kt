@@ -74,7 +74,7 @@ class NativeLyricPresetModelsTest {
         val undone = second.undo()
         assertEquals(0.6f, undone.current.lyricsFraction)
         assertEquals(0.7f, undone.redo().current.lyricsFraction)
-        assertEquals(first, undone.edit(undone.current))
+        assertEquals(undone, undone.edit(undone.current))
         val branched = undone.edit(factory.copy(artworkScale = 1.2f))
         assertTrue(branched.redoSteps.isEmpty())
         assertEquals(branched, branched.redo())
