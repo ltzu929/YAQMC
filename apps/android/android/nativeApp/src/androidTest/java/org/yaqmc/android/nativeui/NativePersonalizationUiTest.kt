@@ -33,6 +33,19 @@ class NativePersonalizationUiTest {
     private val files = TemporaryFolder()
     @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences(ComponentActivity::class.java)).around(files).around(compose)
 
+    @Test fun openingLyricsMidTrackShowsCurrentLine() {
+        val clock = mutableLongStateOf(50000L)
+        val document = Lyrics("initial", lines = List(24) { index ->
+            LyricLine(index * 5000L, (index + 1) * 5000L, "Initial line $index")
+        })
+        compose.setContent { MaterialTheme {
+            LyricList(document, clock, NativeLyricPreferences(blur = false, spring = false), {},
+                Modifier.fillMaxWidth().height(420.dp))
+        } }
+        compose.onNodeWithText("Initial line 10").assertIsDisplayed()
+        compose.onNodeWithTag("lyric-line-10").assertIsSelected()
+    }
+
     @Test fun timingVisibilityAndSeekingUseOneDocumentAndPreserveWordText() {
         val clock = mutableLongStateOf(1500)
         val document = mutableStateOf(Lyrics("one", 300, listOf(

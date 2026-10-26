@@ -80,10 +80,11 @@ internal fun LyricList(
         if (dragged) following = false
         else if (!following) { snapshotFlow { list.isScrollInProgress }.first { !it }; delay(4000); following = true }
     }
-    LaunchedEffect(lyrics) { list.scrollToItem(0); following = true }
+    LaunchedEffect(lyrics) { following = true }
     BoxWithConstraints(modifier.fillMaxHeight().testTag("lyrics-viewport")) {
         val anchor = with(LocalDensity.current) { (maxHeight * 0.35f).roundToPx() }
-        LaunchedEffect(active, following, anchor) {
+        // Song-keyed list state starts at zero; keep a single coroutine responsible for scrolling.
+        LaunchedEffect(lyrics, active, following, anchor) {
             if (following && active >= 0) {
                 if (settings.spring) list.animateScrollToItem(active, -anchor)
                 else list.scrollToItem(active, -anchor)
