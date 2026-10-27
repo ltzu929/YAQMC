@@ -64,7 +64,7 @@ class NativePlaybackTest {
             CompositionLocalProvider(LocalConfiguration provides configuration) {
                 MaterialTheme {
                     Box(Modifier.fillMaxWidth().height(280.dp)) {
-                        if (preview.value) NativeLyricPresetPreview(preset.value) else NowPlaying(model, {})
+                        if (preview.value) NativeLyricPresetPreview(preset.value, wide.value) {} else NowPlaying(model, {})
                     }
                 }
             }
