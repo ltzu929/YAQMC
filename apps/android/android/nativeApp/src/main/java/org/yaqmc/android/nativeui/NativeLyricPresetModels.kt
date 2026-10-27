@@ -149,7 +149,7 @@ internal data class NativeLyricPresetEditHistory(
 }
 
 /** The editor snaps to the center only when a drag is committed, not on every pointer move. */
-/** The artwork returns to 100% only when its resize gesture is committed. */
+/** 封面缩放仅在手势提交时吸附到 100%，拖动过程中不吸附。 */
 internal fun nativeSnapArtworkScale(value: Float): Float {
     val scale = value.finiteOr(1f).coerceIn(0.7f, 1.35f)
     return if (kotlin.math.abs(scale - 1f) <= 0.03f) 1f else scale
