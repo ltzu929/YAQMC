@@ -183,6 +183,13 @@ class NativePersonalizationUiTest {
             swipe(start = center, end = center.copy(x = center.x + 95f), durationMillis = 350)
         }
         compose.runOnIdle { assertEquals(1f, store.state.value.lyricPresets.current().artworkScale) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-cancel"))
+        compose.onNodeWithTag("preset-cancel").assertIsEnabled().performClick()
+        compose.onNodeWithTag("preset-save").assertIsNotEnabled()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-artwork-resize"))
+        compose.onNodeWithTag("preset-artwork-resize").performTouchInput {
+            swipe(start = center, end = center.copy(x = center.x + 95f), durationMillis = 350)
+        }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-undo"))
         compose.onNodeWithTag("preset-undo").assertIsEnabled().performClick()
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
