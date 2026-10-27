@@ -270,7 +270,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val progressLabel = stringResource(R.string.native_progress)
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (preset.showArtwork) Artwork(track.artwork, Modifier.size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
+            if (preset.showArtwork) Artwork(track.artwork, Modifier.testTag("player-artwork").size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                 .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
             if (preset.showMetadata) {
                 Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) }, Modifier.clickable(enabled = track.providerId == "qqmusic") { model.navigate(NativeRoute("song", track.id)) },

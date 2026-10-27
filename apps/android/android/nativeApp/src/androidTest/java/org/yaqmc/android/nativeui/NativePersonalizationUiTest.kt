@@ -218,7 +218,9 @@ class NativePersonalizationUiTest {
             }
         }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-artwork-visible"))
-        compose.onNodeWithTag("preset-artwork-visible").performClick()
+        compose.onNodeWithTag("preset-artwork-visible").assertTextEquals("Show album artwork").assertIsOn()
+        compose.onNodeWithText("Show album artwork").performClick()
+        compose.onNodeWithTag("preset-artwork-visible").assertIsOff()
         compose.runOnIdle { assertTrue(store.state.value.lyricPresets.current().showArtwork) }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
         compose.onNodeWithTag("preset-artwork-preview").assertDoesNotExist()
@@ -239,6 +241,7 @@ class NativePersonalizationUiTest {
         }
 
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-metadata-visible"))
+        compose.onNodeWithTag("preset-metadata-visible").assertTextEquals("Show song information").assertIsOn()
         compose.onNodeWithTag("preset-metadata-visible").performClick()
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
         compose.onNodeWithText("Hear Together").assertDoesNotExist()

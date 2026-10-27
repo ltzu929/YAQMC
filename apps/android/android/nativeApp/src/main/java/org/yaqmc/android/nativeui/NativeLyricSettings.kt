@@ -3,12 +3,14 @@ package org.yaqmc.android.nativeui
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 import org.yaqmc.android.R
@@ -59,10 +61,12 @@ internal fun PreferenceChoices(title: String, selected: String, options: List<Pa
 }
 
 @Composable
-internal fun PreferenceSwitch(title: String, checked: Boolean, enabled: Boolean = true,
-    modifier: Modifier = Modifier, change: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, Modifier.weight(1f)); Switch(checked, change, modifier = modifier, enabled = enabled)
+internal fun PreferenceSwitch(title: String, checked: Boolean, modifier: Modifier = Modifier,
+    enabled: Boolean = true, change: (Boolean) -> Unit) {
+    Row(modifier.fillMaxWidth().heightIn(min = 48.dp)
+        .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = change),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(title, Modifier.weight(1f)); Switch(checked, onCheckedChange = null, enabled = enabled)
     }
 }
 
