@@ -166,4 +166,42 @@ class NativePersonalizationUiTest {
             assertEquals("hide", restarted.lyrics.translation)
         }
     }
+
+    @Test fun draggableWidescreenPreviewIsUndoableAndPersistsOnlyAfterSaving() {
+        val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
+        store.setLyricPresets(NativeLyricPresetPreferences())
+        val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
+                LocalConfiguration provides localized.resources.configuration) {
+                val state by store.state.collectAsState()
+                MaterialTheme { NativeLyricPresets(state.lyricPresets, store::setLyricPresets) }
+            }
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-preview-wide"))
+        compose.onNodeWithTag("preset-preview-wide").performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-divider-handle"))
+        compose.onNodeWithTag("preset-divider-handle").performTouchInput {
+            swipe(start = center, end = center.copy(x = center.x - 95f), durationMillis = 350)
+        }
+        // Dragging changes a local draft, not the preference store or playback state.
+        compose.runOnIdle {
+            assertEquals(0.55f, store.state.value.lyricPresets.current().lyricsFraction)
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-undo"))
+        compose.onNodeWithTag("preset-undo").assertIsEnabled().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsNotEnabled()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-redo"))
+        compose.onNodeWithTag("preset-redo").assertIsEnabled().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            val persisted = NativePreferenceStore(
+                InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0)
+            ).state.value.lyricPresets
+            assertTrue(persisted.current().lyricsFraction > 0.55f)
+            assertEquals("classic", persisted.current().layout)
+        }
+    }
 }

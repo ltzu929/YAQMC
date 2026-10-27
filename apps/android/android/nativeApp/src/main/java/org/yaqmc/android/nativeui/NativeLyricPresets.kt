@@ -1,6 +1,7 @@
 package org.yaqmc.android.nativeui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -10,9 +11,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.util.UUID
@@ -26,47 +31,108 @@ internal fun nativePresetName(preset: NativeLyricPreset): String = when (preset.
     else -> preset.name.ifBlank { stringResource(R.string.native_preset_custom) }
 }
 
-/** Offline fixture: never requests provider data and never touches the player's queue. */
+/**
+ * Offline fixture using the same layout partitions as the real player.
+ * Dragging edits only a local preview; the parent records one undo step on release.
+ */
 @Composable
-internal fun NativeLyricPresetPreview(preset: NativeLyricPreset) {
-    val wide = LocalConfiguration.current.screenWidthDp >= 600
-    Surface(Modifier.fillMaxWidth().height(if (wide) 198.dp else 280.dp).testTag("lyric-preset-preview"),
-        shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        val title = stringResource(R.string.native_preset_sample_title)
-        val artist = stringResource(R.string.native_preset_sample_artist)
-        val sample = stringResource(R.string.native_preset_sample_lyric)
-        val lyrics: @Composable (Modifier) -> Unit = { modifier ->
-            Column(modifier.fillMaxSize().testTag("lyrics-viewport").padding(10.dp), verticalArrangement = Arrangement.Center) {
-                Text(sample, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                Text(stringResource(R.string.native_preset_sample_second), style = MaterialTheme.typography.bodySmall)
+internal fun NativeLyricPresetPreview(
+    preset: NativeLyricPreset, wide: Boolean, onFractionChange: (Float) -> Unit,
+) {
+    var dragging by remember(preset.id, wide, preset.layout) { mutableStateOf<Float?>(null) }
+    val displayedFraction = dragging ?: preset.lyricsFraction
+    val displayed = preset.copy(lyricsFraction = displayedFraction)
+    val horizontal = wide && preset.layout != "immersive"
+    val canDrag = horizontal || preset.layout == "immersive"
+    val currentFraction by rememberUpdatedState(preset.lyricsFraction)
+    val finishDrag by rememberUpdatedState(onFractionChange)
+    val density = LocalDensity.current
+    val dragHint = stringResource(R.string.native_preset_drag_hint)
+
+    BoxWithConstraints(Modifier.fillMaxWidth()
+        .then(if (wide) Modifier.aspectRatio(16f / 9f) else Modifier.height(280.dp))) {
+        val axisPixels = with(density) { (if (horizontal) maxWidth else maxHeight).toPx() }.coerceAtLeast(1f)
+        Surface(Modifier.fillMaxSize().testTag("lyric-preset-preview"),
+            shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            val title = stringResource(R.string.native_preset_sample_title)
+            val artist = stringResource(R.string.native_preset_sample_artist)
+            val sample = stringResource(R.string.native_preset_sample_lyric)
+            val lyrics: @Composable (Modifier) -> Unit = { modifier ->
+                Column(modifier.fillMaxSize().testTag("lyrics-viewport").padding(10.dp),
+                    verticalArrangement = Arrangement.Center) {
+                    Text(sample, style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.native_preset_sample_second),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            val cover: @Composable () -> Unit = {
+                Box(Modifier.size((66f * displayed.artworkScale).dp)
+                    .clip(if (displayed.layout == "vinyl") CircleShape else RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center) {
+                    Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+            }
+            NativeLyricLayout(displayed, wide, controls = {
+                Column(Modifier.fillMaxWidth().padding(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    cover()
+                    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall)
+                    Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                }
+            }, lyrics = lyrics)
+        }
+
+        if (canDrag) {
+            // Row layouts allocate controls on the left. Immersive layouts allocate lyrics above.
+            val handleWidth = if (horizontal) 24.dp else 80.dp
+            val handleHeight = if (horizontal) 80.dp else 24.dp
+            val x = if (horizontal) maxWidth * (1f - displayedFraction) - handleWidth / 2f
+                else maxWidth / 2f - handleWidth / 2f
+            val y = if (horizontal) maxHeight / 2f - handleHeight / 2f
+                else maxHeight * displayedFraction - handleHeight / 2f
+            Box(Modifier.offset(x = x, y = y).size(handleWidth, handleHeight)
+                .testTag("preset-divider-handle")
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.90f))
+                .semantics { contentDescription = dragHint }
+                .pointerInput(horizontal, axisPixels) {
+                    detectDragGestures(
+                        onDragStart = { dragging = currentFraction },
+                        onDragEnd = {
+                            val value = dragging
+                            dragging = null
+                            if (value != null) finishDrag(nativeSnapLyricsFraction(value))
+                        },
+                        onDragCancel = { dragging = null },
+                    ) { pointer, delta ->
+                        pointer.consume()
+                        val movement = (if (horizontal) -delta.x else delta.y) / axisPixels
+                        dragging = ((dragging ?: currentFraction) + movement).coerceIn(0.35f, 0.75f)
+                    }
+                }, contentAlignment = Alignment.Center) {
+                Text(if (horizontal) "⋮" else "━", color = MaterialTheme.colorScheme.onPrimary)
             }
         }
-        val cover: @Composable () -> Unit = {
-            Box(Modifier.size((66f * preset.artworkScale).dp)
-                .clip(if (preset.layout == "vinyl") CircleShape else RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-        }
-        NativeLyricLayout(preset, wide, controls = {
-            Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                cover()
-                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
-            }
-        }, lyrics = lyrics)
     }
 }
 
 @Composable
 internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: (NativeLyricPresetPreferences) -> Unit) {
     val active = settings.current()
-    var draft by remember(active) { mutableStateOf(active) }
+    var edits by remember(active) { mutableStateOf(NativeLyricPresetEditHistory(active)) }
+    val draft = edits.current
+    val edit: (NativeLyricPreset) -> Unit = { edits = edits.edit(it) }
     var confirmDelete by remember(active.id) { mutableStateOf(false) }
+    val deviceWide = LocalConfiguration.current.screenWidthDp >= 600
+    var previewWide by remember(deviceWide) { mutableStateOf(deviceWide) }
     val builtin = active.id.startsWith("builtin.")
     val copyLabel = stringResource(R.string.native_preset_copy_suffix)
     val activeName = nativePresetName(active)
+
     LazyColumn(
         Modifier.fillMaxSize().testTag("lyric-presets"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -81,25 +147,54 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                 }
             }
         }
-        item { NativeLyricPresetPreview(draft) }
         item {
-            if (!builtin) OutlinedTextField(draft.name, onValueChange = { draft = draft.copy(name = it.take(48)) },
-                label = { Text(stringResource(R.string.native_preset_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(R.string.native_preset_preview_mode), style = MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(!previewWide, onClick = { previewWide = false },
+                    label = { Text(stringResource(R.string.native_preset_preview_device)) },
+                    modifier = Modifier.testTag("preset-preview-device"))
+                FilterChip(previewWide, onClick = { previewWide = true },
+                    label = { Text(stringResource(R.string.native_preset_preview_wide)) },
+                    modifier = Modifier.testTag("preset-preview-wide"))
+            }
+        }
+        item { NativeLyricPresetPreview(draft, previewWide) { edit(draft.copy(lyricsFraction = it)) } }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { edits = edits.undo() }, enabled = edits.undoSteps.isNotEmpty(),
+                    modifier = Modifier.testTag("preset-undo")) {
+                    Text(stringResource(R.string.native_preset_undo))
+                }
+                OutlinedButton(onClick = { edits = edits.redo() }, enabled = edits.redoSteps.isNotEmpty(),
+                    modifier = Modifier.testTag("preset-redo")) {
+                    Text(stringResource(R.string.native_preset_redo))
+                }
+            }
+            Text(stringResource(R.string.native_preset_drag_hint), style = MaterialTheme.typography.bodySmall)
+        }
+        item {
+            if (!builtin) OutlinedTextField(draft.name,
+                onValueChange = { edit(draft.copy(name = it.take(48))) },
+                label = { Text(stringResource(R.string.native_preset_name)) },
+                singleLine = true, modifier = Modifier.fillMaxWidth())
             PreferenceChoices(stringResource(R.string.native_preset_layout), draft.layout, listOf(
                 "classic" to stringResource(R.string.native_preset_classic),
                 "immersive" to stringResource(R.string.native_preset_immersive),
                 "vinyl" to stringResource(R.string.native_preset_vinyl),
-            )) { draft = draft.copy(layout = it) }
+            )) { edit(draft.copy(layout = it)) }
             PreferenceSlider(stringResource(R.string.native_preset_lyrics_share), draft.lyricsFraction, 0.35f..0.75f,
-                "${(draft.lyricsFraction * 100).toInt()}%") { draft = draft.copy(lyricsFraction = it) }
+                "${(draft.lyricsFraction * 100).toInt()}%") { edit(draft.copy(lyricsFraction = it)) }
             PreferenceSlider(stringResource(R.string.native_preset_artwork_size), draft.artworkScale, 0.7f..1.35f,
-                "${(draft.artworkScale * 100).toInt()}%") { draft = draft.copy(artworkScale = it) }
+                "${(draft.artworkScale * 100).toInt()}%") { edit(draft.copy(artworkScale = it)) }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { change(settings.save(draft)) }, enabled = draft.normalized() != active,
-                    modifier = Modifier.testTag("preset-save")) { Text(stringResource(R.string.native_preset_apply)) }
-                OutlinedButton(onClick = { draft = active }, enabled = draft != active) { Text(stringResource(R.string.native_cancel)) }
+                    modifier = Modifier.testTag("preset-save")) {
+                    Text(stringResource(R.string.native_preset_apply))
+                }
+                OutlinedButton(onClick = { edits = NativeLyricPresetEditHistory(active) },
+                    enabled = draft != active) { Text(stringResource(R.string.native_cancel)) }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
@@ -108,11 +203,13 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                     Text(stringResource(R.string.native_preset_duplicate))
                 }
                 if (builtin && active.id in settings.overrides) {
-                    OutlinedButton(onClick = { change(settings.reset()) }, modifier = Modifier.testTag("preset-reset")) {
+                    OutlinedButton(onClick = { change(settings.reset()) },
+                        modifier = Modifier.testTag("preset-reset")) {
                         Text(stringResource(R.string.native_preset_reset))
                     }
                 }
-                if (!builtin) OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.testTag("preset-delete")) {
+                if (!builtin) OutlinedButton(onClick = { confirmDelete = true },
+                    modifier = Modifier.testTag("preset-delete")) {
                     Text(stringResource(R.string.native_preset_delete))
                 }
             }
@@ -122,8 +219,15 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },
         title = { Text(stringResource(R.string.native_preset_delete)) },
         text = { Text(nativePresetName(active)) },
-        confirmButton = { TextButton(onClick = { change(settings.deleteCustom()); confirmDelete = false }, modifier = Modifier.testTag("preset-confirm-delete")) {
-            Text(stringResource(R.string.native_preset_delete))
-        } },
-        dismissButton = { TextButton(onClick = { confirmDelete = false }, modifier = Modifier.testTag("preset-cancel-delete")) { Text(stringResource(R.string.native_cancel)) } })
+        confirmButton = {
+            TextButton(onClick = { change(settings.deleteCustom()); confirmDelete = false },
+                modifier = Modifier.testTag("preset-confirm-delete")) {
+                Text(stringResource(R.string.native_preset_delete))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { confirmDelete = false }, modifier = Modifier.testTag("preset-cancel-delete")) {
+                Text(stringResource(R.string.native_cancel))
+            }
+        })
 }

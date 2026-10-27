@@ -304,12 +304,18 @@
     <string name="native_preset_sample_second">让旋律继续流淌</string>
     <string name="native_preset_name">预设名称</string>
     <string name="native_preset_layout">布局样式</string>
-    <string name="native_preset_lyrics_share">歌词区域比例（宽屏）</string>
+    <string name="native_preset_lyrics_share">歌词区域比例</string>
+    <string name="native_preset_preview_mode">预览画幅</string>
+    <string name="native_preset_preview_device">手机</string>
+    <string name="native_preset_preview_wide">宽屏 16:9</string>
+    <string name="native_preset_drag_hint">拖动分割线调整歌词区域（经典与黑胶布局仅宽屏可拖动），保存前可撤销。</string>
+    <string name="native_preset_undo">撤销</string>
+    <string name="native_preset_redo">重做</string>
     <string name="native_preset_artwork_size">封面大小</string>
     <string name="native_preset_apply">保存修改</string>
     <string name="native_preset_duplicate">复制预设</string>
     <string name="native_preset_copy_suffix">副本</string>
     <string name="native_preset_reset">恢复内置布局</string>
     <string name="native_preset_delete">删除自定义布局</string>
-    <string name="native_preset_scope">当前可编辑布局类型、分区比例与封面大小。自由定位、图层编排仍未实现。</string>
+    <string name="native_preset_scope">修改仅在保存后用于播放。自由定位与图层编排仍未实现。</string>
 </resources>
