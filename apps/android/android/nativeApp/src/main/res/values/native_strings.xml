@@ -315,11 +315,12 @@
     <string name="native_preset_redo">Redo</string>
     <string name="native_preset_show_artwork">Show album artwork</string>
     <string name="native_preset_show_metadata">Show song information</string>
+    <string name="native_preset_metadata_first">Song information above artwork</string>
     <string name="native_preset_artwork_size">Artwork size</string>
     <string name="native_preset_apply">Save changes</string>
     <string name="native_preset_duplicate">Duplicate</string>
     <string name="native_preset_copy_suffix">copy</string>
     <string name="native_preset_reset">Restore built-in layout</string>
     <string name="native_preset_delete">Delete my layout</string>
-    <string name="native_preset_scope">Changes affect playback only after saving. Free positioning and layer ordering are not yet available.</string>
+    <string name="native_preset_scope">Changes affect playback only after saving. Free positioning and advanced layer editing are not yet available.</string>
 </resources>
