@@ -206,6 +206,49 @@ class NativePersonalizationUiTest {
         }
     }
 
+    @Test fun layerVisibilityIsPreviewOnlyUntilSaveAndSurvivesRestart() {
+        val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
+        store.setLyricPresets(NativeLyricPresetPreferences())
+        val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
+                LocalConfiguration provides localized.resources.configuration) {
+                val state by store.state.collectAsState()
+                MaterialTheme { NativeLyricPresets(state.lyricPresets, store::setLyricPresets) }
+            }
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-artwork-visible"))
+        compose.onNodeWithTag("preset-artwork-visible").performClick()
+        compose.runOnIdle { assertTrue(store.state.value.lyricPresets.current().showArtwork) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
+        compose.onNodeWithTag("preset-artwork-preview").assertDoesNotExist()
+        compose.onNodeWithText("Hear Together").assertExists()
+
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-undo"))
+        compose.onNodeWithTag("preset-undo").performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
+        compose.onNodeWithTag("preset-artwork-preview").assertExists()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-redo"))
+        compose.onNodeWithTag("preset-redo").performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").performClick()
+        compose.runOnIdle {
+            val restarted = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0)).state.value.lyricPresets
+            assertFalse(restarted.current().showArtwork)
+            assertTrue(restarted.current().showMetadata)
+        }
+
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-metadata-visible"))
+        compose.onNodeWithTag("preset-metadata-visible").performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
+        compose.onNodeWithText("Hear Together").assertDoesNotExist()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-cancel"))
+        compose.onNodeWithTag("preset-cancel").performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
+        compose.onNodeWithText("Hear Together").assertExists()
+        compose.runOnIdle { assertTrue(store.state.value.lyricPresets.current().showMetadata) }
+    }
+
     @Test fun draggableWidescreenPreviewIsUndoableAndPersistsOnlyAfterSaving() {
         val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
         store.setLyricPresets(NativeLyricPresetPreferences())

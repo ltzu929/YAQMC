@@ -10,6 +10,8 @@ internal data class NativeLyricPreset(
     val layout: String = "classic",
     val lyricsFraction: Float = 0.55f,
     val artworkScale: Float = 1f,
+    val showArtwork: Boolean = true,
+    val showMetadata: Boolean = true,
 ) {
     fun normalized(): NativeLyricPreset = copy(
         name = name.trim().take(48),
@@ -20,11 +22,13 @@ internal data class NativeLyricPreset(
 
     fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("layout", layout)
         .put("lyricsFraction", lyricsFraction).put("artworkScale", artworkScale)
+        .put("showArtwork", showArtwork).put("showMetadata", showMetadata)
 
     companion object {
         fun parse(value: JSONObject): NativeLyricPreset = NativeLyricPreset(
             value.optString("id", ""), value.optString("name", ""), value.optString("layout", "classic"),
             value.optDouble("lyricsFraction", 0.55).toFloat(), value.optDouble("artworkScale", 1.0).toFloat(),
+            value.optBoolean("showArtwork", true), value.optBoolean("showMetadata", true),
         ).normalized()
     }
 }

@@ -59,9 +59,10 @@ internal fun PreferenceChoices(title: String, selected: String, options: List<Pa
 }
 
 @Composable
-internal fun PreferenceSwitch(title: String, checked: Boolean, enabled: Boolean = true, change: (Boolean) -> Unit) {
+internal fun PreferenceSwitch(title: String, checked: Boolean, enabled: Boolean = true,
+    modifier: Modifier = Modifier, change: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, Modifier.weight(1f)); Switch(checked, change, enabled = enabled)
+        Text(title, Modifier.weight(1f)); Switch(checked, change, modifier = modifier, enabled = enabled)
     }
 }
 
