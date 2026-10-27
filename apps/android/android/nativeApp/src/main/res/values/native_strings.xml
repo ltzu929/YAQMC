@@ -309,6 +309,8 @@
     <string name="native_preset_preview_device">Phone</string>
     <string name="native_preset_preview_wide">Widescreen 16:9</string>
     <string name="native_preset_drag_hint">Drag the divider to resize the lyrics area (Classic and Vinyl: widescreen only). Undo is available before saving.</string>
+    <string name="native_preset_resize_hint">Drag the artwork corner horizontally to resize it; undo before saving.</string>
+    <string name="native_preset_resize_handle">Resize album artwork</string>
     <string name="native_preset_undo">Undo</string>
     <string name="native_preset_redo">Redo</string>
     <string name="native_preset_artwork_size">Artwork size</string>

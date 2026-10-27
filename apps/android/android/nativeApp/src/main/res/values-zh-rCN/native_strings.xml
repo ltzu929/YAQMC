@@ -309,6 +309,8 @@
     <string name="native_preset_preview_device">手机</string>
     <string name="native_preset_preview_wide">宽屏 16:9</string>
     <string name="native_preset_drag_hint">拖动分割线调整歌词区域（经典与黑胶布局仅宽屏可拖动），保存前可撤销。</string>
+    <string name="native_preset_resize_hint">横向拖动封面角落的手柄调整大小，保存前可撤销。</string>
+    <string name="native_preset_resize_handle">调整封面大小</string>
     <string name="native_preset_undo">撤销</string>
     <string name="native_preset_redo">重做</string>
     <string name="native_preset_artwork_size">封面大小</string>

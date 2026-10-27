@@ -37,17 +37,23 @@ internal fun nativePresetName(preset: NativeLyricPreset): String = when (preset.
  */
 @Composable
 internal fun NativeLyricPresetPreview(
-    preset: NativeLyricPreset, wide: Boolean, onFractionChange: (Float) -> Unit,
+    preset: NativeLyricPreset, wide: Boolean,
+    onFractionChange: (Float) -> Unit, onArtworkScaleChange: (Float) -> Unit,
 ) {
     var dragging by remember(preset.id, wide, preset.layout) { mutableStateOf<Float?>(null) }
+    var resizing by remember(preset.id, wide, preset.layout) { mutableStateOf<Float?>(null) }
     val displayedFraction = dragging ?: preset.lyricsFraction
-    val displayed = preset.copy(lyricsFraction = displayedFraction)
+    val displayed = preset.copy(lyricsFraction = displayedFraction, artworkScale = resizing ?: preset.artworkScale)
     val horizontal = wide && preset.layout != "immersive"
     val canDrag = horizontal || preset.layout == "immersive"
     val currentFraction by rememberUpdatedState(preset.lyricsFraction)
     val finishDrag by rememberUpdatedState(onFractionChange)
+    val currentArtworkScale by rememberUpdatedState(preset.artworkScale)
+    val finishResize by rememberUpdatedState(onArtworkScaleChange)
     val density = LocalDensity.current
+    val artworkAxisPixels = with(density) { 66.dp.toPx() }.coerceAtLeast(1f)
     val dragHint = stringResource(R.string.native_preset_drag_hint)
+    val resizeLabel = stringResource(R.string.native_preset_resize_handle)
 
     BoxWithConstraints(Modifier.fillMaxWidth()
         .then(if (wide) Modifier.aspectRatio(16f / 9f) else Modifier.height(280.dp))) {
@@ -67,11 +73,36 @@ internal fun NativeLyricPresetPreview(
                 }
             }
             val cover: @Composable () -> Unit = {
-                Box(Modifier.size((66f * displayed.artworkScale).dp)
-                    .clip(if (displayed.layout == "vinyl") CircleShape else RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center) {
-                    Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Box(Modifier.testTag("preset-artwork-preview")) {
+                    Box(Modifier.size((66f * displayed.artworkScale).dp)
+                        .clip(if (displayed.layout == "vinyl") CircleShape else RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center) {
+                        Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                    // 预览手柄复用实际播放器的 artworkScale，不引入第二套布局状态。
+                    Box(Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp).size(28.dp)
+                        .testTag("preset-artwork-resize")
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.90f))
+                        .semantics { contentDescription = resizeLabel }
+                        .pointerInput(artworkAxisPixels) {
+                            detectDragGestures(
+                                onDragStart = { resizing = currentArtworkScale },
+                                onDragEnd = {
+                                    val value = resizing
+                                    resizing = null
+                                    if (value != null) finishResize(nativeSnapArtworkScale(value))
+                                },
+                                onDragCancel = { resizing = null },
+                            ) { pointer, delta ->
+                                pointer.consume()
+                                resizing = ((resizing ?: currentArtworkScale) + delta.x / artworkAxisPixels)
+                                    .coerceIn(0.7f, 1.35f)
+                            }
+                        }, contentAlignment = Alignment.Center) {
+                        Text("↔", color = MaterialTheme.colorScheme.onPrimary)
+                    }
                 }
             }
             NativeLyricLayout(displayed, wide, controls = {
@@ -158,7 +189,11 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                     modifier = Modifier.testTag("preset-preview-wide"))
             }
         }
-        item { NativeLyricPresetPreview(draft, previewWide) { edit(draft.copy(lyricsFraction = it)) } }
+        item {
+            NativeLyricPresetPreview(draft, previewWide,
+                onFractionChange = { edit(draft.copy(lyricsFraction = it)) },
+                onArtworkScaleChange = { edit(draft.copy(artworkScale = it)) })
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { edits = edits.undo() }, enabled = edits.undoSteps.isNotEmpty(),
@@ -171,6 +206,7 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                 }
             }
             Text(stringResource(R.string.native_preset_drag_hint), style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.native_preset_resize_hint), style = MaterialTheme.typography.bodySmall)
         }
         item {
             if (!builtin) OutlinedTextField(draft.name,
@@ -194,7 +230,9 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                     Text(stringResource(R.string.native_preset_apply))
                 }
                 OutlinedButton(onClick = { edits = NativeLyricPresetEditHistory(active) },
-                    enabled = draft != active) { Text(stringResource(R.string.native_cancel)) }
+                    enabled = draft != active, modifier = Modifier.testTag("preset-cancel")) {
+                    Text(stringResource(R.string.native_cancel))
+                }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
