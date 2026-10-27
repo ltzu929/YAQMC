@@ -167,6 +167,38 @@ class NativePersonalizationUiTest {
         }
     }
 
+    @Test fun artworkResizeHandleSupportsDraftUndoCancelAndSavedRestart() {
+        val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
+        store.setLyricPresets(NativeLyricPresetPreferences())
+        val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
+                LocalConfiguration provides localized.resources.configuration) {
+                val state by store.state.collectAsState()
+                MaterialTheme { NativeLyricPresets(state.lyricPresets, store::setLyricPresets) }
+            }
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-artwork-resize"))
+        compose.onNodeWithTag("preset-artwork-resize").performTouchInput {
+            swipe(start = center, end = center.copy(x = center.x + 95f), durationMillis = 350)
+        }
+        compose.runOnIdle { assertEquals(1f, store.state.value.lyricPresets.current().artworkScale) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-undo"))
+        compose.onNodeWithTag("preset-undo").assertIsEnabled().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsNotEnabled()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-redo"))
+        compose.onNodeWithTag("preset-redo").assertIsEnabled().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            val persisted = NativePreferenceStore(InstrumentationRegistry.getInstrumentation()
+                .targetContext.getSharedPreferences("native-ui", 0)).state.value.lyricPresets
+            assertTrue(persisted.current().artworkScale > 1f)
+            assertEquals("classic", persisted.current().layout)
+        }
+    }
+
     @Test fun draggableWidescreenPreviewIsUndoableAndPersistsOnlyAfterSaving() {
         val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
         store.setLyricPresets(NativeLyricPresetPreferences())

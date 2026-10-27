@@ -81,6 +81,22 @@ class NativeLyricPresetModelsTest {
         assertEquals(factory, NativeLyricPresetPreferences().current())
     }
 
+    @Test fun artworkResizeClampsInvalidValuesAndSnapsBackToNormalSize() {
+        assertEquals(1f, nativeSnapArtworkScale(1.02f))
+        assertEquals(1f, nativeSnapArtworkScale(0.98f))
+        assertEquals(0.7f, nativeSnapArtworkScale(-10f))
+        assertEquals(1.35f, nativeSnapArtworkScale(10f))
+        assertEquals(1f, nativeSnapArtworkScale(Float.NaN))
+        val initial = NativeLyricPresetPreferences()
+        val edited = NativeLyricPresetEditHistory(initial.current()).edit(
+            initial.current().copy(artworkScale = 1.2f))
+        assertEquals(initial.current(), edited.undo().current)
+        assertEquals(1.2f, edited.undo().redo().current.artworkScale)
+        assertEquals(1f, initial.current().artworkScale)
+        val persisted = initial.save(edited.current)
+        assertEquals(1.2f, NativeLyricPresetPreferences.decode(persisted.json()).current().artworkScale)
+    }
+
     @Test fun historyIsBoundedAndDraggingSnapsOnlyCommittedFraction() {
         val factory = NativeLyricPresetPreferences().current()
         val history = (0..30).fold(NativeLyricPresetEditHistory(factory)) { state, index ->
