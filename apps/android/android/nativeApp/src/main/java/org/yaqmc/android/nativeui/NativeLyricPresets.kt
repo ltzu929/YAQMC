@@ -109,11 +109,16 @@ internal fun NativeLyricPresetPreview(
                 Column(Modifier.fillMaxWidth().padding(10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (displayed.showArtwork) cover()
-                    if (displayed.showMetadata) {
-                        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall)
-                        Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                    displayed.visibleHeaderLayers().forEach { layer ->
+                        when (layer) {
+                            NativeLyricHeaderLayer.Artwork -> cover()
+                            NativeLyricHeaderLayer.Metadata -> Column(Modifier.testTag("preset-metadata-preview"),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall)
+                                Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
             }, lyrics = lyrics)
@@ -228,6 +233,8 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                 modifier = Modifier.testTag("preset-artwork-visible")) { edit(draft.copy(showArtwork = it)) }
             PreferenceSwitch(stringResource(R.string.native_preset_show_metadata), draft.showMetadata,
                 modifier = Modifier.testTag("preset-metadata-visible")) { edit(draft.copy(showMetadata = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_metadata_first), draft.metadataFirst,
+                modifier = Modifier.testTag("preset-metadata-first")) { edit(draft.copy(metadataFirst = it)) }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
