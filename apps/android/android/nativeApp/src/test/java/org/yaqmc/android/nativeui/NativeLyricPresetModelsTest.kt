@@ -41,7 +41,8 @@ class NativeLyricPresetModelsTest {
         val custom = NativeLyricPresetPreferences().select("builtin.immersive")
             .save(nativeBuiltinLyricPresets[1].copy(lyricsFraction = 0.65f))
             .duplicate("custom.test-2", "Night")
-            .save(NativeLyricPreset("custom.test-2", "Night", "vinyl", 0.6f, 1.1f))
+            .save(NativeLyricPreset("custom.test-2", "Night", "vinyl", 0.6f, 1.1f,
+                showArtwork = false, showMetadata = false))
         assertEquals(custom, NativeLyricPresetPreferences.decode(custom.json()))
     }
 
@@ -54,6 +55,8 @@ class NativeLyricPresetModelsTest {
         assertEquals(0.75f, recovered.current().lyricsFraction)
         assertEquals(0.7f, recovered.current().artworkScale)
         assertTrue(recovered.custom.isEmpty())
+        assertTrue(recovered.current().showArtwork)
+        assertTrue(recovered.current().showMetadata)
     }
 
     @Test fun idGuardPreventsTamperingAndDuplicateIds() {
@@ -95,6 +98,29 @@ class NativeLyricPresetModelsTest {
         assertEquals(1f, initial.current().artworkScale)
         val persisted = initial.save(edited.current)
         assertEquals(1.2f, NativeLyricPresetPreferences.decode(persisted.json()).current().artworkScale)
+    }
+
+    @Test fun layerVisibilitySupportsUndoRedoCopyResetAndOlderPresetJson() {
+        val original = NativeLyricPresetPreferences()
+        val hidden = original.current().copy(showArtwork = false, showMetadata = false)
+        val draft = NativeLyricPresetEditHistory(original.current()).edit(hidden)
+        assertTrue(draft.undo().current.showArtwork)
+        assertFalse(draft.undo().redo().current.showMetadata)
+        assertTrue(original.current().showMetadata) // Unsaved edits never change the active preset.
+
+        val saved = original.save(draft.current)
+        assertFalse(saved.current().showArtwork)
+        assertFalse(saved.current().showMetadata)
+        val copied = saved.duplicate("custom.hidden", "Minimal")
+        assertFalse(copied.current().showArtwork)
+        assertFalse(NativeLyricPresetPreferences.decode(copied.json()).current().showMetadata)
+        assertEquals(nativeBuiltinLyricPresets.first(), saved.reset().current())
+
+        val legacy = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","artworkScale":1.2}}}""")
+        assertEquals(1.2f, legacy.current().artworkScale)
+        assertTrue(legacy.current().showArtwork)
+        assertTrue(legacy.current().showMetadata)
     }
 
     @Test fun historyIsBoundedAndDraggingSnapsOnlyCommittedFraction() {
