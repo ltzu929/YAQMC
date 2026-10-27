@@ -80,8 +80,7 @@ internal fun NativeLyricPresetPreview(
                         contentAlignment = Alignment.Center) {
                         Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
-                    // This preview-only handle changes the existing artworkScale field.
-                    // The real player continues using the same field; no second layout state.
+                    // 预览手柄复用实际播放器的 artworkScale，不引入第二套布局状态。
                     Box(Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp).size(28.dp)
                         .testTag("preset-artwork-resize")
                         .clip(RoundedCornerShape(8.dp))
@@ -231,7 +230,9 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                     Text(stringResource(R.string.native_preset_apply))
                 }
                 OutlinedButton(onClick = { edits = NativeLyricPresetEditHistory(active) },
-                    enabled = draft != active) { Text(stringResource(R.string.native_cancel)) }
+                    enabled = draft != active, modifier = Modifier.testTag("preset-cancel")) {
+                    Text(stringResource(R.string.native_cancel))
+                }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
