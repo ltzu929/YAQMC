@@ -71,8 +71,10 @@ class NativePlaybackTest {
         }
         compose.waitUntil(5000) { model.player.value.current != null }
         val visibility = listOf(true to true, false to true, true to false, false to false)
-        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) for ((artwork, metadata) in visibility) {
-            val selected = builtin.copy(lyricsFraction = 0.65f, showArtwork = artwork, showMetadata = metadata)
+        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) for ((artwork, metadata) in visibility)
+            for (metadataFirst in if (artwork && metadata) listOf(false, true) else listOf(false)) {
+            val selected = builtin.copy(lyricsFraction = 0.65f, showArtwork = artwork,
+                showMetadata = metadata, metadataFirst = metadataFirst)
             for (showPreview in listOf(true, false)) {
                 compose.runOnIdle {
                     wide.value = isWide
@@ -84,13 +86,20 @@ class NativePlaybackTest {
                 val lyrics = compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot
                 val layout = compose.onNodeWithTag(if (showPreview) "lyric-preset-preview" else "player-layout-${selected.layout}")
                     .fetchSemanticsNode().boundsInRoot
-                val case = "${selected.layout}, wide=$isWide, preview=$showPreview, artwork=$artwork, metadata=$metadata"
+                val case = "${selected.layout}, wide=$isWide, preview=$showPreview, artwork=$artwork, metadata=$metadata, metadataFirst=$metadataFirst"
                 val cover = compose.onNodeWithTag(if (showPreview) "preset-artwork-preview" else "player-artwork")
                 if (artwork) cover.assertExists() else cover.assertDoesNotExist()
                 val title = compose.onNodeWithText(if (showPreview) "Hear Together" else "Current song")
                 if (metadata) title.assertExists() else title.assertDoesNotExist()
                 val artist = compose.onNodeWithText(if (showPreview) "YAQMC Studio" else "Fixture artist")
                 if (metadata) artist.assertExists() else artist.assertDoesNotExist()
+                if (artwork && metadata) {
+                    val coverBounds = cover.fetchSemanticsNode().boundsInRoot
+                    val infoBounds = compose.onNodeWithTag(if (showPreview) "preset-metadata-preview"
+                        else "player-metadata").fetchSemanticsNode().boundsInRoot
+                    if (metadataFirst) assertTrue(case, infoBounds.bottom <= coverBounds.top + 1f)
+                    else assertTrue(case, coverBounds.bottom <= infoBounds.top + 1f)
+                }
                 if (showPreview) {
                     val resize = compose.onNodeWithTag("preset-artwork-resize")
                     if (artwork) resize.assertExists() else resize.assertDoesNotExist()
