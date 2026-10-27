@@ -270,12 +270,14 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val progressLabel = stringResource(R.string.native_progress)
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Artwork(track.artwork, Modifier.size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
+            if (preset.showArtwork) Artwork(track.artwork, Modifier.testTag("player-artwork").size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                 .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
-            Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) }, Modifier.clickable(enabled = track.providerId == "qqmusic") { model.navigate(NativeRoute("song", track.id)) },
-                style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (track.providerId == "qqmusic") EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
-            else Text(stringResource(R.string.native_unsupported_provider))
+            if (preset.showMetadata) {
+                Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) }, Modifier.clickable(enabled = track.providerId == "qqmusic") { model.navigate(NativeRoute("song", track.id)) },
+                    style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (track.providerId == "qqmusic") EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
+                else Text(stringResource(R.string.native_unsupported_provider))
+            }
             var seeking by remember(player.currentEntry?.id, track.key) { mutableStateOf<Float?>(null) }
             Slider(value = seeking ?: player.position.coerceIn(0, player.duration).toFloat(), onValueChange = { seeking = it }, enabled = player.duration > 0,
                 valueRange = 0f..player.duration.coerceAtLeast(1).toFloat(), onValueChangeFinished = {

@@ -109,10 +109,12 @@ internal fun NativeLyricPresetPreview(
                 Column(Modifier.fillMaxWidth().padding(10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    cover()
-                    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall)
-                    Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                    if (displayed.showArtwork) cover()
+                    if (displayed.showMetadata) {
+                        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall)
+                        Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }, lyrics = lyrics)
         }
@@ -222,6 +224,10 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                 "${(draft.lyricsFraction * 100).toInt()}%") { edit(draft.copy(lyricsFraction = it)) }
             PreferenceSlider(stringResource(R.string.native_preset_artwork_size), draft.artworkScale, 0.7f..1.35f,
                 "${(draft.artworkScale * 100).toInt()}%") { edit(draft.copy(artworkScale = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_show_artwork), draft.showArtwork,
+                modifier = Modifier.testTag("preset-artwork-visible")) { edit(draft.copy(showArtwork = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_show_metadata), draft.showMetadata,
+                modifier = Modifier.testTag("preset-metadata-visible")) { edit(draft.copy(showMetadata = it)) }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

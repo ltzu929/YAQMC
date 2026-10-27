@@ -70,8 +70,9 @@ class NativePlaybackTest {
             }
         }
         compose.waitUntil(5000) { model.player.value.current != null }
-        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) {
-            val selected = builtin.copy(lyricsFraction = 0.65f)
+        val visibility = listOf(true to true, false to true, true to false, false to false)
+        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) for ((artwork, metadata) in visibility) {
+            val selected = builtin.copy(lyricsFraction = 0.65f, showArtwork = artwork, showMetadata = metadata)
             for (showPreview in listOf(true, false)) {
                 compose.runOnIdle {
                     wide.value = isWide
@@ -83,7 +84,22 @@ class NativePlaybackTest {
                 val lyrics = compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot
                 val layout = compose.onNodeWithTag(if (showPreview) "lyric-preset-preview" else "player-layout-${selected.layout}")
                     .fetchSemanticsNode().boundsInRoot
-                val case = "${selected.layout}, wide=$isWide, preview=$showPreview"
+                val case = "${selected.layout}, wide=$isWide, preview=$showPreview, artwork=$artwork, metadata=$metadata"
+                val cover = compose.onNodeWithTag(if (showPreview) "preset-artwork-preview" else "player-artwork")
+                if (artwork) cover.assertExists() else cover.assertDoesNotExist()
+                val title = compose.onNodeWithText(if (showPreview) "Hear Together" else "Current song")
+                if (metadata) title.assertExists() else title.assertDoesNotExist()
+                val artist = compose.onNodeWithText(if (showPreview) "YAQMC Studio" else "Fixture artist")
+                if (metadata) artist.assertExists() else artist.assertDoesNotExist()
+                if (showPreview) {
+                    val resize = compose.onNodeWithTag("preset-artwork-resize")
+                    if (artwork) resize.assertExists() else resize.assertDoesNotExist()
+                } else {
+                    compose.onNodeWithContentDescription("Playback progress").assertExists()
+                    compose.onNodeWithText("Play").assertExists()
+                }
+                if (!isWide && selected.layout == "classic")
+                    capture("pr5-${if (showPreview) "preview" else "player"}-artwork-$artwork-metadata-$metadata")
                 if (selected.layout == "immersive") {
                     assertTrue(case, lyrics.bottom <= controls.top + 1f)
                     assertEquals(case, selected.lyricsFraction, lyrics.height / layout.height, 0.02f)
