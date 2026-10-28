@@ -12,6 +12,7 @@ internal data class NativeLyricPreset(
     val artworkScale: Float = 1f,
     val showArtwork: Boolean = true,
     val showMetadata: Boolean = true,
+    val metadataFirst: Boolean = false,
 ) {
     fun normalized(): NativeLyricPreset = copy(
         name = name.trim().take(48),
@@ -23,15 +24,28 @@ internal data class NativeLyricPreset(
     fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("layout", layout)
         .put("lyricsFraction", lyricsFraction).put("artworkScale", artworkScale)
         .put("showArtwork", showArtwork).put("showMetadata", showMetadata)
+        .put("metadataFirst", metadataFirst)
 
     companion object {
         fun parse(value: JSONObject): NativeLyricPreset = NativeLyricPreset(
             value.optString("id", ""), value.optString("name", ""), value.optString("layout", "classic"),
             value.optDouble("lyricsFraction", 0.55).toFloat(), value.optDouble("artworkScale", 1.0).toFloat(),
             value.optBoolean("showArtwork", true), value.optBoolean("showMetadata", true),
+            value.optBoolean("metadataFirst", false),
         ).normalized()
     }
 }
+
+/** Controls order only; lyrics and transport retain their existing positions. */
+internal enum class NativeLyricHeaderLayer { Artwork, Metadata }
+
+internal fun NativeLyricPreset.visibleHeaderLayers(): List<NativeLyricHeaderLayer> =
+    (if (metadataFirst) listOf(NativeLyricHeaderLayer.Metadata, NativeLyricHeaderLayer.Artwork)
+    else listOf(NativeLyricHeaderLayer.Artwork, NativeLyricHeaderLayer.Metadata))
+        .filter { when (it) {
+            NativeLyricHeaderLayer.Artwork -> showArtwork
+            NativeLyricHeaderLayer.Metadata -> showMetadata
+        } }
 
 internal val nativeBuiltinLyricPresets = listOf(
     NativeLyricPreset("builtin.classic"),

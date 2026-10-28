@@ -71,8 +71,10 @@ class NativePlaybackTest {
         }
         compose.waitUntil(5000) { model.player.value.current != null }
         val visibility = listOf(true to true, false to true, true to false, false to false)
-        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) for ((artwork, metadata) in visibility) {
-            val selected = builtin.copy(lyricsFraction = 0.65f, showArtwork = artwork, showMetadata = metadata)
+        for (isWide in listOf(false, true)) for (builtin in nativeBuiltinLyricPresets) for ((artwork, metadata) in visibility)
+            for (metadataFirst in if (artwork && metadata) listOf(false, true) else listOf(false)) {
+            val selected = builtin.copy(lyricsFraction = 0.65f, showArtwork = artwork,
+                showMetadata = metadata, metadataFirst = metadataFirst)
             for (showPreview in listOf(true, false)) {
                 compose.runOnIdle {
                     wide.value = isWide
@@ -84,13 +86,21 @@ class NativePlaybackTest {
                 val lyrics = compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot
                 val layout = compose.onNodeWithTag(if (showPreview) "lyric-preset-preview" else "player-layout-${selected.layout}")
                     .fetchSemanticsNode().boundsInRoot
-                val case = "${selected.layout}, wide=$isWide, preview=$showPreview, artwork=$artwork, metadata=$metadata"
+                val case = "${selected.layout}, wide=$isWide, preview=$showPreview, artwork=$artwork, metadata=$metadata, metadataFirst=$metadataFirst"
                 val cover = compose.onNodeWithTag(if (showPreview) "preset-artwork-preview" else "player-artwork")
                 if (artwork) cover.assertExists() else cover.assertDoesNotExist()
                 val title = compose.onNodeWithText(if (showPreview) "Hear Together" else "Current song")
                 if (metadata) title.assertExists() else title.assertDoesNotExist()
                 val artist = compose.onNodeWithText(if (showPreview) "YAQMC Studio" else "Fixture artist")
                 if (metadata) artist.assertExists() else artist.assertDoesNotExist()
+                if (artwork && metadata) {
+                    // Scroll containers clip boundsInRoot; ordering is a layout invariant even offscreen.
+                    val coverBounds = cover.getUnclippedBoundsInRoot()
+                    val infoBounds = compose.onNodeWithTag(if (showPreview) "preset-metadata-preview"
+                        else "player-metadata").getUnclippedBoundsInRoot()
+                    if (metadataFirst) assertTrue(case, infoBounds.bottom <= coverBounds.top + 1.dp)
+                    else assertTrue(case, coverBounds.bottom <= infoBounds.top + 1.dp)
+                }
                 if (showPreview) {
                     val resize = compose.onNodeWithTag("preset-artwork-resize")
                     if (artwork) resize.assertExists() else resize.assertDoesNotExist()
@@ -99,7 +109,7 @@ class NativePlaybackTest {
                     compose.onNodeWithText("Play").assertExists()
                 }
                 if (!isWide && selected.layout == "classic")
-                    capture("pr5-${if (showPreview) "preview" else "player"}-artwork-$artwork-metadata-$metadata")
+                    capture("pr7-${if (showPreview) "preview" else "player"}-artwork-$artwork-metadata-$metadata-info-first-$metadataFirst")
                 if (selected.layout == "immersive") {
                     assertTrue(case, lyrics.bottom <= controls.top + 1f)
                     assertEquals(case, selected.lyricsFraction, lyrics.height / layout.height, 0.02f)
@@ -113,6 +123,25 @@ class NativePlaybackTest {
                     assertTrue(case, controls.height / layout.height <= cap + 0.02f)
                 }
             }
+        }
+        assertFalse(core.calls.any { it.first.startsWith("player_") })
+    }
+
+    @Test fun headerOrderKeepsSongLinksAndTransportReachableInTheFullPlayer() {
+        install("player")
+        for (builtin in nativeBuiltinLyricPresets) for (metadataFirst in listOf(false, true)) {
+            compose.runOnIdle {
+                val selected = builtin.copy(metadataFirst = metadataFirst)
+                model.setLyricPresets(NativeLyricPresetPreferences().select(selected.id).save(selected))
+            }
+            compose.onNodeWithTag("player-artwork").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Current song").performScrollTo().assertIsDisplayed()
+            capture("pr7-full-player-${builtin.layout}-info-first-$metadataFirst")
+            compose.onNodeWithText("Fixture artist").performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(NativeRoute("artist", "artist"), model.route.value) }
+            compose.runOnIdle { model.navigate(NativeRoute("player"), root = true) }
+            compose.onNodeWithContentDescription("Playback progress").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Play").performScrollTo().assertIsDisplayed()
         }
         assertFalse(core.calls.any { it.first.startsWith("player_") })
     }

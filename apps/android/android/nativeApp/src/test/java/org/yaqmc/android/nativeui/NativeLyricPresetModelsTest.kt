@@ -42,7 +42,7 @@ class NativeLyricPresetModelsTest {
             .save(nativeBuiltinLyricPresets[1].copy(lyricsFraction = 0.65f))
             .duplicate("custom.test-2", "Night")
             .save(NativeLyricPreset("custom.test-2", "Night", "vinyl", 0.6f, 1.1f,
-                showArtwork = false, showMetadata = false))
+                showArtwork = false, showMetadata = false, metadataFirst = true))
         assertEquals(custom, NativeLyricPresetPreferences.decode(custom.json()))
     }
 
@@ -57,6 +57,7 @@ class NativeLyricPresetModelsTest {
         assertTrue(recovered.custom.isEmpty())
         assertTrue(recovered.current().showArtwork)
         assertTrue(recovered.current().showMetadata)
+        assertFalse(recovered.current().metadataFirst)
     }
 
     @Test fun idGuardPreventsTamperingAndDuplicateIds() {
@@ -121,6 +122,33 @@ class NativeLyricPresetModelsTest {
         assertEquals(1.2f, legacy.current().artworkScale)
         assertTrue(legacy.current().showArtwork)
         assertTrue(legacy.current().showMetadata)
+    }
+
+    @Test fun headerLayerOrderSupportsDraftUndoCopyResetAndLegacyJson() {
+        val initial = NativeLyricPresetPreferences()
+        assertEquals(listOf(NativeLyricHeaderLayer.Artwork, NativeLyricHeaderLayer.Metadata),
+            initial.current().visibleHeaderLayers())
+        val edited = NativeLyricPresetEditHistory(initial.current())
+            .edit(initial.current().copy(metadataFirst = true))
+        assertFalse(edited.undo().current.metadataFirst)
+        assertTrue(edited.undo().redo().current.metadataFirst)
+        assertFalse(initial.current().metadataFirst)
+
+        val saved = initial.save(edited.current)
+        assertEquals(listOf(NativeLyricHeaderLayer.Metadata, NativeLyricHeaderLayer.Artwork),
+            saved.current().visibleHeaderLayers())
+        assertEquals(saved, NativeLyricPresetPreferences.decode(saved.json()))
+        val duplicate = saved.duplicate("custom.metadata-first", "Info first")
+        assertTrue(duplicate.current().metadataFirst)
+        assertEquals(listOf(NativeLyricHeaderLayer.Metadata),
+            duplicate.current().copy(showArtwork = false).visibleHeaderLayers())
+        assertEquals(emptyList<NativeLyricHeaderLayer>(),
+            duplicate.current().copy(showArtwork = false, showMetadata = false).visibleHeaderLayers())
+        assertEquals(initial.current(), saved.reset().current())
+
+        val old = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","showArtwork":true,"showMetadata":true}}}""")
+        assertFalse(old.current().metadataFirst)
     }
 
     @Test fun historyIsBoundedAndDraggingSnapsOnlyCommittedFraction() {
