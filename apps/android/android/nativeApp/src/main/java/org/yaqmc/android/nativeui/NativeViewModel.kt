@@ -1,6 +1,13 @@
 package org.yaqmc.android.nativeui
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import org.yaqmc.android.BuildConfig
+import org.yaqmc.android.update.AndroidUpdateChecker
+import org.yaqmc.android.update.AndroidUpdateResult
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
@@ -52,6 +59,10 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     private var continuationNotificationRevision = 0L
     private val _statistics = MutableStateFlow(NativeStatisticsState())
     val statistics = _statistics.asStateFlow()
+    private val _diagnostics = MutableStateFlow(NativeDiagnosticsState())
+    val diagnostics = _diagnostics.asStateFlow()
+    private val _updateState = MutableStateFlow(NativeUpdateState())
+    val updateState = _updateState.asStateFlow()
     private var statisticsJob: Job? = null
     private val _cache = MutableStateFlow<NativeCacheStats?>(null)
     val cache = _cache.asStateFlow()
@@ -217,7 +228,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics")) return
+        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics", "diagnostics", "about")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)
@@ -588,6 +599,100 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun signOut() = accountAction {
         core.invoke("provider_sign_out", provider()); refreshAccount(); pageCache.clear(); load(refresh = true)
+    }
+
+    fun loadDiagnostics() {
+        if (_diagnostics.value.busy) return
+        _diagnostics.value = _diagnostics.value.copy(loading = true, error = false)
+        action {
+            try {
+                val result = core.objectResult("diagnostics_snapshot", JSONObject().put("request", JSONObject()))
+                val errors = result.optJSONArray("recentErrors").objects().takeLast(20).map {
+                    listOf(it.text("domain"), it.text("code"), it.text("message")).filter(String::isNotBlank).joinToString(" · ")
+                }
+                _diagnostics.value = NativeDiagnosticsState(
+                    logLevel = result.text("logLevel", "info"), recentErrors = errors,
+                )
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { _diagnostics.value = _diagnostics.value.copy(loading = false, error = true) }
+        }
+    }
+
+    fun setDiagnosticsLevel(level: String) {
+        if (level !in setOf("info", "debug", "trace") || _diagnostics.value.busy) return
+        _diagnostics.value = _diagnostics.value.copy(busy = true)
+        action {
+            try {
+                core.invoke("diagnostics_set_log_level", JSONObject().put("level", level))
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                loadDiagnostics()
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+        }
+    }
+
+    fun clearDiagnosticLogs() {
+        if (_diagnostics.value.busy) return
+        _diagnostics.value = _diagnostics.value.copy(busy = true)
+        action {
+            try {
+                core.invoke("diagnostics_clear_logs")
+                _message.value = NativeText(R.string.native_diag_logs_cleared)
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                loadDiagnostics()
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+        }
+    }
+
+    fun shareDiagnosticBundle(context: Context) {
+        if (_diagnostics.value.busy) return
+        _diagnostics.value = _diagnostics.value.copy(busy = true)
+        action {
+            try {
+                val directory = File(getApplication<Application>().cacheDir, "diagnostics").apply { mkdirs() }
+                val file = File(directory, "YAQMC-diagnostics-" + System.currentTimeMillis() + ".zip")
+                val result = core.objectResult("diagnostics_export_bundle_to", JSONObject()
+                    .put("path", file.absolutePath)
+                    .put("request", JSONObject().put("includeLogs", true).put("overrideUnresolved", false)))
+                val target = File(result.text("path")).canonicalFile
+                if (target.parentFile != directory.canonicalFile || !target.isFile || target.length() == 0L) {
+                    throw CoreFailure("core.protocol", "")
+                }
+                val uri = FileProvider.getUriForFile(context, context.packageName + ".diagnostics", target)
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/zip"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(send, localizedString(R.string.native_diag_export))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) { _message.value = errorText(error, R.string.native_diag_export_failed) }
+            finally { _diagnostics.value = _diagnostics.value.copy(busy = false) }
+        }
+    }
+
+    fun checkForUpdates() {
+        if (_updateState.value.loading) return
+        _updateState.value = NativeUpdateState(loading = true)
+        action {
+            val current = BuildConfig.VERSION_NAME.substringBefore("-native-")
+            val result = withContext(Dispatchers.IO) { AndroidUpdateChecker(current).check() }
+            _updateState.value = when (result) {
+                is AndroidUpdateResult.Available -> NativeUpdateState(
+                    checked = true, availableVersion = result.release.versionName,
+                    releaseUrl = result.release.releaseUrl, notes = result.release.notes)
+                AndroidUpdateResult.NotAvailable -> NativeUpdateState(checked = true)
+                is AndroidUpdateResult.Error -> NativeUpdateState(checked = true, error = true)
+            }
+        }
     }
 
     fun loadStatistics(range: String = _statistics.value.range) {
