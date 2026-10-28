@@ -63,6 +63,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     val diagnostics = _diagnostics.asStateFlow()
     private val _updateState = MutableStateFlow(NativeUpdateState())
     val updateState = _updateState.asStateFlow()
+    private val _issueState = MutableStateFlow(NativeIssueState())
+    val issueState = _issueState.asStateFlow()
     private var statisticsJob: Job? = null
     private val _cache = MutableStateFlow<NativeCacheStats?>(null)
     val cache = _cache.asStateFlow()
@@ -228,7 +230,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics", "diagnostics", "about")) return
+        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics", "diagnostics", "about", "issue-report")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)
@@ -599,6 +601,38 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun signOut() = accountAction {
         core.invoke("provider_sign_out", provider()); refreshAccount(); pageCache.clear(); load(refresh = true)
+    }
+
+    fun previewIssue(category: String, summary: String, description: String) {
+        if (category !in setOf("bug", "playback", "provider", "lyrics", "ui", "other") ||
+            summary.isBlank() || _issueState.value.busy) return
+        val draftKey = listOf(category, summary, description).joinToString("\u0000")
+        _issueState.value = NativeIssueState(draftKey = draftKey, busy = true)
+        action {
+            try {
+                val result = core.objectResult("issue_reporter_preview", JSONObject()
+                    .put("draft", JSONObject().put("category", category)
+                        .put("summary", summary).put("description", description))
+                    .put("request", JSONObject()))
+                _issueState.value = NativeIssueState(draftKey = draftKey, preview = NativeIssuePreview(
+                    result.text("title"), result.text("body"), result.text("url"), result.optBoolean("tooLongForBrowser")))
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { _issueState.value = NativeIssueState(draftKey = draftKey, error = true) }
+        }
+    }
+
+    fun openIssuePreview(context: Context) {
+        val preview = _issueState.value.preview ?: return
+        if (preview.tooLong || _issueState.value.busy) return
+        _issueState.value = _issueState.value.copy(busy = true)
+        action {
+            try {
+                core.invoke("issue_reporter_validate_url", JSONObject().put("url", preview.url))
+                openProjectUrl(context, preview.url)
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) { _message.value = errorText(error, R.string.native_issue_failed) }
+            finally { _issueState.value = _issueState.value.copy(busy = false) }
+        }
     }
 
     fun loadDiagnostics() {
