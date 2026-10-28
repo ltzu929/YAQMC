@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.yaqmc.android.BuildConfig
+import androidx.media3.common.util.UnstableApi
 import org.yaqmc.android.R
 
 internal data class NativeDiagnosticsState(
@@ -34,6 +35,7 @@ internal fun openProjectUrl(context: Context, url: String) {
         .addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
+@UnstableApi
 @Composable
 internal fun NativeDiagnostics(model: NativeViewModel) {
     val state by model.diagnostics.collectAsStateWithLifecycle()
@@ -78,6 +80,7 @@ internal fun NativeDiagnostics(model: NativeViewModel) {
         close = { confirmClear = false }) { model.clearDiagnosticLogs() }
 }
 
+@UnstableApi
 @Composable
 internal fun NativeAbout(model: NativeViewModel) {
     val update by model.updateState.collectAsStateWithLifecycle()
@@ -124,6 +127,7 @@ internal data class NativeIssueState(
     val busy: Boolean = false, val error: Boolean = false,
 )
 
+@UnstableApi
 @Composable
 internal fun NativeIssueReport(model: NativeViewModel) {
     val state by model.issueState.collectAsStateWithLifecycle()
