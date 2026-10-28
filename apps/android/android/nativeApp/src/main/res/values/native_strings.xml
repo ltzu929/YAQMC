@@ -311,6 +311,8 @@
     <string name="native_preset_drag_hint">Drag the divider to resize the lyrics area (Classic and Vinyl: widescreen only). Undo is available before saving.</string>
     <string name="native_preset_resize_hint">Drag the artwork corner horizontally to resize it; undo before saving.</string>
     <string name="native_preset_resize_handle">Resize album artwork</string>
+    <string name="native_preset_move_handle">Move cover or song information</string>
+    <string name="native_preset_move_hint">Drag the four-point handles on the cover or song information to adjust their position. Undo or cancel before saving.</string>
     <string name="native_preset_undo">Undo</string>
     <string name="native_preset_redo">Redo</string>
     <string name="native_preset_show_artwork">Show album artwork</string>
@@ -322,5 +324,5 @@
     <string name="native_preset_copy_suffix">copy</string>
     <string name="native_preset_reset">Restore built-in layout</string>
     <string name="native_preset_delete">Delete my layout</string>
-    <string name="native_preset_scope">Changes affect playback only after saving. Free positioning and advanced layer editing are not yet available.</string>
+    <string name="native_preset_scope">Position adjustments apply only to artwork and song information; lyrics and playback controls stay accessible in their original areas.</string>
 </resources>
