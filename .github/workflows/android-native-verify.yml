@@ -39,7 +39,7 @@ jobs:
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Locate pinned Rust TLS Android Maven artifact
         run: |
-          node --input-type=module -e 'import {resolveRustlsVerifierMaven} from "./scripts/build-android.mjs"; import {appendFileSync} from "node:fs"; appendFileSync(process.env.GITHUB_ENV, "YAQMC_RUSTLS_VERIFIER_MAVEN_DIR=" + resolveRustlsVerifierMaven() + "\\n");'
+          echo "YAQMC_RUSTLS_VERIFIER_MAVEN_DIR=$(node --input-type=module -e 'import {resolveRustlsVerifierMaven} from "./scripts/build-android.mjs"; console.log(resolveRustlsVerifierMaven())')" >> "$GITHUB_ENV"
       - name: Compile, test, lint and assemble native Android
         working-directory: apps/android/android
         run: ./gradlew --no-daemon :nativeApp:testDebugUnitTest :nativeApp:lintDebug :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
