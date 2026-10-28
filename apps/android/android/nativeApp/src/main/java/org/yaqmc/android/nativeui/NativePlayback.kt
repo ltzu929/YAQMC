@@ -270,13 +270,16 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val progressLabel = stringResource(R.string.native_progress)
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
             preset.visibleHeaderLayers().forEach { layer ->
                 when (layer) {
                     NativeLyricHeaderLayer.Artwork -> Artwork(track.artwork,
-                        Modifier.testTag("player-artwork")
+                        Modifier.nativeHeaderOffset(preset, layer, maxWidth).testTag("player-artwork")
                             .size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                             .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
-                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.testTag("player-metadata"),
+                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, maxWidth).testTag("player-metadata"),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) },
@@ -288,6 +291,8 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                             EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
                         else Text(stringResource(R.string.native_unsupported_provider))
                     }
+                }
+            }
                 }
             }
             var seeking by remember(player.currentEntry?.id, track.key) { mutableStateOf<Float?>(null) }
