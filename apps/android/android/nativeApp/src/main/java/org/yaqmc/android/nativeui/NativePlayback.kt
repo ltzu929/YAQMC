@@ -281,7 +281,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                             .size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                             .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
                     NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, paneWidth)
-                            .widthIn(max = paneWidth * ((1f - 2f * kotlin.math.abs(preset.metadataOffsetX)) / maxOf(1f, preset.metadataScale))
+                            .widthIn(max = paneWidth * (1f - 2f * kotlin.math.abs(preset.metadataOffsetX)) / maxOf(1f, preset.metadataScale))
                             .graphicsLayer { scaleX = preset.metadataScale; scaleY = preset.metadataScale }
                             .zIndex(preset.headerZ(layer))
                             .testTag("player-metadata"),
