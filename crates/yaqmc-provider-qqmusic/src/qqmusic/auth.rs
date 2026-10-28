@@ -3903,13 +3903,31 @@ mod tests {
     async fn wait_for_notification(notification: &Notify) {
         let notified = notification.notified();
         tokio::pin!(notified);
-        for _ in 0..1_000 {
+        // Blocking credential work needs real elapsed time, not a fixed yield budget.
+        // Keep yielding so tests with paused Tokio time do not advance owner leases.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
             tokio::select! {
                 _ = &mut notified => return,
                 _ = tokio::task::yield_now() => {}
             }
         }
         panic!("notification did not arrive");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn notification_wait_allows_blocking_work_without_advancing_owner_time() {
+        let notification = Arc::new(Notify::new());
+        let sender = Arc::clone(&notification);
+        let started = tokio::time::Instant::now();
+        let worker = tokio::task::spawn_blocking(move || {
+            std::thread::sleep(Duration::from_millis(25));
+            sender.notify_one();
+        });
+
+        wait_for_notification(&notification).await;
+        worker.await.expect("notification worker");
+        assert_eq!(tokio::time::Instant::now(), started);
     }
 
     #[tokio::test]
