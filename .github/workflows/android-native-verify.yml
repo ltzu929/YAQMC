@@ -43,7 +43,7 @@ jobs:
           echo "YAQMC_RUSTLS_VERIFIER_MAVEN_DIR=$(node --input-type=module -e 'import {resolveRustlsVerifierMaven} from "./scripts/build-android.mjs"; console.log(resolveRustlsVerifierMaven())')" >> "$GITHUB_ENV"
       - name: Compile, test, lint and assemble native Android
         working-directory: apps/android/android
-        run: ./gradlew --no-daemon :nativeApp:testDebugUnitTest :nativeApp:lintDebug :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
+        run: bash ./gradlew --no-daemon :nativeApp:testDebugUnitTest :nativeApp:lintDebug :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
       - name: Upload build reports on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
