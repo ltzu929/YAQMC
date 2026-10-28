@@ -162,16 +162,17 @@ internal fun NativeLyricPresetPreview(
             }
             NativeLyricLayout(displayed, wide, controls = {
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val paneWidth = maxWidth
                     Column(Modifier.fillMaxWidth().padding(10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         displayed.visibleHeaderLayers().forEach { layer ->
                             when (layer) {
                                 NativeLyricHeaderLayer.Artwork ->
-                                    cover(Modifier.nativeHeaderOffset(displayed, layer, maxWidth))
+                                    cover(Modifier.nativeHeaderOffset(displayed, layer, paneWidth))
                                 NativeLyricHeaderLayer.Metadata ->
-                                    Column(Modifier.nativeHeaderOffset(displayed, layer, maxWidth)
-                                        .widthIn(max = maxWidth * (1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)))
+                                    Column(Modifier.nativeHeaderOffset(displayed, layer, paneWidth)
+                                        .widthIn(max = paneWidth * ((1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)) / maxOf(1f, preset.metadataScale))
                                         .graphicsLayer { scaleX = displayed.metadataScale; scaleY = displayed.metadataScale }
                                         .zIndex(displayed.headerZ(layer))
                                         .testTag("preset-metadata-preview"),
