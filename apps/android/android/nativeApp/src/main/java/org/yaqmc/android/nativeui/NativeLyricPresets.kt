@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -121,14 +123,15 @@ internal fun NativeLyricPresetPreview(
                 }
             }
             val cover: @Composable (Modifier) -> Unit = { modifier ->
-                Box(modifier.testTag("preset-artwork-preview")) {
+                Box(modifier.zIndex(displayed.headerZ(NativeLyricHeaderLayer.Artwork))
+                    .testTag("preset-artwork-preview")) {
                     Box(Modifier.size((66f * displayed.artworkScale).dp)
                         .clip(if (displayed.layout == "vinyl") CircleShape else RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center) {
                         Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
-                    PresetLayerMoveHandle(NativeLyricHeaderLayer.Artwork,
+                    if (!displayed.artworkLocked) PresetLayerMoveHandle(NativeLyricHeaderLayer.Artwork,
                         preset.headerOffset(NativeLyricHeaderLayer.Artwork), layerWidthPixels,
                         onPreview = { movingArtwork = it },
                         onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Artwork, x, y) })
@@ -169,13 +172,15 @@ internal fun NativeLyricPresetPreview(
                                 NativeLyricHeaderLayer.Metadata ->
                                     Column(Modifier.nativeHeaderOffset(displayed, layer, maxWidth)
                                         .widthIn(max = maxWidth * (1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)))
+                                        .graphicsLayer { scaleX = displayed.metadataScale; scaleY = displayed.metadataScale }
+                                        .zIndex(displayed.headerZ(layer))
                                         .testTag("preset-metadata-preview"),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                             style = MaterialTheme.typography.bodySmall)
                                         Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
-                                        PresetLayerMoveHandle(NativeLyricHeaderLayer.Metadata,
+                                        if (!displayed.metadataLocked) PresetLayerMoveHandle(NativeLyricHeaderLayer.Metadata,
                                             preset.headerOffset(NativeLyricHeaderLayer.Metadata), layerWidthPixels,
                                             onPreview = { movingMetadata = it },
                                             onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Metadata, x, y) })
@@ -303,6 +308,16 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                 modifier = Modifier.testTag("preset-metadata-visible")) { edit(draft.copy(showMetadata = it)) }
             PreferenceSwitch(stringResource(R.string.native_preset_metadata_first), draft.metadataFirst,
                 modifier = Modifier.testTag("preset-metadata-first")) { edit(draft.copy(metadataFirst = it)) }
+            PreferenceSlider(stringResource(R.string.native_preset_metadata_size), draft.metadataScale,
+                0.7f..1.35f, "${(draft.metadataScale * 100).toInt()}%") {
+                edit(draft.copy(metadataScale = it))
+            }
+            PreferenceSwitch(stringResource(R.string.native_preset_lock_artwork), draft.artworkLocked,
+                modifier = Modifier.testTag("preset-artwork-locked")) { edit(draft.copy(artworkLocked = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_lock_metadata), draft.metadataLocked,
+                modifier = Modifier.testTag("preset-metadata-locked")) { edit(draft.copy(metadataLocked = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_artwork_on_top), draft.artworkOnTop,
+                modifier = Modifier.testTag("preset-artwork-on-top")) { edit(draft.copy(artworkOnTop = it)) }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
