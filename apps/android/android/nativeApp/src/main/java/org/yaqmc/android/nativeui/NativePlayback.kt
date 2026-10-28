@@ -279,7 +279,9 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                         Modifier.nativeHeaderOffset(preset, layer, maxWidth).testTag("player-artwork")
                             .size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                             .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
-                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, maxWidth).testTag("player-metadata"),
+                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, maxWidth)
+                            .widthIn(max = maxWidth * (1f - 2f * kotlin.math.abs(preset.metadataOffsetX)))
+                            .testTag("player-metadata"),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) },
