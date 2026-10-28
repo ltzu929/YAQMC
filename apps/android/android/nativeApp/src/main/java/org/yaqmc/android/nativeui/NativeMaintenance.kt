@@ -70,9 +70,9 @@ internal fun NativeDiagnostics(model: NativeViewModel) {
         items(state.recentErrors.size) { index ->
             Text(state.recentErrors[index], style = MaterialTheme.typography.bodySmall)
         }
-        item { TextButton(onClick = {
-            openProjectUrl(context, "https://github.com/YAQMC/YAQMC/issues/new")
-        }) { Text(stringResource(R.string.native_diag_report_issue)) } }
+        item { TextButton(onClick = { model.navigate(NativeRoute("issue-report")) }) {
+            Text(stringResource(R.string.native_diag_report_issue))
+        } }
     }
     if (confirmClear) Confirm(stringResource(R.string.native_diag_confirm_clear_logs),
         close = { confirmClear = false }) { model.clearDiagnosticLogs() }
@@ -112,5 +112,63 @@ internal fun NativeAbout(model: NativeViewModel) {
         item { TextButton(onClick = {
             openProjectUrl(context, "https://github.com/YAQMC/YAQMC")
         }) { Text(stringResource(R.string.native_about_repository)) } }
+    }
+}
+
+
+internal data class NativeIssuePreview(
+    val title: String, val body: String, val url: String, val tooLong: Boolean,
+)
+internal data class NativeIssueState(
+    val draftKey: String = "", val preview: NativeIssuePreview? = null,
+    val busy: Boolean = false, val error: Boolean = false,
+)
+
+@Composable
+internal fun NativeIssueReport(model: NativeViewModel) {
+    val state by model.issueState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var category by remember { mutableStateOf("bug") }
+    var summary by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    val key = listOf(category, summary, description).joinToString("\u0000")
+    val preview = state.preview?.takeIf { state.draftKey == key }
+    val categoryLabels = listOf("bug" to R.string.native_issue_bug,
+        "playback" to R.string.native_issue_playback, "provider" to R.string.native_issue_provider,
+        "lyrics" to R.string.native_issue_lyrics, "ui" to R.string.native_issue_ui,
+        "other" to R.string.native_issue_other)
+    LazyColumn(Modifier.fillMaxSize().testTag("issue-report-list"),
+        contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { Text(stringResource(R.string.native_diag_report_issue),
+            style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
+        item { Text(stringResource(R.string.native_issue_intro)) }
+        item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            categoryLabels.forEach { (value, label) ->
+                FilterChip(selected = category == value, onClick = { category = value },
+                    label = { Text(stringResource(label)) })
+            }
+        } }
+        item { OutlinedTextField(summary, { summary = it }, Modifier.fillMaxWidth(),
+            singleLine = true, label = { Text(stringResource(R.string.native_issue_summary)) }) }
+        item { OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(),
+            minLines = 4, maxLines = 8, label = { Text(stringResource(R.string.native_issue_description)) }) }
+        if (state.busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        if (state.error) item { Text(stringResource(R.string.native_issue_failed),
+            color = MaterialTheme.colorScheme.error) }
+        item { OutlinedButton(
+            onClick = { model.previewIssue(category, summary, description) },
+            enabled = summary.isNotBlank() && !state.busy) {
+            Text(stringResource(R.string.native_issue_preview))
+        } }
+        if (preview != null) {
+            item { Text(preview.title, style = MaterialTheme.typography.titleMedium) }
+            item { Text(preview.body, style = MaterialTheme.typography.bodySmall) }
+            if (preview.tooLong) item { Text(stringResource(R.string.native_issue_too_long),
+                color = MaterialTheme.colorScheme.error) }
+            item { Button(onClick = { model.openIssuePreview(context) },
+                enabled = !preview.tooLong && !state.busy) {
+                Text(stringResource(R.string.native_issue_open))
+            } }
+        }
     }
 }
