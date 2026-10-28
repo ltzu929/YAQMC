@@ -311,6 +311,8 @@
     <string name="native_preset_drag_hint">拖动分割线调整歌词区域（经典与黑胶布局仅宽屏可拖动），保存前可撤销。</string>
     <string name="native_preset_resize_hint">横向拖动封面角落的手柄调整大小，保存前可撤销。</string>
     <string name="native_preset_resize_handle">调整封面大小</string>
+    <string name="native_preset_move_handle">移动封面或歌曲信息</string>
+    <string name="native_preset_move_hint">拖动封面或歌曲信息上的四向手柄微调位置，可撤销或取消后再保存。</string>
     <string name="native_preset_undo">撤销</string>
     <string name="native_preset_redo">重做</string>
     <string name="native_preset_show_artwork">显示封面</string>
@@ -322,5 +324,5 @@
     <string name="native_preset_copy_suffix">副本</string>
     <string name="native_preset_reset">恢复内置布局</string>
     <string name="native_preset_delete">删除自定义布局</string>
-    <string name="native_preset_scope">修改仅在保存后用于播放。自由定位与更多图层编排仍未实现。</string>
+    <string name="native_preset_scope">位置微调仅作用于封面和歌曲信息，歌词与播放控制仍保留原有区域。</string>
 </resources>
