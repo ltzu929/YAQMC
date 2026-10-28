@@ -378,7 +378,7 @@
     <string name="native_about_repository">Project repository</string>
     <string name="native_update_failed">Could not check for updates. Please retry.</string>
     <string name="native_update_available">New version available: %1$s</string>
-    <string name="native_update_latest">You're using the latest available release.</string>
+    <string name="native_update_latest">No newer release is available.</string>
     <string name="native_update_check">Check for updates</string>
     <string name="native_update_open_release">View release on GitHub</string>
     <string name="native_issue_bug">Bug</string>
