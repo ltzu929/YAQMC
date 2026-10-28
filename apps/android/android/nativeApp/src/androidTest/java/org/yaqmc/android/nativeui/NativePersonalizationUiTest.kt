@@ -327,4 +327,49 @@ class NativePersonalizationUiTest {
             assertEquals("classic", persisted.current().layout)
         }
     }
+
+    @Test fun independentLayerMovesAreDraftOnlyAndPersistAfterUndoRedoAndSave() {
+        val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("native-ui", 0))
+        store.setLyricPresets(NativeLyricPresetPreferences())
+        val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
+                LocalConfiguration provides localized.resources.configuration) {
+                val state by store.state.collectAsState()
+                MaterialTheme { NativeLyricPresets(state.lyricPresets, store::setLyricPresets) }
+            }
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-artwork-move"))
+        compose.onNodeWithTag("preset-artwork-move").performTouchInput {
+            swipe(start = center, end = center.copy(x = center.x + 42f, y = center.y + 22f), durationMillis = 350)
+        }
+        compose.runOnIdle {
+            assertEquals(0f, store.state.value.lyricPresets.current().artworkOffsetX)
+            assertEquals(0f, store.state.value.lyricPresets.current().metadataOffsetX)
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-cancel"))
+        compose.onNodeWithTag("preset-cancel").assertIsEnabled().performClick()
+        compose.onNodeWithTag("preset-save").assertIsNotEnabled()
+
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-metadata-move"))
+        compose.onNodeWithTag("preset-metadata-move").performTouchInput {
+            swipe(start = center, end = center.copy(x = center.x - 38f, y = center.y - 24f), durationMillis = 350)
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-undo"))
+        compose.onNodeWithTag("preset-undo").assertIsEnabled().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsNotEnabled()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-redo"))
+        compose.onNodeWithTag("preset-redo").assertIsEnabled().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            val persisted = NativePreferenceStore(InstrumentationRegistry.getInstrumentation()
+                .targetContext.getSharedPreferences("native-ui", 0)).state.value.lyricPresets.current()
+            assertTrue(persisted.metadataOffsetX < 0f)
+            assertTrue(persisted.metadataOffsetY < 0f)
+            assertEquals(0f, persisted.artworkOffsetX)
+            assertEquals(0f, persisted.artworkOffsetY)
+        }
+    }
 }
