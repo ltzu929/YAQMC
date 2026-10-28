@@ -372,4 +372,39 @@ class NativePersonalizationUiTest {
             assertEquals(0f, persisted.artworkOffsetY)
         }
     }
+
+    @Test fun lyricGestureAndTransportLockAreIsolatedUntilSavedAndSurviveRestart() {
+        val store = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext
+            .getSharedPreferences("native-ui", 0))
+        store.setLyricPresets(NativeLyricPresetPreferences())
+        val localized = compose.activity.withNativeLanguage(NativePreferences(language = "en-US"))
+        compose.setContent {
+            CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized,
+                LocalConfiguration provides localized.resources.configuration) {
+                val state by store.state.collectAsState()
+                MaterialTheme { NativeLyricPresets(state.lyricPresets, store::setLyricPresets) }
+            }
+        }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-lyrics-move"))
+        compose.onNodeWithTag("preset-lyrics-move").performTouchInput {
+            swipe(start = center, end = center.copy(x = center.x + 40f, y = center.y - 12f),
+                durationMillis = 300)
+        }
+        compose.runOnIdle { assertEquals(0f, store.state.value.lyricPresets.current().lyricsOffsetX) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-transport-locked"))
+        compose.onNodeWithTag("preset-transport-locked").performClick()
+        compose.runOnIdle { assertFalse(store.state.value.lyricPresets.current().transportLocked) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))
+        compose.onNodeWithTag("preset-transport-move").assertDoesNotExist()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-save"))
+        compose.onNodeWithTag("preset-save").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            val saved = NativePreferenceStore(InstrumentationRegistry.getInstrumentation().targetContext
+                .getSharedPreferences("native-ui", 0)).state.value.lyricPresets.current()
+            assertTrue(saved.lyricsOffsetX > 0f)
+            assertTrue(saved.lyricsOffsetY < 0f)
+            assertTrue(saved.transportLocked)
+            assertEquals(1f, saved.transportScale)
+        }
+    }
 }
