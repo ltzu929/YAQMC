@@ -333,4 +333,22 @@
     <string name="native_preset_reset">Restore built-in layout</string>
     <string name="native_preset_delete">Delete my layout</string>
     <string name="native_preset_scope">Move and resize artwork, song information, lyrics and playback controls within their layout areas. Lock a position to hide its move handle.</string>
+    <string name="native_stats_7_days">7 days</string>
+    <string name="native_stats_30_days">30 days</string>
+    <string name="native_stats_365_days">365 days</string>
+    <string name="native_stats_all_time">All time</string>
+    <string name="native_stats_listening">Qualified listening time</string>
+    <string name="native_stats_plays">Qualified plays</string>
+    <string name="native_stats_completed">Completed plays</string>
+    <string name="native_stats_skip_rate">Skip rate</string>
+    <string name="native_stats_empty">No listening history in this period.</string>
+    <string name="native_stats_trend">Daily listening trend</string>
+    <string name="native_stats_artists">Top artists</string>
+    <string name="native_stats_albums">Top albums</string>
+    <string name="native_stats_qualities">Listening by quality</string>
+    <string name="native_stats_providers">Listening by provider</string>
+    <string name="native_stats_storage">Listening database size: %1$s</string>
+    <string name="native_stats_clear">Clear listening history</string>
+    <string name="native_stats_confirm_clear">Clear all listening history? This cannot be undone.</string>
+    <string name="native_stats_cleared">Listening history cleared</string>
 </resources>
