@@ -32,7 +32,7 @@ internal fun NativeLyricLayout(
     // The same transform is used by the offline editor and the real player.
     // Keep weight/scroll constraints intact so navigation and follow-scrolling still work.
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val paneWidth = maxWidth
+        val paneWidth = if (wide && preset.layout != "immersive") maxWidth * preset.lyricsFraction else maxWidth
         if (preset.layout == "immersive") {
             Column(Modifier.fillMaxSize()) {
                 lyrics(Modifier.weight(preset.lyricsFraction)
