@@ -1,6 +1,5 @@
 package org.yaqmc.android.nativeui
 
-import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.toggleable
@@ -38,8 +37,7 @@ internal fun NativeLyricSettings(settings: NativeLyricPreferences, change: (Nati
         item { PreferenceSwitch(stringResource(R.string.native_lyric_spring), settings.spring) { change(settings.copy(spring = it)) } }
         item { PreferenceSwitch(stringResource(R.string.native_lyric_scale), settings.scale) { change(settings.copy(scale = it)) } }
         item {
-            PreferenceSwitch(stringResource(R.string.native_lyric_blur), settings.blur, enabled = Build.VERSION.SDK_INT >= 31) { change(settings.copy(blur = it)) }
-            if (Build.VERSION.SDK_INT < 31) Text(stringResource(R.string.native_lyric_blur_version), style = MaterialTheme.typography.bodySmall)
+            PreferenceSwitch(stringResource(R.string.native_lyric_blur), settings.blur) { change(settings.copy(blur = it)) }
         }
         item { PreferenceSwitch(stringResource(R.string.native_lyric_hide_passed), settings.hidePassed) { change(settings.copy(hidePassed = it)) } }
         item { PreferenceSlider(stringResource(R.string.native_lyric_fade), settings.fadeWidth, 0.05f..1f, String.format(Locale.ROOT, "%.2f", settings.fadeWidth)) { change(settings.copy(fadeWidth = it)) } }
