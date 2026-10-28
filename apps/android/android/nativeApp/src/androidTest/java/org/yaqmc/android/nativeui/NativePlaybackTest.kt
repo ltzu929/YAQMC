@@ -94,11 +94,12 @@ class NativePlaybackTest {
                 val artist = compose.onNodeWithText(if (showPreview) "YAQMC Studio" else "Fixture artist")
                 if (metadata) artist.assertExists() else artist.assertDoesNotExist()
                 if (artwork && metadata) {
-                    val coverBounds = cover.fetchSemanticsNode().boundsInRoot
+                    // Scroll containers clip boundsInRoot; ordering is a layout invariant even offscreen.
+                    val coverBounds = cover.getUnclippedBoundsInRoot()
                     val infoBounds = compose.onNodeWithTag(if (showPreview) "preset-metadata-preview"
-                        else "player-metadata").fetchSemanticsNode().boundsInRoot
-                    if (metadataFirst) assertTrue(case, infoBounds.bottom <= coverBounds.top + 1f)
-                    else assertTrue(case, coverBounds.bottom <= infoBounds.top + 1f)
+                        else "player-metadata").getUnclippedBoundsInRoot()
+                    if (metadataFirst) assertTrue(case, infoBounds.bottom <= coverBounds.top + 1.dp)
+                    else assertTrue(case, coverBounds.bottom <= infoBounds.top + 1.dp)
                 }
                 if (showPreview) {
                     val resize = compose.onNodeWithTag("preset-artwork-resize")
@@ -108,7 +109,7 @@ class NativePlaybackTest {
                     compose.onNodeWithText("Play").assertExists()
                 }
                 if (!isWide && selected.layout == "classic")
-                    capture("pr5-${if (showPreview) "preview" else "player"}-artwork-$artwork-metadata-$metadata")
+                    capture("pr7-${if (showPreview) "preview" else "player"}-artwork-$artwork-metadata-$metadata-info-first-$metadataFirst")
                 if (selected.layout == "immersive") {
                     assertTrue(case, lyrics.bottom <= controls.top + 1f)
                     assertEquals(case, selected.lyricsFraction, lyrics.height / layout.height, 0.02f)
@@ -122,6 +123,25 @@ class NativePlaybackTest {
                     assertTrue(case, controls.height / layout.height <= cap + 0.02f)
                 }
             }
+        }
+        assertFalse(core.calls.any { it.first.startsWith("player_") })
+    }
+
+    @Test fun headerOrderKeepsSongLinksAndTransportReachableInTheFullPlayer() {
+        install("player")
+        for (builtin in nativeBuiltinLyricPresets) for (metadataFirst in listOf(false, true)) {
+            compose.runOnIdle {
+                val selected = builtin.copy(metadataFirst = metadataFirst)
+                model.setLyricPresets(NativeLyricPresetPreferences().select(selected.id).save(selected))
+            }
+            compose.onNodeWithTag("player-artwork").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Current song").performScrollTo().assertIsDisplayed()
+            capture("pr7-full-player-${builtin.layout}-info-first-$metadataFirst")
+            compose.onNodeWithText("Fixture artist").performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(NativeRoute("artist", "artist"), model.route.value) }
+            compose.runOnIdle { model.navigate(NativeRoute("player"), root = true) }
+            compose.onNodeWithContentDescription("Playback progress").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Play").performScrollTo().assertIsDisplayed()
         }
         assertFalse(core.calls.any { it.first.startsWith("player_") })
     }

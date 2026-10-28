@@ -264,6 +264,11 @@ class NativePersonalizationUiTest {
             }
         }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-metadata-first"))
+        compose.onNodeWithText("Song information above artwork").assertIsOff().performClick()
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-cancel"))
+        compose.onNodeWithTag("preset-cancel").performClick()
+        compose.runOnIdle { assertFalse(store.state.value.lyricPresets.current().metadataFirst) }
+        compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-metadata-first"))
         compose.onNodeWithTag("preset-metadata-first").assertIsOff().performClick()
         compose.runOnIdle { assertFalse(store.state.value.lyricPresets.current().metadataFirst) }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("lyric-preset-preview"))

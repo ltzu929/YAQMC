@@ -113,7 +113,8 @@ internal fun NativeLyricPresetPreview(
                         when (layer) {
                             NativeLyricHeaderLayer.Artwork -> cover()
                             NativeLyricHeaderLayer.Metadata -> Column(Modifier.testTag("preset-metadata-preview"),
-                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.bodySmall)
                                 Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
