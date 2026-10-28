@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -28,23 +29,33 @@ internal fun NativeLyricLayout(
     controls: @Composable () -> Unit,
     lyrics: @Composable (Modifier) -> Unit,
 ) {
-    if (preset.layout == "immersive") {
-        Column(modifier.fillMaxSize()) {
-            lyrics(Modifier.weight(preset.lyricsFraction))
-            Column(Modifier.weight(1f - preset.lyricsFraction).verticalScroll(rememberScrollState())
-                .testTag("player-controls")) { controls() }
-        }
-    } else if (wide) Row(modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f - preset.lyricsFraction).fillMaxHeight()
-            .verticalScroll(rememberScrollState()).testTag("player-controls")) { controls() }
-        lyrics(Modifier.weight(preset.lyricsFraction))
-    } else BoxWithConstraints(modifier.fillMaxSize()) {
-        // Preserve the classic phone layout's existing 72%-height controls cap by default.
-        val maxControlsHeight = maxHeight * (0.72f - (preset.lyricsFraction - 0.55f) * 0.5f)
-        Column {
-            Column(Modifier.heightIn(max = maxControlsHeight).verticalScroll(rememberScrollState())
-                .testTag("player-controls")) { controls() }
-            lyrics(Modifier.weight(1f))
+    // The same transform is used by the offline editor and the real player.
+    // Keep weight/scroll constraints intact so navigation and follow-scrolling still work.
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val paneWidth = maxWidth
+        if (preset.layout == "immersive") {
+            Column(Modifier.fillMaxSize()) {
+                lyrics(Modifier.weight(preset.lyricsFraction)
+                    .nativeHeaderOffset(preset, NativeLyricHeaderLayer.Lyrics, paneWidth)
+                    .graphicsLayer { scaleX = preset.lyricsScale; scaleY = preset.lyricsScale })
+                Column(Modifier.weight(1f - preset.lyricsFraction).verticalScroll(rememberScrollState())
+                    .testTag("player-controls")) { controls() }
+            }
+        } else if (wide) Row(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f - preset.lyricsFraction).fillMaxHeight()
+                .verticalScroll(rememberScrollState()).testTag("player-controls")) { controls() }
+            lyrics(Modifier.weight(preset.lyricsFraction)
+                .nativeHeaderOffset(preset, NativeLyricHeaderLayer.Lyrics, paneWidth)
+                .graphicsLayer { scaleX = preset.lyricsScale; scaleY = preset.lyricsScale })
+        } else {
+            val maxControlsHeight = maxHeight * (0.72f - (preset.lyricsFraction - 0.55f) * 0.5f)
+            Column {
+                Column(Modifier.heightIn(max = maxControlsHeight).verticalScroll(rememberScrollState())
+                    .testTag("player-controls")) { controls() }
+                lyrics(Modifier.weight(1f)
+                    .nativeHeaderOffset(preset, NativeLyricHeaderLayer.Lyrics, paneWidth)
+                    .graphicsLayer { scaleX = preset.lyricsScale; scaleY = preset.lyricsScale })
+            }
         }
     }
 }
