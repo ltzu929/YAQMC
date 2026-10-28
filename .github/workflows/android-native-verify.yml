@@ -5,11 +5,22 @@ on:
     paths:
       - 'apps/android/android/nativeApp/**'
       - 'apps/android/android/app/**'
+      - 'apps/android/android/*.kts'
+      - 'apps/android/android/gradle/**'
+      - 'package-lock.json'
+      - 'Cargo.lock'
       - '.github/workflows/android-native-verify.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# These APKs exercise presentation only and intentionally contain no Rust Core.
+env:
+  YAQMC_ANDROID_OFFLINE_UI_TESTS: '1'
+  YAQMC_ANDROID_NATIVE_ABI: x86_64
+  YAQMC_ANDROID_NATIVE_LIB_DIR: ${{ github.workspace }}/artifacts/offline-empty-core
+  YAQMC_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
   group: android-native-${{ github.event.pull_request.number || github.ref }}
@@ -44,11 +55,11 @@ jobs:
       - name: Compile, test, lint and assemble native Android
         working-directory: apps/android/android
         run: bash ./gradlew --no-daemon :nativeApp:testDebugUnitTest :nativeApp:lintDebug :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
-      - name: Upload reviewable debug and instrumentation APKs
+      - name: Upload offline-only debug and instrumentation APKs
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: yaqmc-native-review-apks-${{ github.sha }}
+          name: yaqmc-native-offline-test-apks-${{ github.sha }}
           path: |
             apps/android/android/nativeApp/build/outputs/apk/debug/
             apps/android/android/nativeApp/build/outputs/apk/androidTest/debug/
@@ -102,7 +113,7 @@ jobs:
           target: google_apis
           profile: pixel_6
           disable-animations: true
-          script: cd apps/android/android && bash gradlew --no-daemon :nativeApp:connectedDebugAndroidTest
+          script: cd apps/android/android && bash gradlew --no-daemon :nativeApp:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest
       - name: Upload UI instrumentation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
