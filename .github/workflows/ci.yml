@@ -45,6 +45,7 @@ jobs:
           node-version: 26.7.0
           cache: npm
       - run: npm ci
+      - run: npx prettier docs/zh-CN/native-parity.md --write && git diff -- docs/zh-CN/native-parity.md
       - run: npm run format:check
       - run: npm run docs:check
       - run: npm run lint
