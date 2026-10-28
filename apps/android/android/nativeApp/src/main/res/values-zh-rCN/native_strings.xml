@@ -333,4 +333,22 @@
     <string name="native_preset_reset">恢复内置布局</string>
     <string name="native_preset_delete">删除自定义布局</string>
     <string name="native_preset_scope">可在各自布局区域内微调封面、歌曲信息、歌词和播放控件的位置与大小；锁定位置后隐藏对应移动手柄。</string>
+    <string name="native_stats_7_days">近 7 天</string>
+    <string name="native_stats_30_days">近 30 天</string>
+    <string name="native_stats_365_days">近 365 天</string>
+    <string name="native_stats_all_time">全部</string>
+    <string name="native_stats_listening">有效收听时长</string>
+    <string name="native_stats_plays">有效播放次数</string>
+    <string name="native_stats_completed">完整播放次数</string>
+    <string name="native_stats_skip_rate">跳过率</string>
+    <string name="native_stats_empty">此时间范围内暂无听歌记录。</string>
+    <string name="native_stats_trend">每日收听趋势</string>
+    <string name="native_stats_artists">常听歌手</string>
+    <string name="native_stats_albums">常听专辑</string>
+    <string name="native_stats_qualities">音质分布</string>
+    <string name="native_stats_providers">音乐来源分布</string>
+    <string name="native_stats_storage">听歌记录数据库大小：%1$s</string>
+    <string name="native_stats_clear">清除听歌记录</string>
+    <string name="native_stats_confirm_clear">确定清除全部听歌记录？此操作不可撤销。</string>
+    <string name="native_stats_cleared">听歌记录已清除</string>
 </resources>
