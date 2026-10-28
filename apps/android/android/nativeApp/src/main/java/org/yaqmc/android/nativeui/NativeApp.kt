@@ -136,6 +136,8 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                         "library" -> Library(model)
                         "settings" -> Settings(model, login)
                         "statistics" -> NativeStatistics(model)
+                        "diagnostics" -> NativeDiagnostics(model)
+                        "about" -> NativeAbout(model)
                         "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics) { model.navigate(NativeRoute("lyric-presets")) }
                         "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
                         "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
@@ -266,7 +268,12 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
                 OutlinedButton(onClick = { confirmClear = true }, enabled = !cacheBusy) { Text(stringResource(R.string.native_clear_cache)) }
             }
         }
-        item { Text("YAQMC Native · ${org.yaqmc.android.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall) }
+        item { OutlinedButton(onClick = { model.navigate(NativeRoute("diagnostics")) }) {
+            Text(stringResource(R.string.native_diag_title))
+        } }
+        item { OutlinedButton(onClick = { model.navigate(NativeRoute("about")) }) {
+            Text(stringResource(R.string.native_about_title))
+        } }
     }
     if (confirmSignOut) Confirm(stringResource(R.string.native_confirm_sign_out), { confirmSignOut = false }) { model.signOut() }
     if (confirmClear) Confirm(stringResource(R.string.native_confirm_clear_cache), { confirmClear = false }) { model.cacheStats(clear = true) }
