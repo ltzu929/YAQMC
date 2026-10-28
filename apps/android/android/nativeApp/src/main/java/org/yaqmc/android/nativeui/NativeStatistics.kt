@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +62,7 @@ internal data class NativeStatisticsState(
 @Composable
 internal fun NativeStatistics(model: NativeViewModel) {
     val state by model.statistics.collectAsStateWithLifecycle()
+    val locale = LocalConfiguration.current.locales[0]
     var confirmClear by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.loadStatistics() }
     val ranges = listOf("7-days" to R.string.native_stats_7_days,
@@ -84,7 +86,7 @@ internal fun NativeStatistics(model: NativeViewModel) {
         val snapshot = state.snapshot
         if (snapshot != null) {
             item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatisticMetric(R.string.native_stats_listening, formatTime(snapshot.listeningMs))
+                StatisticMetric(R.string.native_stats_listening, listeningDuration(snapshot.listeningMs))
                 StatisticMetric(R.string.native_stats_plays, snapshot.playCount.toString())
                 StatisticMetric(R.string.native_stats_completed, snapshot.completed.toString())
                 StatisticMetric(R.string.native_stats_skip_rate,
@@ -93,16 +95,16 @@ internal fun NativeStatistics(model: NativeViewModel) {
             if (snapshot.recordCount == 0L) item {
                 Text(stringResource(R.string.native_stats_empty), modifier = Modifier.testTag("statistics-empty"))
             } else {
-                if (snapshot.daily.isNotEmpty()) item {
-                    Text(stringResource(R.string.native_stats_trend), style = MaterialTheme.typography.titleLarge)
+                if (snapshot.daily.isNotEmpty()) {
                     val max = snapshot.daily.maxOf { it.listenedMs }.coerceAtLeast(1)
-                    snapshot.daily.takeLast(31).forEach { day ->
+                    item { Text(stringResource(R.string.native_stats_trend), style = MaterialTheme.typography.titleLarge) }
+                    items(snapshot.daily, key = { it.startMs }) { day ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(DateFormat.getDateInstance(DateFormat.SHORT).format(Date(day.startMs)),
+                            Text(DateFormat.getDateInstance(DateFormat.SHORT, locale).format(Date(day.startMs)),
                                 modifier = Modifier.width(85.dp), style = MaterialTheme.typography.labelSmall)
                             LinearProgressIndicator(progress = { (day.listenedMs.toFloat() / max.toFloat()).coerceIn(0f, 1f) },
                                 modifier = Modifier.weight(1f))
-                            Text(formatTime(day.listenedMs), style = MaterialTheme.typography.labelSmall)
+                            Text(listeningDuration(day.listenedMs), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -142,7 +144,7 @@ private fun StatisticEntry(item: StatisticsEntity, kind: String, model: NativeVi
                 if (item.subtitle.isNotBlank()) Text(item.subtitle, style = MaterialTheme.typography.bodySmall)
             }
         }
-        Text(formatTime(item.listenedMs), style = MaterialTheme.typography.bodySmall)
+        Text(listeningDuration(item.listenedMs), style = MaterialTheme.typography.bodySmall)
     }
 }
 @Composable
@@ -152,10 +154,18 @@ private fun StatisticDimensions(title: Int, items: List<StatisticsDimension>) {
         items.forEach { item ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(item.label.ifBlank { stringResource(R.string.native_unknown) })
-                Text(formatTime(item.listenedMs))
+                Text(listeningDuration(item.listenedMs))
             }
         }
     }
+}
+@Composable
+private fun listeningDuration(value: Long): String {
+    val seconds = value.coerceAtLeast(0) / 1000
+    val hours = seconds / 3600
+    val minutes = (seconds / 60) % 60
+    return if (hours > 0) stringResource(R.string.native_stats_duration_hours, hours, minutes)
+        else stringResource(R.string.native_stats_duration_minutes, minutes, seconds % 60)
 }
 internal fun readableBytes(value: Long): String {
     val safe = value.coerceAtLeast(0).toDouble()
