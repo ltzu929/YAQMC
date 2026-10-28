@@ -164,4 +164,36 @@ class NativeLyricPresetModelsTest {
         assertEquals(0.75f, nativeSnapLyricsFraction(9f))
         assertEquals(0.55f, nativeSnapLyricsFraction(Float.NaN))
     }
+    @Test fun independentHeaderOffsetsSupportPersistenceClampingAndLegacyDefaults() {
+        val original = NativeLyricPresetPreferences()
+        val first = original.current().moveHeaderLayer(NativeLyricHeaderLayer.Artwork, 0.18f, -0.1f)
+        val edited = first.moveHeaderLayer(NativeLyricHeaderLayer.Metadata, -0.13f, 0.15f)
+        assertEquals(0.18f to -0.1f, edited.headerOffset(NativeLyricHeaderLayer.Artwork))
+        assertEquals(-0.13f to 0.15f, edited.headerOffset(NativeLyricHeaderLayer.Metadata))
+        val history = NativeLyricPresetEditHistory(original.current()).edit(first).edit(edited)
+        assertEquals(first, history.undo().current)
+        assertEquals(edited, history.undo().redo().current)
+        assertEquals(original.current(), NativeLyricPresetPreferences().current())
+
+        val saved = original.save(edited)
+        assertEquals(saved, NativeLyricPresetPreferences.decode(saved.json()))
+        assertEquals(edited, saved.duplicate("custom.moved", "Moved").current())
+        assertEquals(original.current(), saved.reset().current())
+
+        val invalid = edited.copy(artworkOffsetX = Float.NaN, artworkOffsetY = 99f,
+            metadataOffsetX = -99f, metadataOffsetY = Float.POSITIVE_INFINITY).normalized()
+        assertEquals(0f, invalid.artworkOffsetX)
+        assertEquals(0.20f, invalid.artworkOffsetY)
+        assertEquals(-0.20f, invalid.metadataOffsetX)
+        assertEquals(0f, invalid.metadataOffsetY)
+        assertEquals(0f, nativeSnapLayerOffset(0.01f))
+        assertEquals(-0.20f, nativeSnapLayerOffset(-100f))
+
+        val legacy = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","metadataFirst":true}}}""")
+        assertEquals(0f to 0f, legacy.current().headerOffset(NativeLyricHeaderLayer.Artwork))
+        assertEquals(0f to 0f, legacy.current().headerOffset(NativeLyricHeaderLayer.Metadata))
+        assertTrue(legacy.current().metadataFirst)
+    }
+
 }
