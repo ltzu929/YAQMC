@@ -177,7 +177,7 @@ class NativeLyricPresetModelsTest {
 
         val saved = original.save(edited)
         assertEquals(saved, NativeLyricPresetPreferences.decode(saved.json()))
-        assertEquals(edited, saved.duplicate("custom.moved", "Moved").current())
+        assertEquals(edited.copy(id = "custom.moved", name = "Moved"), saved.duplicate("custom.moved", "Moved").current())
         assertEquals(original.current(), saved.reset().current())
 
         val invalid = edited.copy(artworkOffsetX = Float.NaN, artworkOffsetY = 99f,
@@ -207,7 +207,7 @@ class NativeLyricPresetModelsTest {
         assertEquals(0f, edited.headerZ(NativeLyricHeaderLayer.Metadata))
         val saved = start.save(edited)
         assertEquals(edited, NativeLyricPresetPreferences.decode(saved.json()).current())
-        assertEquals(edited, saved.duplicate("custom.locked", "Locked").current())
+        assertEquals(edited.copy(id = "custom.locked", name = "Locked"), saved.duplicate("custom.locked", "Locked").current())
         assertEquals(start.current(), saved.reset().current())
 
         val invalid = edited.copy(metadataScale = Float.NaN).normalized()
