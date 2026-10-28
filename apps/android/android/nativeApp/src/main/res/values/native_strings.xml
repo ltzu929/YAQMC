@@ -358,4 +358,27 @@
     <string name="native_cache_metadata">Metadata: %1$d entries</string>
     <string name="native_cache_lyrics">Lyrics: %1$d entries</string>
     <string name="native_cache_limits">Limits: audio %1$s · artwork %2$s</string>
+    <string name="native_diag_title">Diagnostics and support</string>
+    <string name="native_diag_log_level">Log detail</string>
+    <string name="native_diag_info">Normal</string>
+    <string name="native_diag_debug">Detailed</string>
+    <string name="native_diag_trace">Full trace</string>
+    <string name="native_diag_export">Share diagnostic bundle</string>
+    <string name="native_diag_export_failed">Could not prepare a safe diagnostic bundle. Please retry.</string>
+    <string name="native_diag_privacy">Diagnostic bundles are checked for sensitive content. Review the ZIP before sharing it.</string>
+    <string name="native_diag_clear_logs">Clear old logs</string>
+    <string name="native_diag_logs_cleared">Old logs cleared</string>
+    <string name="native_diag_confirm_clear_logs">Clear old diagnostic logs?</string>
+    <string name="native_diag_recent_errors">Recent errors</string>
+    <string name="native_diag_no_errors">No recent errors</string>
+    <string name="native_diag_report_issue">Report a problem on GitHub</string>
+    <string name="native_about_title">About YAQMC</string>
+    <string name="native_about_build">Source commit: %1$s</string>
+    <string name="native_about_platform">Android %1$s (API %2$d) · %3$s</string>
+    <string name="native_about_repository">Project repository</string>
+    <string name="native_update_failed">Could not check for updates. Please retry.</string>
+    <string name="native_update_available">New version available: %1$s</string>
+    <string name="native_update_latest">You're using the latest available release.</string>
+    <string name="native_update_check">Check for updates</string>
+    <string name="native_update_open_release">View release on GitHub</string>
 </resources>
