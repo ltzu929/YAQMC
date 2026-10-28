@@ -381,4 +381,17 @@
     <string name="native_update_latest">当前没有可用的新版本。</string>
     <string name="native_update_check">检查更新</string>
     <string name="native_update_open_release">前往 GitHub 查看版本</string>
+    <string name="native_issue_bug">问题</string>
+    <string name="native_issue_playback">播放</string>
+    <string name="native_issue_provider">账号</string>
+    <string name="native_issue_lyrics">歌词</string>
+    <string name="native_issue_ui">界面</string>
+    <string name="native_issue_other">其他</string>
+    <string name="native_issue_intro">描述遇到的问题并预览报告，再打开 GitHub 填写表单。应用不会自动提交。</string>
+    <string name="native_issue_summary">问题概述</string>
+    <string name="native_issue_description">详细说明与复现步骤</string>
+    <string name="native_issue_failed">无法准备或打开问题报告，请重试。</string>
+    <string name="native_issue_preview">预览报告</string>
+    <string name="native_issue_open">打开 GitHub 问题表单</string>
+    <string name="native_issue_too_long">报告超出浏览器链接长度，请缩短说明。</string>
 </resources>
