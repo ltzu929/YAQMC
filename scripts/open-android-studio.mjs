@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,14 +34,17 @@ const commit = revision.stdout?.trim();
 if (revision.status !== 0 || !/^[0-9a-f]{40}$/u.test(commit ?? '')) {
   throw new Error('Unable to resolve the build commit');
 }
-const nativeDir = path.resolve(
+const nativeSource = path.resolve(
   process.env.YAQMC_ANDROID_NATIVE_LIB_DIR ??
     path.join(android, 'nativeApp/build/generated/jniLibs'),
 );
 const abi = process.env.YAQMC_ANDROID_NATIVE_ABI ?? 'arm64-v8a';
-if (!existsSync(path.join(nativeDir, abi, 'libyaqmc_core.so'))) {
+const nativeLibrary = path.join(nativeSource, abi, 'libyaqmc_core.so');
+if (!existsSync(nativeLibrary)) {
   throw new Error('Build a matching Rust Core first, or set YAQMC_ANDROID_NATIVE_LIB_DIR');
 }
+// Gradle clean removes module build directories, so keep IDE inputs outside them.
+const nativeDir = path.join(android, '.gradle/yaqmc-studio/jniLibs');
 const environment = {
   ...process.env,
   JAVA_HOME: javaHome,
@@ -55,6 +58,9 @@ const environment = {
   YAQMC_VERSION_CODE: String(version.versionCode),
   YAQMC_BUILD_COMMIT: commit,
 };
+const stagedLibrary = path.join(nativeDir, abi, 'libyaqmc_core.so');
+mkdirSync(path.dirname(stagedLibrary), { recursive: true });
+if (nativeLibrary !== stagedLibrary) copyFileSync(nativeLibrary, stagedLibrary);
 
 // These machine paths belong only in ignored local files. Preserve other properties.
 function setLocalProperty(file, key, value) {

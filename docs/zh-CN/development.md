@@ -63,7 +63,7 @@ $env:ANDROID_SDK_ROOT = '<现有 SDK 36 目录>'
 npm run android:studio -- 'D:\android\bin\studio64.exe'
 ```
 
-首次使用前先通过原生构建脚本生成 Core。启动脚本默认复用 `nativeApp/build/generated/jniLibs`，也可用 `YAQMC_ANDROID_NATIVE_LIB_DIR` 指定已核对的兼容目录；修改 Rust 后先重新构建。脚本向 IDE 注入 SDK / NDK、Rust TLS Maven 仓库、Core 目录、版本和源码提交信息，并在被忽略的 `local.properties`、`.gradle/config.properties` 中保存 SDK 与 JDK 路径；首次创建 `.idea/gradle.xml` 时选择 `GRADLE_LOCAL_JAVA_HOME`，已有 IDE 设置不覆盖。附加 `--prepare-only` 可只准备本地路径而不启动 IDE。
+首次使用前先通过原生构建脚本生成 Core。启动脚本默认读取 `nativeApp/build/generated/jniLibs`，也可用 `YAQMC_ANDROID_NATIVE_LIB_DIR` 指定已核对的兼容目录；每次启动将所选 ABI 的 Core 复制到被忽略的 `.gradle/yaqmc-studio/jniLibs`，供 IDE 使用，避免 Clean Project 删除运行所需的 JNI 库。修改 Rust 后先重新构建并重新运行启动命令，更新该副本。脚本向 IDE 注入 SDK / NDK、Rust TLS Maven 仓库、Core 目录、版本和源码提交信息，并在被忽略的 `local.properties`、`.gradle/config.properties` 中保存 SDK 与 JDK 路径；首次创建 `.idea/gradle.xml` 时选择 `GRADLE_LOCAL_JAVA_HOME`，已有 IDE 设置不覆盖。附加 `--prepare-only` 可只准备本地路径和 Core 副本而不启动 IDE。
 
 Gradle JDK 选择 **JDK 21**（`GRADLE_LOCAL_JAVA_HOME` 或上述 `JAVA_HOME`），IDE 自身继续使用随附 JBR；两者用途见 [Android 官方 JDK 说明](https://developer.android.com/build/jdks)。本机新装 Studio 的 JBR 为 Java 25，不直接用于本工程 Gradle。IDE 的 SDK Location 应指向已有 SDK 36，避免另建一套环境。
 
