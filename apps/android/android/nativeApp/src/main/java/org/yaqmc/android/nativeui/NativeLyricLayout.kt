@@ -6,6 +6,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+/** Relative x displacement tracks the control-pane width, while y uses a stable 160dp axis.
+ * A shared transform guarantees preview/live agreement without moving transport controls.
+ */
+internal fun Modifier.nativeHeaderOffset(
+    preset: NativeLyricPreset, layer: NativeLyricHeaderLayer, paneWidth: Dp,
+): Modifier {
+    val (x, y) = preset.headerOffset(layer)
+    return offset(x = paneWidth * x, y = 160.dp * y)
+}
 
 /** Shared partitions for the live player and its offline sample preview. */
 @Composable
