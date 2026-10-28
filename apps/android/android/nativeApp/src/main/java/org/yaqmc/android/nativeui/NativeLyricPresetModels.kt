@@ -13,18 +13,29 @@ internal data class NativeLyricPreset(
     val showArtwork: Boolean = true,
     val showMetadata: Boolean = true,
     val metadataFirst: Boolean = false,
+    // Relative offsets within the controls column, shared by offline preview and live playback.
+    val artworkOffsetX: Float = 0f,
+    val artworkOffsetY: Float = 0f,
+    val metadataOffsetX: Float = 0f,
+    val metadataOffsetY: Float = 0f,
 ) {
     fun normalized(): NativeLyricPreset = copy(
         name = name.trim().take(48),
         layout = layout.takeIf { it in setOf("classic", "immersive", "vinyl") } ?: "classic",
         lyricsFraction = lyricsFraction.finiteOr(0.55f).coerceIn(0.35f, 0.75f),
         artworkScale = artworkScale.finiteOr(1f).coerceIn(0.7f, 1.35f),
+        artworkOffsetX = nativeBoundLayerOffset(artworkOffsetX),
+        artworkOffsetY = nativeBoundLayerOffset(artworkOffsetY),
+        metadataOffsetX = nativeBoundLayerOffset(metadataOffsetX),
+        metadataOffsetY = nativeBoundLayerOffset(metadataOffsetY),
     )
 
     fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("layout", layout)
         .put("lyricsFraction", lyricsFraction).put("artworkScale", artworkScale)
         .put("showArtwork", showArtwork).put("showMetadata", showMetadata)
         .put("metadataFirst", metadataFirst)
+        .put("artworkOffsetX", artworkOffsetX).put("artworkOffsetY", artworkOffsetY)
+        .put("metadataOffsetX", metadataOffsetX).put("metadataOffsetY", metadataOffsetY)
 
     companion object {
         fun parse(value: JSONObject): NativeLyricPreset = NativeLyricPreset(
@@ -32,12 +43,36 @@ internal data class NativeLyricPreset(
             value.optDouble("lyricsFraction", 0.55).toFloat(), value.optDouble("artworkScale", 1.0).toFloat(),
             value.optBoolean("showArtwork", true), value.optBoolean("showMetadata", true),
             value.optBoolean("metadataFirst", false),
+            value.optDouble("artworkOffsetX", 0.0).toFloat(),
+            value.optDouble("artworkOffsetY", 0.0).toFloat(),
+            value.optDouble("metadataOffsetX", 0.0).toFloat(),
+            value.optDouble("metadataOffsetY", 0.0).toFloat(),
         ).normalized()
     }
 }
 
 /** Controls order only; lyrics and transport retain their existing positions. */
 internal enum class NativeLyricHeaderLayer { Artwork, Metadata }
+
+/** A deliberately bounded translation leaves the transport controls in the original scroll region. */
+internal fun nativeBoundLayerOffset(value: Float): Float = value.finiteOr(0f).coerceIn(-0.20f, 0.20f)
+
+internal fun nativeSnapLayerOffset(value: Float): Float =
+    nativeBoundLayerOffset(value).let { if (kotlin.math.abs(it) <= 0.015f) 0f else it }
+
+internal fun NativeLyricPreset.headerOffset(layer: NativeLyricHeaderLayer): Pair<Float, Float> =
+    when (layer) {
+        NativeLyricHeaderLayer.Artwork -> artworkOffsetX to artworkOffsetY
+        NativeLyricHeaderLayer.Metadata -> metadataOffsetX to metadataOffsetY
+    }
+
+internal fun NativeLyricPreset.moveHeaderLayer(layer: NativeLyricHeaderLayer, x: Float, y: Float): NativeLyricPreset =
+    when (layer) {
+        NativeLyricHeaderLayer.Artwork -> copy(artworkOffsetX = nativeSnapLayerOffset(x),
+            artworkOffsetY = nativeSnapLayerOffset(y))
+        NativeLyricHeaderLayer.Metadata -> copy(metadataOffsetX = nativeSnapLayerOffset(x),
+            metadataOffsetY = nativeSnapLayerOffset(y))
+    }
 
 internal fun NativeLyricPreset.visibleHeaderLayers(): List<NativeLyricHeaderLayer> =
     (if (metadataFirst) listOf(NativeLyricHeaderLayer.Metadata, NativeLyricHeaderLayer.Artwork)
@@ -122,7 +157,7 @@ internal data class NativeLyricPresetPreferences(
         state.overrides.forEach { (id, value) -> overridden.put(id, value.json()) }
         val customArray = JSONArray()
         state.custom.forEach { customArray.put(it.json()) }
-        return JSONObject().put("schemaVersion", 2).put("selectedId", state.selectedId)
+        return JSONObject().put("schemaVersion", 3).put("selectedId", state.selectedId)
             .put("overrides", overridden).put("custom", customArray).toString()
     }
 
