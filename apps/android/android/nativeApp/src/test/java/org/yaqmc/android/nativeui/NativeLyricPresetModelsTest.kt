@@ -196,4 +196,28 @@ class NativeLyricPresetModelsTest {
         assertTrue(legacy.current().metadataFirst)
     }
 
+
+    @Test fun layerSizeLockStackingAndLegacyDefaultsRoundTrip() {
+        val start = NativeLyricPresetPreferences()
+        val edited = start.current().copy(metadataScale = 1.2f,
+            artworkLocked = true, metadataLocked = true, artworkOnTop = true)
+        assertEquals(edited, edited.moveHeaderLayer(NativeLyricHeaderLayer.Artwork, 0.2f, 0.2f))
+        assertEquals(edited, edited.moveHeaderLayer(NativeLyricHeaderLayer.Metadata, -0.2f, 0f))
+        assertEquals(1f, edited.headerZ(NativeLyricHeaderLayer.Artwork))
+        assertEquals(0f, edited.headerZ(NativeLyricHeaderLayer.Metadata))
+        val saved = start.save(edited)
+        assertEquals(edited, NativeLyricPresetPreferences.decode(saved.json()).current())
+        assertEquals(edited, saved.duplicate("custom.locked", "Locked").current())
+        assertEquals(start.current(), saved.reset().current())
+
+        val invalid = edited.copy(metadataScale = Float.NaN).normalized()
+        assertEquals(1f, invalid.metadataScale)
+        assertEquals(1.35f, edited.copy(metadataScale = 40f).normalized().metadataScale)
+        val old = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","metadataFirst":true}}}""")
+        assertEquals(1f, old.current().metadataScale)
+        assertFalse(old.current().artworkLocked)
+        assertFalse(old.current().metadataLocked)
+        assertFalse(old.current().artworkOnTop)
+    }
 }
