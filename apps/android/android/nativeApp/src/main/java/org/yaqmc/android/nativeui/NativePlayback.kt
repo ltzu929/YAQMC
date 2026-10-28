@@ -271,16 +271,17 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val paneWidth = maxWidth
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
             preset.visibleHeaderLayers().forEach { layer ->
                 when (layer) {
                     NativeLyricHeaderLayer.Artwork -> Artwork(track.artwork,
-                        Modifier.nativeHeaderOffset(preset, layer, maxWidth).zIndex(preset.headerZ(layer)).testTag("player-artwork")
+                        Modifier.nativeHeaderOffset(preset, layer, paneWidth).zIndex(preset.headerZ(layer)).testTag("player-artwork")
                             .size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                             .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
-                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, maxWidth)
-                            .widthIn(max = maxWidth * (1f - 2f * kotlin.math.abs(preset.metadataOffsetX)))
+                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, paneWidth)
+                            .widthIn(max = paneWidth * ((1f - 2f * kotlin.math.abs(preset.metadataOffsetX)) / maxOf(1f, preset.metadataScale))
                             .graphicsLayer { scaleX = preset.metadataScale; scaleY = preset.metadataScale }
                             .zIndex(preset.headerZ(layer))
                             .testTag("player-metadata"),
