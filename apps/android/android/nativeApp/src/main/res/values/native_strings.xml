@@ -318,6 +318,10 @@
     <string name="native_preset_show_artwork">Show album artwork</string>
     <string name="native_preset_show_metadata">Show song information</string>
     <string name="native_preset_metadata_first">Song information above artwork</string>
+    <string name="native_preset_metadata_size">Song information size</string>
+    <string name="native_preset_lock_artwork">Lock artwork position</string>
+    <string name="native_preset_lock_metadata">Lock song information position</string>
+    <string name="native_preset_artwork_on_top">Place artwork above song information when overlapping</string>
     <string name="native_preset_artwork_size">Artwork size</string>
     <string name="native_preset_apply">Save changes</string>
     <string name="native_preset_duplicate">Duplicate</string>
