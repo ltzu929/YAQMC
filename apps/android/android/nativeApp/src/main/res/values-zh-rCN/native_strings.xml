@@ -319,6 +319,10 @@
     <string name="native_preset_show_metadata">显示歌曲信息</string>
     <string name="native_preset_metadata_first">歌曲信息显示在封面上方</string>
     <string name="native_preset_metadata_size">歌曲信息大小</string>
+    <string name="native_preset_lyrics_size">歌词区域大小</string>
+    <string name="native_preset_lock_lyrics">锁定歌词位置</string>
+    <string name="native_preset_transport_size">播放控件大小</string>
+    <string name="native_preset_lock_transport">锁定播放控件位置</string>
     <string name="native_preset_lock_artwork">锁定封面位置</string>
     <string name="native_preset_lock_metadata">锁定歌曲信息位置</string>
     <string name="native_preset_artwork_on_top">重叠时封面显示在歌曲信息上方</string>
