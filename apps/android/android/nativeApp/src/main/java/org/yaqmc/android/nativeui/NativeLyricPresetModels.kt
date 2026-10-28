@@ -13,18 +13,55 @@ internal data class NativeLyricPreset(
     val showArtwork: Boolean = true,
     val showMetadata: Boolean = true,
     val metadataFirst: Boolean = false,
+    // Relative offsets within the controls column, shared by offline preview and live playback.
+    val artworkOffsetX: Float = 0f,
+    val artworkOffsetY: Float = 0f,
+    val metadataOffsetX: Float = 0f,
+    val metadataOffsetY: Float = 0f,
+    val metadataScale: Float = 1f,
+    val artworkLocked: Boolean = false,
+    val metadataLocked: Boolean = false,
+    val artworkOnTop: Boolean = false,
+    val lyricsOffsetX: Float = 0f,
+    val lyricsOffsetY: Float = 0f,
+    val lyricsScale: Float = 1f,
+    val lyricsLocked: Boolean = false,
+    val transportOffsetX: Float = 0f,
+    val transportOffsetY: Float = 0f,
+    val transportScale: Float = 1f,
+    val transportLocked: Boolean = false,
 ) {
     fun normalized(): NativeLyricPreset = copy(
         name = name.trim().take(48),
         layout = layout.takeIf { it in setOf("classic", "immersive", "vinyl") } ?: "classic",
         lyricsFraction = lyricsFraction.finiteOr(0.55f).coerceIn(0.35f, 0.75f),
         artworkScale = artworkScale.finiteOr(1f).coerceIn(0.7f, 1.35f),
+        artworkOffsetX = nativeBoundLayerOffset(artworkOffsetX),
+        artworkOffsetY = nativeBoundLayerOffset(artworkOffsetY),
+        metadataOffsetX = nativeBoundLayerOffset(metadataOffsetX),
+        metadataOffsetY = nativeBoundLayerOffset(metadataOffsetY),
+        metadataScale = metadataScale.finiteOr(1f).coerceIn(0.7f, 1.35f),
+        lyricsOffsetX = nativeBoundLayerOffset(lyricsOffsetX),
+        lyricsOffsetY = nativeBoundLayerOffset(lyricsOffsetY),
+        lyricsScale = lyricsScale.finiteOr(1f).coerceIn(0.7f, 1.35f),
+        transportOffsetX = nativeBoundLayerOffset(transportOffsetX),
+        transportOffsetY = nativeBoundLayerOffset(transportOffsetY),
+        transportScale = transportScale.finiteOr(1f).coerceIn(0.7f, 1.35f),
     )
 
     fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("layout", layout)
         .put("lyricsFraction", lyricsFraction).put("artworkScale", artworkScale)
         .put("showArtwork", showArtwork).put("showMetadata", showMetadata)
         .put("metadataFirst", metadataFirst)
+        .put("artworkOffsetX", artworkOffsetX).put("artworkOffsetY", artworkOffsetY)
+        .put("metadataOffsetX", metadataOffsetX).put("metadataOffsetY", metadataOffsetY)
+        .put("metadataScale", metadataScale)
+        .put("artworkLocked", artworkLocked).put("metadataLocked", metadataLocked)
+        .put("artworkOnTop", artworkOnTop)
+        .put("lyricsOffsetX", lyricsOffsetX).put("lyricsOffsetY", lyricsOffsetY)
+        .put("lyricsScale", lyricsScale).put("lyricsLocked", lyricsLocked)
+        .put("transportOffsetX", transportOffsetX).put("transportOffsetY", transportOffsetY)
+        .put("transportScale", transportScale).put("transportLocked", transportLocked)
 
     companion object {
         fun parse(value: JSONObject): NativeLyricPreset = NativeLyricPreset(
@@ -32,12 +69,70 @@ internal data class NativeLyricPreset(
             value.optDouble("lyricsFraction", 0.55).toFloat(), value.optDouble("artworkScale", 1.0).toFloat(),
             value.optBoolean("showArtwork", true), value.optBoolean("showMetadata", true),
             value.optBoolean("metadataFirst", false),
+            value.optDouble("artworkOffsetX", 0.0).toFloat(),
+            value.optDouble("artworkOffsetY", 0.0).toFloat(),
+            value.optDouble("metadataOffsetX", 0.0).toFloat(),
+            value.optDouble("metadataOffsetY", 0.0).toFloat(),
+            value.optDouble("metadataScale", 1.0).toFloat(),
+            value.optBoolean("artworkLocked", false),
+            value.optBoolean("metadataLocked", false),
+            value.optBoolean("artworkOnTop", false),
+            value.optDouble("lyricsOffsetX", 0.0).toFloat(),
+            value.optDouble("lyricsOffsetY", 0.0).toFloat(),
+            value.optDouble("lyricsScale", 1.0).toFloat(),
+            value.optBoolean("lyricsLocked", false),
+            value.optDouble("transportOffsetX", 0.0).toFloat(),
+            value.optDouble("transportOffsetY", 0.0).toFloat(),
+            value.optDouble("transportScale", 1.0).toFloat(),
+            value.optBoolean("transportLocked", false),
         ).normalized()
     }
 }
 
 /** Controls order only; lyrics and transport retain their existing positions. */
-internal enum class NativeLyricHeaderLayer { Artwork, Metadata }
+internal enum class NativeLyricHeaderLayer { Artwork, Metadata, Lyrics, Transport }
+
+/** A deliberately bounded translation leaves the transport controls in the original scroll region. */
+internal fun nativeBoundLayerOffset(value: Float): Float = value.finiteOr(0f).coerceIn(-0.20f, 0.20f)
+
+internal fun nativeSnapLayerOffset(value: Float): Float =
+    nativeBoundLayerOffset(value).let { if (kotlin.math.abs(it) <= 0.015f) 0f else it }
+
+internal fun NativeLyricPreset.headerLocked(layer: NativeLyricHeaderLayer): Boolean =
+    when (layer) {
+        NativeLyricHeaderLayer.Artwork -> artworkLocked
+        NativeLyricHeaderLayer.Metadata -> metadataLocked
+        NativeLyricHeaderLayer.Lyrics -> lyricsLocked
+        NativeLyricHeaderLayer.Transport -> transportLocked
+    }
+
+internal fun NativeLyricPreset.headerZ(layer: NativeLyricHeaderLayer): Float =
+    when (layer) {
+        NativeLyricHeaderLayer.Artwork -> if (artworkOnTop) 1f else 0f
+        NativeLyricHeaderLayer.Metadata -> if (artworkOnTop) 0f else 1f
+        NativeLyricHeaderLayer.Lyrics -> 0f
+        NativeLyricHeaderLayer.Transport -> 0f
+    }
+
+internal fun NativeLyricPreset.headerOffset(layer: NativeLyricHeaderLayer): Pair<Float, Float> =
+    when (layer) {
+        NativeLyricHeaderLayer.Artwork -> artworkOffsetX to artworkOffsetY
+        NativeLyricHeaderLayer.Metadata -> metadataOffsetX to metadataOffsetY
+        NativeLyricHeaderLayer.Lyrics -> lyricsOffsetX to lyricsOffsetY
+        NativeLyricHeaderLayer.Transport -> transportOffsetX to transportOffsetY
+    }
+
+internal fun NativeLyricPreset.moveHeaderLayer(layer: NativeLyricHeaderLayer, x: Float, y: Float): NativeLyricPreset =
+    if (headerLocked(layer)) this else when (layer) {
+        NativeLyricHeaderLayer.Artwork -> copy(artworkOffsetX = nativeSnapLayerOffset(x),
+            artworkOffsetY = nativeSnapLayerOffset(y))
+        NativeLyricHeaderLayer.Metadata -> copy(metadataOffsetX = nativeSnapLayerOffset(x),
+            metadataOffsetY = nativeSnapLayerOffset(y))
+        NativeLyricHeaderLayer.Lyrics -> copy(lyricsOffsetX = nativeSnapLayerOffset(x),
+            lyricsOffsetY = nativeSnapLayerOffset(y))
+        NativeLyricHeaderLayer.Transport -> copy(transportOffsetX = nativeSnapLayerOffset(x),
+            transportOffsetY = nativeSnapLayerOffset(y))
+    }
 
 internal fun NativeLyricPreset.visibleHeaderLayers(): List<NativeLyricHeaderLayer> =
     (if (metadataFirst) listOf(NativeLyricHeaderLayer.Metadata, NativeLyricHeaderLayer.Artwork)
@@ -45,6 +140,7 @@ internal fun NativeLyricPreset.visibleHeaderLayers(): List<NativeLyricHeaderLaye
         .filter { when (it) {
             NativeLyricHeaderLayer.Artwork -> showArtwork
             NativeLyricHeaderLayer.Metadata -> showMetadata
+            NativeLyricHeaderLayer.Lyrics, NativeLyricHeaderLayer.Transport -> false
         } }
 
 internal val nativeBuiltinLyricPresets = listOf(
@@ -122,7 +218,7 @@ internal data class NativeLyricPresetPreferences(
         state.overrides.forEach { (id, value) -> overridden.put(id, value.json()) }
         val customArray = JSONArray()
         state.custom.forEach { customArray.put(it.json()) }
-        return JSONObject().put("schemaVersion", 2).put("selectedId", state.selectedId)
+        return JSONObject().put("schemaVersion", 4).put("selectedId", state.selectedId)
             .put("overrides", overridden).put("custom", customArray).toString()
     }
 

@@ -269,14 +269,24 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     if (track == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(stringResource(R.string.native_select_song)) }; return }
     val progressLabel = stringResource(R.string.native_progress)
     val controls: @Composable () -> Unit = {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val controlsWidth = (maxWidth - 32.dp).coerceAtLeast(0.dp)
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val paneWidth = maxWidth
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
             preset.visibleHeaderLayers().forEach { layer ->
                 when (layer) {
                     NativeLyricHeaderLayer.Artwork -> Artwork(track.artwork,
-                        Modifier.testTag("player-artwork")
+                        Modifier.nativeHeaderOffset(preset, layer, paneWidth).zIndex(preset.headerZ(layer)).testTag("player-artwork")
                             .size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                             .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
-                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.testTag("player-metadata"),
+                    NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, paneWidth)
+                            .widthIn(max = paneWidth * (1f - 2f * kotlin.math.abs(preset.metadataOffsetX)) / maxOf(1f, preset.metadataScale))
+                            .graphicsLayer { scaleX = preset.metadataScale; scaleY = preset.metadataScale }
+                            .zIndex(preset.headerZ(layer))
+                            .testTag("player-metadata"),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) },
@@ -288,15 +298,24 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                             EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
                         else Text(stringResource(R.string.native_unsupported_provider))
                     }
+                    NativeLyricHeaderLayer.Lyrics, NativeLyricHeaderLayer.Transport -> Unit
                 }
             }
+                    Spacer(Modifier.height((160f * maxOf(0f,
+                        if (preset.showArtwork) preset.artworkOffsetY else 0f,
+                        if (preset.showMetadata) preset.metadataOffsetY else 0f)).dp))
+                }
+            }
+            Column(Modifier.nativeTransportTransform(preset, controlsWidth)
+                .zIndex(1f).testTag("player-transport"), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
             var seeking by remember(player.currentEntry?.id, track.key) { mutableStateOf<Float?>(null) }
             Slider(value = seeking ?: player.position.coerceIn(0, player.duration).toFloat(), onValueChange = { seeking = it }, enabled = player.duration > 0,
                 valueRange = 0f..player.duration.coerceAtLeast(1).toFloat(), onValueChangeFinished = {
                     seeking?.let { model.command("player_seek", JSONObject().put("positionMs", it.toLong())) }; seeking = null
                 }, modifier = Modifier.semantics { contentDescription = progressLabel })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatTime(seeking?.toLong() ?: player.position)); Text(formatTime(player.duration)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
                 Transport("|<", stringResource(R.string.native_previous)) { model.command("player_previous") }
                 FilledTonalButton(onClick = { model.command("player_toggle") }) { Text(stringResource(if (player.playing) R.string.native_pause else R.string.native_play)) }
                 Transport(">|", stringResource(R.string.native_next)) { model.command("player_next") }
@@ -320,6 +339,9 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
             if (player.quality.isNotBlank()) Text(stringResource(R.string.native_current_quality, stringResource(NativePlayback.qualityLabel(player.quality))), style = MaterialTheme.typography.bodySmall)
             PlaybackStatus(player)
             if (player.phase.endsWith("error") && player.retryable) TextButton(onClick = { model.command("player_play") }) { Text(stringResource(R.string.native_retry)) }
+            }
+            if (preset.transportOffsetY > 0f) Spacer(Modifier.height((160f * preset.transportOffsetY).dp))
+        }
         }
     }
     val lyricSeek: (Long) -> Unit = { model.command("player_seek", JSONObject().put("positionMs", it)) }

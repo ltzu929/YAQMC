@@ -39,6 +39,28 @@ class NativePlaybackTest {
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()
     @After fun clear() { compose.runOnIdle { if (::model.isInitialized) model.viewModelScope.cancel() } }
 
+    @Test fun movedAndScaledTransportKeepsAllControlsInsideTheViewport() {
+        install("player")
+        for (offset in listOf(-0.2f, 0.2f)) {
+            compose.runOnIdle {
+                val preset = nativeBuiltinLyricPresets.first().copy(
+                    transportOffsetX = offset, transportOffsetY = 0.2f, transportScale = 1.35f)
+                model.setLyricPresets(NativeLyricPresetPreferences().save(preset))
+            }
+            val viewport = compose.onNodeWithTag("player-controls").getUnclippedBoundsInRoot()
+            for (label in listOf("Previous track", "Next track", "Play queue")) {
+                val control = compose.onNodeWithContentDescription(label)
+                control.performScrollTo().assertIsDisplayed()
+                val bounds = control.getUnclippedBoundsInRoot()
+                assertTrue("$label left edge at offset $offset", bounds.left >= viewport.left)
+                assertTrue("$label right edge at offset $offset", bounds.right <= viewport.right)
+            }
+            capture("pr8-transport-$offset")
+        }
+        compose.onNodeWithContentDescription("Play queue").performClick()
+        compose.runOnIdle { assertEquals(NativeRoute("queue"), model.route.value) }
+    }
+
     @Test fun openingPresetSettingsDoesNotLoadAProviderPage() {
         install("lyric-settings")
         compose.onNodeWithTag("open-lyric-presets").performClick()

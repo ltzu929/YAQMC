@@ -1,5 +1,6 @@
 package org.yaqmc.android.nativeui
 
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -18,6 +19,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.transformations
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,9 +62,20 @@ internal fun NativeBackdrop(settings: NativeAppearancePreferences, artwork: Stri
     val assets = remember(context.filesDir) { NativeBackgroundAssets(File(context.filesDir, "native-backgrounds")) }
     val image = when (settings.background) { "image" -> assets.resolve(settings.image); "artwork" -> artwork; else -> null }
     val base = if (settings.background in setOf("color", "image")) nativeColor(settings.backgroundColor) else MaterialTheme.colorScheme.background
+    val blurArtwork = settings.background == "artwork"
+    // Pre-31 Modifier.blur silently renders sharp pixels. Coil caches one small blurred
+    // bitmap per artwork instead of redoing CPU work during lyric-frame recompositions.
+    val imageModel = remember(context, image, blurArtwork) {
+        if (image != null && blurArtwork && Build.VERSION.SDK_INT < 31) {
+            ImageRequest.Builder(context).data(image)
+                .transformations(NativeLegacyBackdropBlur()).build()
+        } else image
+    }
     Box(modifier.background(base)) {
-        if (image != null) AsyncImage(image, null, Modifier.fillMaxSize().blur(if (settings.background == "artwork") 30.dp else 0.dp),
-            alpha = settings.influence / 100f, contentScale = if (settings.fit == "contain" && settings.background == "image") ContentScale.Fit else ContentScale.Crop)
+        if (image != null) AsyncImage(imageModel, null,
+            Modifier.fillMaxSize().then(if (blurArtwork && Build.VERSION.SDK_INT >= 31) Modifier.blur(30.dp) else Modifier),
+            alpha = settings.influence / 100f,
+            contentScale = if (settings.fit == "contain" && settings.background == "image") ContentScale.Fit else ContentScale.Crop)
         if (image != null) Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.74f)))
     }
 }

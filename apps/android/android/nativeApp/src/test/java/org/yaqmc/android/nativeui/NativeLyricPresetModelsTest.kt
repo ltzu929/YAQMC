@@ -164,4 +164,97 @@ class NativeLyricPresetModelsTest {
         assertEquals(0.75f, nativeSnapLyricsFraction(9f))
         assertEquals(0.55f, nativeSnapLyricsFraction(Float.NaN))
     }
+    @Test fun independentHeaderOffsetsSupportPersistenceClampingAndLegacyDefaults() {
+        val original = NativeLyricPresetPreferences()
+        val first = original.current().moveHeaderLayer(NativeLyricHeaderLayer.Artwork, 0.18f, -0.1f)
+        val edited = first.moveHeaderLayer(NativeLyricHeaderLayer.Metadata, -0.13f, 0.15f)
+        assertEquals(0.18f to -0.1f, edited.headerOffset(NativeLyricHeaderLayer.Artwork))
+        assertEquals(-0.13f to 0.15f, edited.headerOffset(NativeLyricHeaderLayer.Metadata))
+        val history = NativeLyricPresetEditHistory(original.current()).edit(first).edit(edited)
+        assertEquals(first, history.undo().current)
+        assertEquals(edited, history.undo().redo().current)
+        assertEquals(original.current(), NativeLyricPresetPreferences().current())
+
+        val saved = original.save(edited)
+        assertEquals(saved, NativeLyricPresetPreferences.decode(saved.json()))
+        assertEquals(edited.copy(id = "custom.moved", name = "Moved"), saved.duplicate("custom.moved", "Moved").current())
+        assertEquals(original.current(), saved.reset().current())
+
+        val invalid = edited.copy(artworkOffsetX = Float.NaN, artworkOffsetY = 99f,
+            metadataOffsetX = -99f, metadataOffsetY = Float.POSITIVE_INFINITY).normalized()
+        assertEquals(0f, invalid.artworkOffsetX)
+        assertEquals(0.20f, invalid.artworkOffsetY)
+        assertEquals(-0.20f, invalid.metadataOffsetX)
+        assertEquals(0f, invalid.metadataOffsetY)
+        assertEquals(0f, nativeSnapLayerOffset(0.01f))
+        assertEquals(-0.20f, nativeSnapLayerOffset(-100f))
+
+        val legacy = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","metadataFirst":true}}}""")
+        assertEquals(0f to 0f, legacy.current().headerOffset(NativeLyricHeaderLayer.Artwork))
+        assertEquals(0f to 0f, legacy.current().headerOffset(NativeLyricHeaderLayer.Metadata))
+        assertTrue(legacy.current().metadataFirst)
+    }
+
+
+    @Test fun layerSizeLockStackingAndLegacyDefaultsRoundTrip() {
+        val start = NativeLyricPresetPreferences()
+        val edited = start.current().copy(metadataScale = 1.2f,
+            artworkLocked = true, metadataLocked = true, artworkOnTop = true)
+        assertEquals(edited, edited.moveHeaderLayer(NativeLyricHeaderLayer.Artwork, 0.2f, 0.2f))
+        assertEquals(edited, edited.moveHeaderLayer(NativeLyricHeaderLayer.Metadata, -0.2f, 0f))
+        assertEquals(1f, edited.headerZ(NativeLyricHeaderLayer.Artwork))
+        assertEquals(0f, edited.headerZ(NativeLyricHeaderLayer.Metadata))
+        val saved = start.save(edited)
+        assertEquals(edited, NativeLyricPresetPreferences.decode(saved.json()).current())
+        assertEquals(edited.copy(id = "custom.locked", name = "Locked"), saved.duplicate("custom.locked", "Locked").current())
+        assertEquals(start.current(), saved.reset().current())
+
+        val invalid = edited.copy(metadataScale = Float.NaN).normalized()
+        assertEquals(1f, invalid.metadataScale)
+        assertEquals(1.35f, edited.copy(metadataScale = 40f).normalized().metadataScale)
+        val old = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","metadataFirst":true}}}""")
+        assertEquals(1f, old.current().metadataScale)
+        assertFalse(old.current().artworkLocked)
+        assertFalse(old.current().metadataLocked)
+        assertFalse(old.current().artworkOnTop)
+    }
+
+    @Test fun lyricAndTransportLayersRemainIndependentUndoableAndCompatibleWithOldPresets() {
+        val defaults = NativeLyricPresetPreferences()
+        val start = defaults.current()
+        assertEquals(1f, start.lyricsScale)
+        assertEquals(1f, start.transportScale)
+        val lyrics = start.moveHeaderLayer(NativeLyricHeaderLayer.Lyrics, 0.14f, -0.13f)
+            .copy(lyricsScale = 1.22f)
+        val transport = lyrics.moveHeaderLayer(NativeLyricHeaderLayer.Transport, -0.17f, 0.20f)
+            .copy(transportScale = 0.78f, lyricsLocked = true, transportLocked = true)
+        assertEquals(0.14f to -0.13f, transport.headerOffset(NativeLyricHeaderLayer.Lyrics))
+        assertEquals(-0.17f to 0.20f, transport.headerOffset(NativeLyricHeaderLayer.Transport))
+        assertEquals(transport, transport.moveHeaderLayer(NativeLyricHeaderLayer.Lyrics, 0f, 0f))
+        assertEquals(transport, transport.moveHeaderLayer(NativeLyricHeaderLayer.Transport, 0f, 0f))
+        val changes = NativeLyricPresetEditHistory(start).edit(lyrics).edit(transport)
+        assertEquals(lyrics, changes.undo().current)
+        assertEquals(transport, changes.undo().redo().current)
+        assertEquals(start, defaults.current())
+
+        val saved = defaults.save(transport)
+        assertEquals(transport, NativeLyricPresetPreferences.decode(saved.json()).current())
+        val copied = saved.duplicate("custom.four-layers", "Four")
+        assertEquals(transport.copy(id = "custom.four-layers", name = "Four"), copied.current())
+        assertEquals(start, saved.reset().current())
+        assertEquals(1f, transport.copy(lyricsScale = Float.NaN).normalized().lyricsScale)
+        assertEquals(0.7f, transport.copy(transportScale = -8f).normalized().transportScale)
+        assertEquals(0.2f, transport.copy(lyricsOffsetX = 10f).normalized().lyricsOffsetX)
+
+        val old = NativeLyricPresetPreferences.decode(
+            """{"schemaVersion":2,"selectedId":"builtin.classic","overrides":{"builtin.classic":{"id":"builtin.classic","metadataFirst":true}}}""")
+        assertEquals(0f to 0f, old.current().headerOffset(NativeLyricHeaderLayer.Lyrics))
+        assertEquals(0f to 0f, old.current().headerOffset(NativeLyricHeaderLayer.Transport))
+        assertFalse(old.current().lyricsLocked)
+        assertFalse(old.current().transportLocked)
+        assertEquals(1f, old.current().lyricsScale)
+        assertEquals(1f, old.current().transportScale)
+    }
 }

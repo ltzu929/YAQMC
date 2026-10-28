@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -31,6 +33,48 @@ internal fun nativePresetName(preset: NativeLyricPreset): String = when (preset.
     else -> preset.name.ifBlank { stringResource(R.string.native_preset_custom) }
 }
 
+/** An isolated gesture target, separate from the artwork resize and the scroll container. */
+@Composable
+private fun PresetLayerMoveHandle(
+    layer: NativeLyricHeaderLayer,
+    initial: Pair<Float, Float>,
+    widthPixels: Float,
+    onPreview: (Pair<Float, Float>?) -> Unit,
+    onCommit: (Float, Float) -> Unit,
+) {
+    val label = stringResource(R.string.native_preset_move_handle)
+    val heightPixels = with(LocalDensity.current) { 160.dp.toPx() }.coerceAtLeast(1f)
+    val current by rememberUpdatedState(initial)
+    val preview by rememberUpdatedState(onPreview)
+    val commit by rememberUpdatedState(onCommit)
+    Box(Modifier.size(26.dp)
+        .testTag(when (layer) {
+            NativeLyricHeaderLayer.Artwork -> "preset-artwork-move"
+            NativeLyricHeaderLayer.Metadata -> "preset-metadata-move"
+            NativeLyricHeaderLayer.Lyrics -> "preset-lyrics-move"
+            NativeLyricHeaderLayer.Transport -> "preset-transport-move"
+        })
+        .clip(RoundedCornerShape(8.dp))
+        .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.92f))
+        .semantics { contentDescription = label }
+        .pointerInput(layer, widthPixels, heightPixels) {
+            var x = 0f
+            var y = 0f
+            detectDragGestures(
+                onDragStart = { x = current.first; y = current.second; preview(x to y) },
+                onDragEnd = { preview(null); commit(x, y) },
+                onDragCancel = { preview(null) },
+            ) { pointer, delta ->
+                pointer.consume()
+                x = nativeBoundLayerOffset(x + delta.x / widthPixels.coerceAtLeast(1f))
+                y = nativeBoundLayerOffset(y + delta.y / heightPixels)
+                preview(x to y)
+            }
+        }, contentAlignment = Alignment.Center) {
+        Text("✥", color = MaterialTheme.colorScheme.onSecondary)
+    }
+}
+
 /**
  * Offline fixture using the same layout partitions as the real player.
  * Dragging edits only a local preview; the parent records one undo step on release.
@@ -39,17 +83,31 @@ internal fun nativePresetName(preset: NativeLyricPreset): String = when (preset.
 internal fun NativeLyricPresetPreview(
     preset: NativeLyricPreset, wide: Boolean,
     onFractionChange: (Float) -> Unit, onArtworkScaleChange: (Float) -> Unit,
+    onLayerMove: (NativeLyricHeaderLayer, Float, Float) -> Unit = { _, _, _ -> },
 ) {
     var dragging by remember(preset.id, wide, preset.layout) { mutableStateOf<Float?>(null) }
     var resizing by remember(preset.id, wide, preset.layout) { mutableStateOf<Float?>(null) }
+    var movingArtwork by remember(preset.id, wide, preset.layout) { mutableStateOf<Pair<Float, Float>?>(null) }
+    var movingMetadata by remember(preset.id, wide, preset.layout) { mutableStateOf<Pair<Float, Float>?>(null) }
+    var movingLyrics by remember(preset.id, wide, preset.layout) { mutableStateOf<Pair<Float, Float>?>(null) }
+    var movingTransport by remember(preset.id, wide, preset.layout) { mutableStateOf<Pair<Float, Float>?>(null) }
     val displayedFraction = dragging ?: preset.lyricsFraction
-    val displayed = preset.copy(lyricsFraction = displayedFraction, artworkScale = resizing ?: preset.artworkScale)
+    val displayed = preset.copy(lyricsFraction = displayedFraction, artworkScale = resizing ?: preset.artworkScale,
+        artworkOffsetX = movingArtwork?.first ?: preset.artworkOffsetX,
+        artworkOffsetY = movingArtwork?.second ?: preset.artworkOffsetY,
+        metadataOffsetX = movingMetadata?.first ?: preset.metadataOffsetX,
+        metadataOffsetY = movingMetadata?.second ?: preset.metadataOffsetY,
+        lyricsOffsetX = movingLyrics?.first ?: preset.lyricsOffsetX,
+        lyricsOffsetY = movingLyrics?.second ?: preset.lyricsOffsetY,
+        transportOffsetX = movingTransport?.first ?: preset.transportOffsetX,
+        transportOffsetY = movingTransport?.second ?: preset.transportOffsetY)
     val horizontal = wide && preset.layout != "immersive"
     val canDrag = horizontal || preset.layout == "immersive"
     val currentFraction by rememberUpdatedState(preset.lyricsFraction)
     val finishDrag by rememberUpdatedState(onFractionChange)
     val currentArtworkScale by rememberUpdatedState(preset.artworkScale)
     val finishResize by rememberUpdatedState(onArtworkScaleChange)
+    val finishMove by rememberUpdatedState(onLayerMove)
     val density = LocalDensity.current
     val artworkAxisPixels = with(density) { 66.dp.toPx() }.coerceAtLeast(1f)
     val dragHint = stringResource(R.string.native_preset_drag_hint)
@@ -58,28 +116,49 @@ internal fun NativeLyricPresetPreview(
     BoxWithConstraints(Modifier.fillMaxWidth()
         .then(if (wide) Modifier.aspectRatio(16f / 9f) else Modifier.height(280.dp))) {
         val axisPixels = with(density) { (if (horizontal) maxWidth else maxHeight).toPx() }.coerceAtLeast(1f)
+        val layerWidthPixels = with(density) {
+            ((if (horizontal) maxWidth * (1f - displayedFraction) else maxWidth) - 20.dp).toPx()
+        }.coerceAtLeast(1f)
+        val lyricsWidthPixels = with(density) {
+            (if (horizontal) maxWidth * displayedFraction else maxWidth).toPx()
+        }.coerceAtLeast(1f)
         Surface(Modifier.fillMaxSize().testTag("lyric-preset-preview"),
             shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
             val title = stringResource(R.string.native_preset_sample_title)
             val artist = stringResource(R.string.native_preset_sample_artist)
             val sample = stringResource(R.string.native_preset_sample_lyric)
             val lyrics: @Composable (Modifier) -> Unit = { modifier ->
-                Column(modifier.fillMaxSize().testTag("lyrics-viewport").padding(10.dp),
-                    verticalArrangement = Arrangement.Center) {
-                    Text(sample, style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary)
-                    Text(stringResource(R.string.native_preset_sample_second),
-                        style = MaterialTheme.typography.bodySmall)
+                Box(modifier.fillMaxSize().testTag("lyrics-viewport")) {
+                    Column(Modifier.fillMaxSize().padding(10.dp),
+                        verticalArrangement = Arrangement.Center) {
+                        Text(sample, style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.native_preset_sample_second),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!displayed.lyricsLocked) {
+                        Box(Modifier.align(Alignment.TopEnd)) {
+                            PresetLayerMoveHandle(NativeLyricHeaderLayer.Lyrics,
+                                preset.headerOffset(NativeLyricHeaderLayer.Lyrics), lyricsWidthPixels,
+                                onPreview = { movingLyrics = it },
+                                onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Lyrics, x, y) })
+                        }
+                    }
                 }
             }
-            val cover: @Composable () -> Unit = {
-                Box(Modifier.testTag("preset-artwork-preview")) {
+            val cover: @Composable (Modifier) -> Unit = { modifier ->
+                Box(modifier.zIndex(displayed.headerZ(NativeLyricHeaderLayer.Artwork))
+                    .testTag("preset-artwork-preview")) {
                     Box(Modifier.size((66f * displayed.artworkScale).dp)
                         .clip(if (displayed.layout == "vinyl") CircleShape else RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center) {
                         Text("♫", color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
+                    if (!displayed.artworkLocked) PresetLayerMoveHandle(NativeLyricHeaderLayer.Artwork,
+                        preset.headerOffset(NativeLyricHeaderLayer.Artwork), layerWidthPixels,
+                        onPreview = { movingArtwork = it },
+                        onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Artwork, x, y) })
                     // 预览手柄复用实际播放器的 artworkScale，不引入第二套布局状态。
                     Box(Modifier.align(Alignment.BottomEnd).offset(x = 8.dp, y = 8.dp).size(28.dp)
                         .testTag("preset-artwork-resize")
@@ -106,20 +185,46 @@ internal fun NativeLyricPresetPreview(
                 }
             }
             NativeLyricLayout(displayed, wide, controls = {
-                Column(Modifier.fillMaxWidth().padding(10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    displayed.visibleHeaderLayers().forEach { layer ->
-                        when (layer) {
-                            NativeLyricHeaderLayer.Artwork -> cover()
-                            NativeLyricHeaderLayer.Metadata -> Column(Modifier.testTag("preset-metadata-preview"),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodySmall)
-                                Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(10.dp)) {
+                    val paneWidth = maxWidth
+                    Column(Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        displayed.visibleHeaderLayers().forEach { layer ->
+                            when (layer) {
+                                NativeLyricHeaderLayer.Artwork ->
+                                    cover(Modifier.nativeHeaderOffset(displayed, layer, paneWidth))
+                                NativeLyricHeaderLayer.Metadata ->
+                                    Column(Modifier.nativeHeaderOffset(displayed, layer, paneWidth)
+                                        .widthIn(max = paneWidth * (1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)) / maxOf(1f, displayed.metadataScale))
+                                        .graphicsLayer { scaleX = displayed.metadataScale; scaleY = displayed.metadataScale }
+                                        .zIndex(displayed.headerZ(layer))
+                                        .testTag("preset-metadata-preview"),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                            style = MaterialTheme.typography.bodySmall)
+                                        Text(artist, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                                        if (!displayed.metadataLocked) PresetLayerMoveHandle(NativeLyricHeaderLayer.Metadata,
+                                            preset.headerOffset(NativeLyricHeaderLayer.Metadata), layerWidthPixels,
+                                            onPreview = { movingMetadata = it },
+                                            onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Metadata, x, y) })
+                                    }
+                                NativeLyricHeaderLayer.Lyrics, NativeLyricHeaderLayer.Transport -> Unit
                             }
                         }
+                        Spacer(Modifier.height((160f * maxOf(0f,
+                            if (displayed.showArtwork) displayed.artworkOffsetY else 0f,
+                            if (displayed.showMetadata) displayed.metadataOffsetY else 0f)).dp))
+                        Box(Modifier.nativeTransportTransform(displayed, paneWidth)
+                            .testTag("preset-transport-preview")) {
+                            Text("◀  ▶  ▶▶  ━━━━━", style = MaterialTheme.typography.bodySmall)
+                            if (!displayed.transportLocked) PresetLayerMoveHandle(NativeLyricHeaderLayer.Transport,
+                                preset.headerOffset(NativeLyricHeaderLayer.Transport), layerWidthPixels,
+                                onPreview = { movingTransport = it },
+                                onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Transport, x, y) })
+                        }
+                        if (displayed.transportOffsetY > 0f) Spacer(Modifier.height((160f * displayed.transportOffsetY).dp))
                     }
                 }
             }, lyrics = lyrics)
@@ -200,7 +305,8 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
         item {
             NativeLyricPresetPreview(draft, previewWide,
                 onFractionChange = { edit(draft.copy(lyricsFraction = it)) },
-                onArtworkScaleChange = { edit(draft.copy(artworkScale = it)) })
+                onArtworkScaleChange = { edit(draft.copy(artworkScale = it)) },
+                onLayerMove = { layer, x, y -> edit(draft.moveHeaderLayer(layer, x, y)) })
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -215,6 +321,7 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
             }
             Text(stringResource(R.string.native_preset_drag_hint), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.native_preset_resize_hint), style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.native_preset_move_hint), style = MaterialTheme.typography.bodySmall)
         }
         item {
             if (!builtin) OutlinedTextField(draft.name,
@@ -236,6 +343,28 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                 modifier = Modifier.testTag("preset-metadata-visible")) { edit(draft.copy(showMetadata = it)) }
             PreferenceSwitch(stringResource(R.string.native_preset_metadata_first), draft.metadataFirst,
                 modifier = Modifier.testTag("preset-metadata-first")) { edit(draft.copy(metadataFirst = it)) }
+            PreferenceSlider(stringResource(R.string.native_preset_metadata_size), draft.metadataScale,
+                0.7f..1.35f, "${(draft.metadataScale * 100).toInt()}%") {
+                edit(draft.copy(metadataScale = it))
+            }
+            PreferenceSwitch(stringResource(R.string.native_preset_lock_artwork), draft.artworkLocked,
+                modifier = Modifier.testTag("preset-artwork-locked")) { edit(draft.copy(artworkLocked = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_lock_metadata), draft.metadataLocked,
+                modifier = Modifier.testTag("preset-metadata-locked")) { edit(draft.copy(metadataLocked = it)) }
+            PreferenceSwitch(stringResource(R.string.native_preset_artwork_on_top), draft.artworkOnTop,
+                modifier = Modifier.testTag("preset-artwork-on-top")) { edit(draft.copy(artworkOnTop = it)) }
+            PreferenceSlider(stringResource(R.string.native_preset_lyrics_size), draft.lyricsScale,
+                0.7f..1.35f, "${(draft.lyricsScale * 100).toInt()}%") {
+                edit(draft.copy(lyricsScale = it))
+            }
+            PreferenceSwitch(stringResource(R.string.native_preset_lock_lyrics), draft.lyricsLocked,
+                modifier = Modifier.testTag("preset-lyrics-locked")) { edit(draft.copy(lyricsLocked = it)) }
+            PreferenceSlider(stringResource(R.string.native_preset_transport_size), draft.transportScale,
+                0.7f..1.35f, "${(draft.transportScale * 100).toInt()}%") {
+                edit(draft.copy(transportScale = it))
+            }
+            PreferenceSwitch(stringResource(R.string.native_preset_lock_transport), draft.transportLocked,
+                modifier = Modifier.testTag("preset-transport-locked")) { edit(draft.copy(transportLocked = it)) }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
