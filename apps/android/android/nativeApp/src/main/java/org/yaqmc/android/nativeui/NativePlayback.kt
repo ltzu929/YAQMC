@@ -276,11 +276,13 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
             preset.visibleHeaderLayers().forEach { layer ->
                 when (layer) {
                     NativeLyricHeaderLayer.Artwork -> Artwork(track.artwork,
-                        Modifier.nativeHeaderOffset(preset, layer, maxWidth).testTag("player-artwork")
+                        Modifier.nativeHeaderOffset(preset, layer, maxWidth).zIndex(preset.headerZ(layer)).testTag("player-artwork")
                             .size(((if (wide) 128f else 150f) * preset.artworkScale).dp)
                             .then(if (preset.layout == "vinyl") Modifier.clip(CircleShape) else Modifier))
                     NativeLyricHeaderLayer.Metadata -> Column(Modifier.nativeHeaderOffset(preset, layer, maxWidth)
                             .widthIn(max = maxWidth * (1f - 2f * kotlin.math.abs(preset.metadataOffsetX)))
+                            .graphicsLayer { scaleX = preset.metadataScale; scaleY = preset.metadataScale }
+                            .zIndex(preset.headerZ(layer))
                             .testTag("player-metadata"),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
