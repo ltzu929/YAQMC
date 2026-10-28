@@ -50,6 +50,9 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     private val _queueBusy = MutableStateFlow(false)
     val queueBusy = _queueBusy.asStateFlow()
     private var continuationNotificationRevision = 0L
+    private val _statistics = MutableStateFlow(NativeStatisticsState())
+    val statistics = _statistics.asStateFlow()
+    private var statisticsJob: Job? = null
     private val _cache = MutableStateFlow<Long?>(null)
     val cache = _cache.asStateFlow()
     private val preferenceStore = NativePreferenceStore(application.getSharedPreferences("native-ui", 0))
@@ -212,7 +215,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue")) return
+        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)
@@ -583,6 +586,41 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun signOut() = accountAction {
         core.invoke("provider_sign_out", provider()); refreshAccount(); pageCache.clear(); load(refresh = true)
+    }
+
+    fun loadStatistics(range: String = _statistics.value.range) {
+        if (range !in setOf("7-days", "30-days", "365-days", "all-time") || _statistics.value.clearing) return
+        statisticsJob?.cancel()
+        // Different ranges must not display stale numbers under the newly selected label.
+        val previous = _statistics.value
+        _statistics.value = NativeStatisticsState(range, if (range == previous.range) previous.snapshot else null, loading = true)
+        statisticsJob = viewModelScope.launch {
+            try {
+                val result = core.objectResult("statistics_snapshot", JSONObject().put("range", range))
+                _statistics.value = NativeStatisticsState(range, NativeStatisticsSnapshot.parse(result))
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+                _statistics.value = _statistics.value.copy(loading = false, error = true)
+            }
+        }
+    }
+
+    fun clearStatistics() {
+        if (_statistics.value.clearing) return
+        statisticsJob?.cancel()
+        _statistics.value = _statistics.value.copy(clearing = true, loading = false)
+        viewModelScope.launch {
+            try {
+                core.invoke("statistics_clear")
+                _statistics.value = _statistics.value.copy(clearing = false, snapshot = null)
+                _message.value = NativeText(R.string.native_stats_cleared)
+                loadStatistics()
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _statistics.value = _statistics.value.copy(clearing = false, error = true)
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+        }
     }
 
     fun cacheStats(clear: Boolean = false) = action {
