@@ -394,4 +394,9 @@
     <string name="native_issue_preview">预览报告</string>
     <string name="native_issue_open">打开 GitHub 问题表单</string>
     <string name="native_issue_too_long">报告超出浏览器链接长度，请缩短说明。</string>
+    <string name="native_stats_duration_hours">%1$d 小时 %2$d 分钟</string>
+    <string name="native_stats_duration_minutes">%1$d 分 %2$d 秒</string>
+    <string name="native_about_audio_engine">音频：Rust Core 引擎 · Android Media3 系统媒体控制</string>
+    <string name="native_stats_cleared_count">已清除 %1$d 条听歌记录</string>
+    <string name="native_diag_logs_cleared_count">已清理 %1$d 条旧日志</string>
 </resources>
