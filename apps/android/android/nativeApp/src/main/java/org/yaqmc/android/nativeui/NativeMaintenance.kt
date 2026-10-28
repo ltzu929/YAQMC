@@ -94,6 +94,7 @@ internal fun NativeAbout(model: NativeViewModel) {
         item { Text(stringResource(R.string.native_about_build, BuildConfig.YAQMC_BUILD_COMMIT)) }
         item { Text(stringResource(R.string.native_about_platform, Build.VERSION.RELEASE,
             Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.firstOrNull() ?: "-")) }
+        item { Text(stringResource(R.string.native_about_audio_engine)) }
         if (update.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (update.checked) item {
             val result = when {
