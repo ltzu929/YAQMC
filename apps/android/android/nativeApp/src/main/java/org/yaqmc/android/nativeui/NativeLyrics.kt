@@ -3,6 +3,7 @@ package org.yaqmc.android.nativeui
 import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import android.os.Build
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -32,6 +33,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.Shadow
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.ResolvedTextDirection
@@ -103,22 +106,34 @@ internal fun LyricList(
                 val focus by animateFloatAsState(if (selected) 1f else 0f,
                     animationSpec = if (settings.spring) spring(stiffness = 220f, dampingRatio = 0.8f) else tween(180), label = "lyric-focus")
                 val blur = if (settings.blur && active >= 0 && !selected && following) (abs(index - active).coerceAtMost(3) * 0.7f).dp else 0.dp
+                // Pre-Android 12 Compose blur is a no-op. Blur the text ink with an
+                // unshifted text shadow while keeping the original text semantics and wrapping.
+                val legacyBlur = if (Build.VERSION.SDK_INT < 31) with(LocalDensity.current) {
+                    blur.toPx()
+                } else 0f
+                val legacySoft = legacyBlur > 0f
+                val shadow = if (legacySoft) Shadow(
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.60f),
+                    offset = Offset.Zero, blurRadius = legacyBlur.coerceAtLeast(1f),
+                ) else null
                 // Keep list indices stable when hiding sung lines; manual browsing reveals them.
                 val hidden = settings.hidePassed && passed
                 Column(Modifier.fillMaxWidth().testTag("lyric-line-$index")
                     .graphicsLayer { alpha = if (hidden) 0f else 1f; scaleX = if (settings.scale) 0.94f + focus * 0.06f else 1f; scaleY = scaleX }
-                    .blur(blur)
+                    .then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(blur) else Modifier)
                     .clickable(enabled = !hidden && lyrics.seekPosition(index, settings.timingOffsetMs) != null) {
                         lyrics.seekPosition(index, settings.timingOffsetMs)?.let(seek); following = true
                     }.then(if (hidden) Modifier.clearAndSetSemantics {} else Modifier.semantics { this.selected = selected })
                     .padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TimedLyricText(line, selected, lyrics, clock, settings, size)
+                    TimedLyricText(line, selected, lyrics, clock, settings, size, shadow)
                     if (showLyricSecondary(settings.translation, line.translation, line.text, false))
                         Text(line.translation, fontSize = (size * 0.55f).sp, lineHeight = (size * 0.55f * settings.lineHeight).sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f))
+                            color = if (legacySoft) Color.Transparent else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
+                            style = TextStyle(shadow = shadow))
                     if (showLyricSecondary(settings.romanization, line.romanization, line.text, true))
                         Text(line.romanization, fontSize = (size * 0.5f).sp, lineHeight = (size * 0.5f * settings.lineHeight).sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f))
+                            color = if (legacySoft) Color.Transparent else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
+                            style = TextStyle(shadow = shadow))
                 }
             }
         }
@@ -133,7 +148,8 @@ private data class WordRun(val span: LyricWordSpan, val rects: List<Rect>, val w
 
 /** Text stays a single layout: wrapping, spaces, CJK and accessibility match the unpainted text. */
 @Composable
-private fun TimedLyricText(line: LyricLine, selected: Boolean, lyrics: Lyrics, clock: State<Long>, settings: NativeLyricPreferences, size: Float) {
+private fun TimedLyricText(line: LyricLine, selected: Boolean, lyrics: Lyrics, clock: State<Long>,
+    settings: NativeLyricPreferences, size: Float, legacyShadow: Shadow? = null) {
     var layout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
     val spans = remember(line, lyrics.wordSynchronized) { if (lyrics.wordSynchronized) line.wordSpans() else emptyList() }
     val runs = remember(layout, spans) { layout?.let { measured -> spans.map { span ->
@@ -149,7 +165,8 @@ private fun TimedLyricText(line: LyricLine, selected: Boolean, lyrics: Lyrics, c
     val jumpHeight = with(LocalDensity.current) { 4.dp.toPx() }
     Box {
         Text(line.text, Modifier.fillMaxWidth(), fontSize = size.sp, lineHeight = (size * settings.lineHeight).sp,
-            fontWeight = FontWeight(settings.fontWeight), color = if (selected && runs.isNotEmpty()) Color.Transparent else if (selected) foreground else base,
+            fontWeight = FontWeight(settings.fontWeight), color = if (legacyShadow != null) Color.Transparent else if (selected && runs.isNotEmpty()) Color.Transparent else if (selected) foreground else base,
+            style = TextStyle(shadow = legacyShadow),
             onTextLayout = { layout = it })
         if (selected && runs.isNotEmpty()) Canvas(Modifier.matchParentSize()) {
             val measured = layout ?: return@Canvas
