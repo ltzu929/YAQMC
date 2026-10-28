@@ -295,6 +295,9 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                     }
                 }
             }
+                    Spacer(Modifier.height((160f * maxOf(0f,
+                        if (preset.showArtwork) preset.artworkOffsetY else 0f,
+                        if (preset.showMetadata) preset.metadataOffsetY else 0f)).dp))
                 }
             }
             var seeking by remember(player.currentEntry?.id, track.key) { mutableStateOf<Float?>(null) }
