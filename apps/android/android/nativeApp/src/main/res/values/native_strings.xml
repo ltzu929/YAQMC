@@ -394,4 +394,9 @@
     <string name="native_issue_preview">Preview report</string>
     <string name="native_issue_open">Open GitHub issue form</string>
     <string name="native_issue_too_long">The report is too long for a browser link. Shorten the details.</string>
+    <string name="native_stats_duration_hours">%1$d h %2$d min</string>
+    <string name="native_stats_duration_minutes">%1$d min %2$d sec</string>
+    <string name="native_about_audio_engine">Audio: Rust Core engine · Android Media3 system controls</string>
+    <string name="native_stats_cleared_count">Cleared %1$d listening records</string>
+    <string name="native_diag_logs_cleared_count">Cleared %1$d old logs</string>
 </resources>
