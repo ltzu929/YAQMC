@@ -319,6 +319,10 @@
     <string name="native_preset_show_metadata">Show song information</string>
     <string name="native_preset_metadata_first">Song information above artwork</string>
     <string name="native_preset_metadata_size">Song information size</string>
+    <string name="native_preset_lyrics_size">Lyrics size</string>
+    <string name="native_preset_lock_lyrics">Lock lyrics position</string>
+    <string name="native_preset_transport_size">Playback controls size</string>
+    <string name="native_preset_lock_transport">Lock playback controls</string>
     <string name="native_preset_lock_artwork">Lock artwork position</string>
     <string name="native_preset_lock_metadata">Lock song information position</string>
     <string name="native_preset_artwork_on_top">Place artwork above song information when overlapping</string>
