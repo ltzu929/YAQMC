@@ -172,7 +172,7 @@ internal fun NativeLyricPresetPreview(
                                     cover(Modifier.nativeHeaderOffset(displayed, layer, paneWidth))
                                 NativeLyricHeaderLayer.Metadata ->
                                     Column(Modifier.nativeHeaderOffset(displayed, layer, paneWidth)
-                                        .widthIn(max = paneWidth * ((1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)) / maxOf(1f, preset.metadataScale))
+                                        .widthIn(max = paneWidth * (1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)) / maxOf(1f, displayed.metadataScale))
                                         .graphicsLayer { scaleX = displayed.metadataScale; scaleY = displayed.metadataScale }
                                         .zIndex(displayed.headerZ(layer))
                                         .testTag("preset-metadata-preview"),
