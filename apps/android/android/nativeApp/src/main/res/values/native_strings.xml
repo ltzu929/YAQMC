@@ -381,4 +381,17 @@
     <string name="native_update_latest">You're using the latest available release.</string>
     <string name="native_update_check">Check for updates</string>
     <string name="native_update_open_release">View release on GitHub</string>
+    <string name="native_issue_bug">Bug</string>
+    <string name="native_issue_playback">Playback</string>
+    <string name="native_issue_provider">Account</string>
+    <string name="native_issue_lyrics">Lyrics</string>
+    <string name="native_issue_ui">Interface</string>
+    <string name="native_issue_other">Other</string>
+    <string name="native_issue_intro">Describe what happened, preview the report and open the prefilled GitHub issue form. Nothing is submitted automatically.</string>
+    <string name="native_issue_summary">Short summary</string>
+    <string name="native_issue_description">Details and reproduction steps</string>
+    <string name="native_issue_failed">Could not prepare or open the report. Please retry.</string>
+    <string name="native_issue_preview">Preview report</string>
+    <string name="native_issue_open">Open GitHub issue form</string>
+    <string name="native_issue_too_long">The report is too long for a browser link. Shorten the details.</string>
 </resources>
