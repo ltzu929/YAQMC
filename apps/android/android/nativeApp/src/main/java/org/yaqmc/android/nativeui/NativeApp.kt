@@ -137,6 +137,7 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                         "settings" -> Settings(model, login)
                         "statistics" -> NativeStatistics(model)
                         "diagnostics" -> NativeDiagnostics(model)
+                        "issue-report" -> NativeIssueReport(model)
                         "about" -> NativeAbout(model)
                         "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics) { model.navigate(NativeRoute("lyric-presets")) }
                         "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
