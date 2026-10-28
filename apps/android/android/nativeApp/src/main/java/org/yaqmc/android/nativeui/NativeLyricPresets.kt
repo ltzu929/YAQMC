@@ -168,6 +168,7 @@ internal fun NativeLyricPresetPreview(
                                     cover(Modifier.nativeHeaderOffset(displayed, layer, maxWidth))
                                 NativeLyricHeaderLayer.Metadata ->
                                     Column(Modifier.nativeHeaderOffset(displayed, layer, maxWidth)
+                                        .widthIn(max = maxWidth * (1f - 2f * kotlin.math.abs(displayed.metadataOffsetX)))
                                         .testTag("preset-metadata-preview"),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
