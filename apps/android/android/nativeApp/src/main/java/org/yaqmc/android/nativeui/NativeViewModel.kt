@@ -53,8 +53,10 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     private val _statistics = MutableStateFlow(NativeStatisticsState())
     val statistics = _statistics.asStateFlow()
     private var statisticsJob: Job? = null
-    private val _cache = MutableStateFlow<Long?>(null)
+    private val _cache = MutableStateFlow<NativeCacheStats?>(null)
     val cache = _cache.asStateFlow()
+    private val _cacheBusy = MutableStateFlow(false)
+    val cacheBusy = _cacheBusy.asStateFlow()
     private val preferenceStore = NativePreferenceStore(application.getSharedPreferences("native-ui", 0))
     val preferences = preferenceStore.state
     private val backStack = mutableListOf<NativeRoute>()
@@ -623,11 +625,18 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         }
     }
 
-    fun cacheStats(clear: Boolean = false) = action {
-        if (clear) core.invoke("provider_clear_cache", provider())
-        val stats = core.objectResult("provider_cache_stats", provider())
-        _cache.value = stats.optLong("totalBytes") / 1024 / 1024
-        if (clear) _message.value = NativeText(R.string.native_cache_cleared)
+    fun cacheStats(clear: Boolean = false) {
+        if (_cacheBusy.value) return
+        _cacheBusy.value = true
+        viewModelScope.launch {
+            try {
+                if (clear) core.invoke("provider_clear_cache", provider())
+                _cache.value = NativeCacheStats.parse(core.objectResult("provider_cache_stats", provider()))
+                if (clear) _message.value = NativeText(R.string.native_cache_cleared)
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) { _message.value = errorText(error, R.string.native_action_failed) }
+            finally { _cacheBusy.value = false }
+        }
     }
 
     fun refreshAccountSession() = accountAction {
