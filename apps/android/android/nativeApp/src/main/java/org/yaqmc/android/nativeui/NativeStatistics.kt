@@ -15,6 +15,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 import org.json.JSONObject
+import androidx.media3.common.util.UnstableApi
 import org.yaqmc.android.R
 
 internal data class StatisticsEntity(val id: String, val providerId: String, val title: String, val subtitle: String, val listenedMs: Long)
@@ -56,6 +57,7 @@ internal data class NativeStatisticsState(
     val loading: Boolean = false, val clearing: Boolean = false, val error: Boolean = false,
 )
 
+@UnstableApi
 @Composable
 internal fun NativeStatistics(model: NativeViewModel) {
     val state by model.statistics.collectAsStateWithLifecycle()
@@ -129,6 +131,7 @@ private fun StatisticMetric(label: Int, value: String) {
         Text(stringResource(label)); Text(value, fontWeight = FontWeight.SemiBold)
     }
 }
+@UnstableApi
 @Composable
 private fun StatisticEntry(item: StatisticsEntity, kind: String, model: NativeViewModel) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
