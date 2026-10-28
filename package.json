@@ -12,6 +12,7 @@
     "node": "26.7.0"
   },
   "scripts": {
+    "android:studio": "node scripts/open-android-studio.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/ci/verify-release-bundle.mjs --renderer dist",
     "preview": "vite preview",
