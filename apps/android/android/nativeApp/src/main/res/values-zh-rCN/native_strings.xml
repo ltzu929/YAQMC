@@ -351,4 +351,11 @@
     <string name="native_stats_clear">清除听歌记录</string>
     <string name="native_stats_confirm_clear">确定清除全部听歌记录？此操作不可撤销。</string>
     <string name="native_stats_cleared">听歌记录已清除</string>
+    <string name="native_cache_breakdown">缓存使用情况</string>
+    <string name="native_cache_total">总占用：%1$s</string>
+    <string name="native_cache_media">音频：%1$d 项 · %2$s</string>
+    <string name="native_cache_artwork">封面：%1$d 项 · %2$s</string>
+    <string name="native_cache_metadata">元数据：%1$d 项</string>
+    <string name="native_cache_lyrics">歌词：%1$d 项</string>
+    <string name="native_cache_limits">缓存上限：音频 %1$s · 封面 %2$s</string>
 </resources>
