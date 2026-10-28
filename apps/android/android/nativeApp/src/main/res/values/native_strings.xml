@@ -351,4 +351,11 @@
     <string name="native_stats_clear">Clear listening history</string>
     <string name="native_stats_confirm_clear">Clear all listening history? This cannot be undone.</string>
     <string name="native_stats_cleared">Listening history cleared</string>
+    <string name="native_cache_breakdown">Storage cache</string>
+    <string name="native_cache_total">Total: %1$s</string>
+    <string name="native_cache_media">Audio: %1$d files · %2$s</string>
+    <string name="native_cache_artwork">Artwork: %1$d files · %2$s</string>
+    <string name="native_cache_metadata">Metadata: %1$d entries</string>
+    <string name="native_cache_lyrics">Lyrics: %1$d entries</string>
+    <string name="native_cache_limits">Limits: audio %1$s · artwork %2$s</string>
 </resources>
