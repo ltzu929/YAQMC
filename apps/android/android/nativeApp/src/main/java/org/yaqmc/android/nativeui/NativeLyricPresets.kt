@@ -182,6 +182,9 @@ internal fun NativeLyricPresetPreview(
                                     }
                             }
                         }
+                        Spacer(Modifier.height((160f * maxOf(0f,
+                            if (displayed.showArtwork) displayed.artworkOffsetY else 0f,
+                            if (displayed.showMetadata) displayed.metadataOffsetY else 0f)).dp))
                     }
                 }
             }, lyrics = lyrics)
