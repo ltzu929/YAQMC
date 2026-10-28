@@ -332,5 +332,5 @@
     <string name="native_preset_copy_suffix">copy</string>
     <string name="native_preset_reset">Restore built-in layout</string>
     <string name="native_preset_delete">Delete my layout</string>
-    <string name="native_preset_scope">Position adjustments apply only to artwork and song information; lyrics and playback controls stay accessible in their original areas.</string>
+    <string name="native_preset_scope">Move and resize artwork, song information, lyrics and playback controls within their layout areas. Lock a position to hide its move handle.</string>
 </resources>

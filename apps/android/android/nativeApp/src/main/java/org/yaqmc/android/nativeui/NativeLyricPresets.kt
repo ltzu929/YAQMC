@@ -117,7 +117,7 @@ internal fun NativeLyricPresetPreview(
         .then(if (wide) Modifier.aspectRatio(16f / 9f) else Modifier.height(280.dp))) {
         val axisPixels = with(density) { (if (horizontal) maxWidth else maxHeight).toPx() }.coerceAtLeast(1f)
         val layerWidthPixels = with(density) {
-            (if (horizontal) maxWidth * (1f - displayedFraction) else maxWidth).toPx()
+            ((if (horizontal) maxWidth * (1f - displayedFraction) else maxWidth) - 20.dp).toPx()
         }.coerceAtLeast(1f)
         val lyricsWidthPixels = with(density) {
             (if (horizontal) maxWidth * displayedFraction else maxWidth).toPx()
@@ -185,9 +185,9 @@ internal fun NativeLyricPresetPreview(
                 }
             }
             NativeLyricLayout(displayed, wide, controls = {
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(10.dp)) {
                     val paneWidth = maxWidth
-                    Column(Modifier.fillMaxWidth().padding(10.dp),
+                    Column(Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         displayed.visibleHeaderLayers().forEach { layer ->
@@ -216,8 +216,7 @@ internal fun NativeLyricPresetPreview(
                         Spacer(Modifier.height((160f * maxOf(0f,
                             if (displayed.showArtwork) displayed.artworkOffsetY else 0f,
                             if (displayed.showMetadata) displayed.metadataOffsetY else 0f)).dp))
-                        Box(Modifier.nativeHeaderOffset(displayed, NativeLyricHeaderLayer.Transport, paneWidth)
-                            .graphicsLayer { scaleX = displayed.transportScale; scaleY = displayed.transportScale }
+                        Box(Modifier.nativeTransportTransform(displayed, paneWidth)
                             .testTag("preset-transport-preview")) {
                             Text("◀  ▶  ▶▶  ━━━━━", style = MaterialTheme.typography.bodySmall)
                             if (!displayed.transportLocked) PresetLayerMoveHandle(NativeLyricHeaderLayer.Transport,
@@ -225,6 +224,7 @@ internal fun NativeLyricPresetPreview(
                                 onPreview = { movingTransport = it },
                                 onCommit = { x, y -> finishMove(NativeLyricHeaderLayer.Transport, x, y) })
                         }
+                        if (displayed.transportOffsetY > 0f) Spacer(Modifier.height((160f * displayed.transportOffsetY).dp))
                     }
                 }
             }, lyrics = lyrics)

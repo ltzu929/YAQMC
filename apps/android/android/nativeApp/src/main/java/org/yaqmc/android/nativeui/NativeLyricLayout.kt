@@ -6,12 +6,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 
 /** Relative x displacement tracks the control-pane width, while y uses a stable 160dp axis.
- * A shared transform guarantees preview/live agreement without moving transport controls.
+ * Preview and player use the same displacement relative to each layer's content pane.
  */
 internal fun Modifier.nativeHeaderOffset(
     preset: NativeLyricPreset, layer: NativeLyricHeaderLayer, paneWidth: Dp,
@@ -19,6 +23,24 @@ internal fun Modifier.nativeHeaderOffset(
     val (x, y) = preset.headerOffset(layer)
     return offset(x = paneWidth * x, y = 160.dp * y)
 }
+
+/** Reserve the scaled size in the scroll container so edge controls remain reachable. */
+internal fun Modifier.nativeTransportTransform(preset: NativeLyricPreset, paneWidth: Dp): Modifier =
+    nativeHeaderOffset(preset, NativeLyricHeaderLayer.Transport, paneWidth)
+        .widthIn(max = paneWidth * (1f - 2f * kotlin.math.abs(preset.transportOffsetX)))
+        .layout { measurable, constraints ->
+            val scale = preset.transportScale
+            fun unscale(value: Int) = if (value == Constraints.Infinity) value else (value / scale).roundToInt()
+            val child = measurable.measure(Constraints(
+                unscale(constraints.minWidth), unscale(constraints.maxWidth),
+                unscale(constraints.minHeight), unscale(constraints.maxHeight)))
+            layout((child.width * scale).roundToInt(), (child.height * scale).roundToInt()) {
+                child.placeWithLayer(0, 0) {
+                    scaleX = scale; scaleY = scale
+                    transformOrigin = TransformOrigin(0f, 0f)
+                }
+            }
+        }
 
 /** Shared partitions for the live player and its offline sample preview. */
 @Composable

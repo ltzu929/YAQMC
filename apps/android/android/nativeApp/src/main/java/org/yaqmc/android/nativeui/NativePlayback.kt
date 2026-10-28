@@ -270,7 +270,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val progressLabel = stringResource(R.string.native_progress)
     val controls: @Composable () -> Unit = {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val controlsWidth = maxWidth
+        val controlsWidth = (maxWidth - 32.dp).coerceAtLeast(0.dp)
         Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val paneWidth = maxWidth
@@ -306,8 +306,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                         if (preset.showMetadata) preset.metadataOffsetY else 0f)).dp))
                 }
             }
-            Column(Modifier.nativeHeaderOffset(preset, NativeLyricHeaderLayer.Transport, controlsWidth)
-                .graphicsLayer { scaleX = preset.transportScale; scaleY = preset.transportScale }
+            Column(Modifier.nativeTransportTransform(preset, controlsWidth)
                 .zIndex(1f).testTag("player-transport"), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
             var seeking by remember(player.currentEntry?.id, track.key) { mutableStateOf<Float?>(null) }
@@ -316,7 +315,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                     seeking?.let { model.command("player_seek", JSONObject().put("positionMs", it.toLong())) }; seeking = null
                 }, modifier = Modifier.semantics { contentDescription = progressLabel })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatTime(seeking?.toLong() ?: player.position)); Text(formatTime(player.duration)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
                 Transport("|<", stringResource(R.string.native_previous)) { model.command("player_previous") }
                 FilledTonalButton(onClick = { model.command("player_toggle") }) { Text(stringResource(if (player.playing) R.string.native_pause else R.string.native_play)) }
                 Transport(">|", stringResource(R.string.native_next)) { model.command("player_next") }
@@ -341,6 +340,7 @@ internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
             PlaybackStatus(player)
             if (player.phase.endsWith("error") && player.retryable) TextButton(onClick = { model.command("player_play") }) { Text(stringResource(R.string.native_retry)) }
             }
+            if (preset.transportOffsetY > 0f) Spacer(Modifier.height((160f * preset.transportOffsetY).dp))
         }
         }
     }

@@ -33,6 +33,32 @@ class NativePersonalizationUiTest {
     private val files = TemporaryFolder()
     @get:Rule val rules: RuleChain = RuleChain.outerRule(NativeDevicePreferences(ComponentActivity::class.java)).around(files).around(compose)
 
+    @Test fun legacyLyricBlurKeepsVisibleInkAndChangesTheRendering() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT < 31)
+        val blurred = mutableStateOf(false)
+        val clock = mutableLongStateOf(1500L)
+        val document = Lyrics("legacy-blur", lines = listOf(
+            LyricLine(0, 1000, "Previous lyric", "Translation", "Romanization"),
+            LyricLine(1000, 2000, "Current lyric")))
+        compose.setContent { MaterialTheme(colorScheme = lightColorScheme()) {
+            LyricList(document, clock, NativeLyricPreferences(blur = blurred.value, spring = false), {},
+                Modifier.fillMaxWidth().height(420.dp))
+        } }
+        val line = compose.onNodeWithTag("lyric-line-0")
+        val sharp = line.captureToImage().toPixelMap()
+        compose.runOnIdle { blurred.value = true }
+        val soft = line.captureToImage().toPixelMap()
+        var visible = 0
+        var changed = 0
+        for (y in 0 until soft.height) for (x in 0 until soft.width) {
+            if (soft[x, y].alpha > 0.05f) visible++
+            if (soft[x, y] != sharp[x, y]) changed++
+        }
+        assertTrue("Legacy blur must keep visible text ink", visible > 20)
+        assertTrue("Enabling blur must change text pixels", changed > 20)
+        compose.onNodeWithText("Previous lyric").assertExists()
+    }
+
     @Test fun openingLyricsMidTrackShowsCurrentLine() {
         val clock = mutableLongStateOf(50000L)
         val document = Lyrics("initial", lines = List(24) { index ->
@@ -386,8 +412,10 @@ class NativePersonalizationUiTest {
             }
         }
         compose.onNodeWithTag("lyric-presets").performScrollToNode(hasTestTag("preset-lyrics-move"))
+        // Clear touch slop and the center snap threshold at every emulator density.
+        val dragDistance = with(compose.density) { 32.dp.toPx() }
         compose.onNodeWithTag("preset-lyrics-move").performTouchInput {
-            swipe(start = center, end = center.copy(x = center.x + 40f, y = center.y - 12f),
+            swipe(start = center, end = center.copy(x = center.x + dragDistance, y = center.y - dragDistance),
                 durationMillis = 300)
         }
         compose.runOnIdle { assertEquals(0f, store.state.value.lyricPresets.current().lyricsOffsetX) }
