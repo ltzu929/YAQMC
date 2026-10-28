@@ -673,8 +673,10 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         _diagnostics.value = _diagnostics.value.copy(busy = true)
         action {
             try {
-                core.invoke("diagnostics_clear_logs")
-                _message.value = NativeText(R.string.native_diag_logs_cleared)
+                val result = core.invoke("diagnostics_clear_logs")
+                val deleted = (result as? Number)?.toLong()
+                _message.value = if (deleted == null) NativeText(R.string.native_diag_logs_cleared)
+                    else NativeText(R.string.native_diag_logs_cleared_count, deleted)
                 _diagnostics.value = _diagnostics.value.copy(busy = false)
                 loadDiagnostics()
             } catch (error: CancellationException) { throw error }
@@ -752,9 +754,9 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         _statistics.value = _statistics.value.copy(clearing = true, loading = false)
         viewModelScope.launch {
             try {
-                core.invoke("statistics_clear")
+                val result = core.objectResult("statistics_clear")
                 _statistics.value = _statistics.value.copy(clearing = false, snapshot = null)
-                _message.value = NativeText(R.string.native_stats_cleared)
+                _message.value = NativeText(R.string.native_stats_cleared_count, result.optLong("deletedSessions"))
                 loadStatistics()
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
