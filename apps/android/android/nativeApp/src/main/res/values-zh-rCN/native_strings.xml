@@ -358,4 +358,27 @@
     <string name="native_cache_metadata">元数据：%1$d 项</string>
     <string name="native_cache_lyrics">歌词：%1$d 项</string>
     <string name="native_cache_limits">缓存上限：音频 %1$s · 封面 %2$s</string>
+    <string name="native_diag_title">诊断与反馈</string>
+    <string name="native_diag_log_level">日志详细程度</string>
+    <string name="native_diag_info">普通</string>
+    <string name="native_diag_debug">详细</string>
+    <string name="native_diag_trace">完整追踪</string>
+    <string name="native_diag_export">分享诊断包</string>
+    <string name="native_diag_export_failed">无法生成安全诊断包，请重试。</string>
+    <string name="native_diag_privacy">诊断包会经过敏感信息检查。发送前请自行确认内容。</string>
+    <string name="native_diag_clear_logs">清理旧日志</string>
+    <string name="native_diag_logs_cleared">旧日志已清理</string>
+    <string name="native_diag_confirm_clear_logs">确定清理旧诊断日志？</string>
+    <string name="native_diag_recent_errors">近期错误</string>
+    <string name="native_diag_no_errors">暂无近期错误</string>
+    <string name="native_diag_report_issue">前往 GitHub 反馈问题</string>
+    <string name="native_about_title">关于 YAQMC</string>
+    <string name="native_about_build">源码提交：%1$s</string>
+    <string name="native_about_platform">Android %1$s（API %2$d）· %3$s</string>
+    <string name="native_about_repository">项目仓库</string>
+    <string name="native_update_failed">无法检查更新，请重试。</string>
+    <string name="native_update_available">发现新版本：%1$s</string>
+    <string name="native_update_latest">当前没有可用的新版本。</string>
+    <string name="native_update_check">检查更新</string>
+    <string name="native_update_open_release">前往 GitHub 查看版本</string>
 </resources>
