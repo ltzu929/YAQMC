@@ -16,6 +16,7 @@ const files = [
   'AndroidManifest.xml',
   'lib/arm64-v8a/libyaqmc_core.so',
   'lib/arm64-v8a/libc++_shared.so',
+  '',
 ].join('\n');
 const certificate = 'ab'.repeat(32);
 const signature = 'Verifies\nSigner #1 certificate SHA-256 digest: ' + certificate + '\n';
