@@ -12,12 +12,17 @@ const version = { versionName: '0.1.1', versionCode: 1_019_000 };
 const packageLine =
   "package: name='org.yaqmc.android.nativeui' versionCode='1019000' versionName='0.1.1-native-benchmark'";
 const badging = packageLine + "\nsdkVersion:'26'\nnative-code: 'arm64-v8a'\n";
-const files = 'AndroidManifest.xml\nlib/arm64-v8a/libyaqmc_core.so\nlib/arm64-v8a/libc++_shared.so\n';
+const files = [
+  'AndroidManifest.xml',
+  'lib/arm64-v8a/libyaqmc_core.so',
+  'lib/arm64-v8a/libc++_shared.so',
+].join('\n');
 const certificate = 'ab'.repeat(32);
 const signature = 'Verifies\nSigner #1 certificate SHA-256 digest: ' + certificate + '\n';
 
 test('accepts only a correctly identified native APK with the packaged ARM64 Core', () => {
-  assert.deepEqual(assertNativeApkContents({ badging, files, variant: 'benchmark', version }), {
+  const identity = assertNativeApkContents({ badging, files, variant: 'benchmark', version });
+  assert.deepEqual(identity, {
     packageName: 'org.yaqmc.android.nativeui',
     versionCode: 1_019_000,
     versionName: '0.1.1-native-benchmark',
