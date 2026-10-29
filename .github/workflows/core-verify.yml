@@ -22,7 +22,13 @@ jobs:
           toolchain: '1.88.0'
           components: rustfmt, clippy
       - name: Install host test dependencies
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config pulseaudio
+      - name: Start a realtime virtual audio output
+        run: |
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=yaqmc_ci rate=48000 channels=2
+          pactl set-default-sink yaqmc_ci
+          pactl info | grep -F 'Default Sink: yaqmc_ci'
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run docs:check
