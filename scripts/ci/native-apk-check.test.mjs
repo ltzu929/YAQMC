@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import { assertNativeApkContents, parseNativeApkSigner, verifyNativeApk } from './native-apk-check.mjs';
+import {
+  assertNativeApkContents,
+  parseNativeApkSigner,
+  verifyNativeApk,
+} from './native-apk-check.mjs';
 
 const version = { versionName: '0.1.1', versionCode: 1_019_000 };
 const packageLine =
