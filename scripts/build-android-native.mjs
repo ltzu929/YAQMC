@@ -9,6 +9,7 @@ import {
   resolveRustlsVerifierMaven,
 } from './build-android.mjs';
 import { rootVersion } from './ci/android-version.mjs';
+import { verifyNativeApk } from './ci/native-apk-check.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const android = path.join(root, 'apps/android/android');
@@ -66,8 +67,16 @@ run(
 const output = path.join(root, 'release-android');
 mkdirSync(output, { recursive: true });
 const destination = path.join(output, `YAQMC-${version.versionName}-android-native-${variant}.apk`);
-copyFileSync(
-  path.join(android, `nativeApp/build/outputs/apk/${variant}/nativeApp-${variant}.apk`),
-  destination,
+const builtApk = path.join(android, `nativeApp/build/outputs/apk/${variant}/nativeApp-${variant}.apk`);
+const identity = verifyNativeApk({
+  apkPath: builtApk,
+  sdk: toolchain.sdk,
+  java: resolveAndroidJava(environment),
+  version,
+  variant,
+});
+copyFileSync(builtApk, destination);
+process.stdout.write(
+  `Native Android APK verified: ${identity.packageName} ${identity.versionName} (${identity.versionCode}), signer SHA-256 ${identity.certificateSha256}\n`,
 );
 process.stdout.write(`Native Android APK: ${destination}\n`);
