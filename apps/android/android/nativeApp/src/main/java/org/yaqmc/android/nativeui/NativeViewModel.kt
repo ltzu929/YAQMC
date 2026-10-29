@@ -136,6 +136,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (observing) return
         observing = true
         CoreManager.addCallback(this)
+        // Events can be missed or their pending refresh cancelled while stopped.
+        if (route.value.kind == "statistics") loadStatistics(quiet = true)
         action {
             snapshots.trySend(core.objectResult("player_snapshot").toString())
             refreshAccount()

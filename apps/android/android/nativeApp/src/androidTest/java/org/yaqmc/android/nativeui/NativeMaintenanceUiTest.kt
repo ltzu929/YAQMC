@@ -117,6 +117,41 @@ class NativeMaintenanceUiTest {
         compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 3L }
     }
 
+    @Test fun statisticsRefreshRecoversAfterStopAndResume() {
+        val snapshots = java.util.concurrent.atomic.AtomicInteger(0)
+        respond = { method, _ ->
+            if (method == "statistics_snapshot")
+                JSONObject().put("recordCount", 1).put("qualifiedPlayCount", snapshots.incrementAndGet())
+            else JSONObject()
+        }
+        install("statistics")
+        compose.waitUntil(5000) { snapshots.get() == 1 }
+        try {
+            compose.runOnIdle { model.observe() }
+            compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 2L }
+            compose.runOnIdle {
+                model.onCoreEvent(1, "api://event", JSONObject().put("type", "statistics.changed")
+                    .put("data", JSONObject().put("revision", 1)).toString())
+                model.stopObserving()
+            }
+            Thread.sleep(400)
+            compose.runOnIdle { assertEquals(2, snapshots.get()); model.observe() }
+            compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 3L }
+            // A second resume must also recover events missed entirely in the background.
+            compose.runOnIdle { model.stopObserving(); model.observe() }
+            compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 4L }
+            compose.runOnIdle {
+                model.stopObserving()
+                model.navigate(NativeRoute("settings"), root = true)
+                model.observe()
+            }
+            Thread.sleep(400)
+            compose.runOnIdle { assertEquals(4, snapshots.get()) }
+        } finally {
+            compose.runOnIdle { model.stopObserving() }
+        }
+    }
+
     @Test fun diagnosticsSerializesLoadingAndMutationsAndRecoversFromFailure() {
         val pending = CompletableDeferred<JSONObject>()
         var level = "info"
