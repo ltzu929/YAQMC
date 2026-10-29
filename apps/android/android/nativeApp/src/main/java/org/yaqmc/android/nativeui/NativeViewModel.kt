@@ -1,6 +1,13 @@
 package org.yaqmc.android.nativeui
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import org.yaqmc.android.BuildConfig
+import org.yaqmc.android.update.AndroidUpdateChecker
+import org.yaqmc.android.update.AndroidUpdateResult
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
@@ -29,7 +36,11 @@ internal data class NativeRoute(val kind: String = "home", val id: String = "", 
 internal data class PageState(val page: CatalogPage = CatalogPage(titleFor("home")), val loading: Boolean = false, val error: NativeText? = null, val loadingMore: Boolean = false, val moreError: NativeText? = null, val loaded: Boolean = false)
 
 @UnstableApi
-internal class NativeViewModel(application: Application, val core: NativeCoreApi) : AndroidViewModel(application), CoreManager.Callback {
+internal class NativeViewModel(application: Application, val core: NativeCoreApi,
+    private val checkUpdate: () -> AndroidUpdateResult = {
+        AndroidUpdateChecker(BuildConfig.VERSION_NAME.substringBefore("-native-")).check()
+    },
+) : AndroidViewModel(application), CoreManager.Callback {
     constructor(application: Application) : this(application, NativeCore(application))
     private val _route = MutableStateFlow(NativeRoute())
     val route = _route.asStateFlow()
@@ -50,8 +61,21 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     private val _queueBusy = MutableStateFlow(false)
     val queueBusy = _queueBusy.asStateFlow()
     private var continuationNotificationRevision = 0L
-    private val _cache = MutableStateFlow<Long?>(null)
+    private val _statistics = MutableStateFlow(NativeStatisticsState())
+    val statistics = _statistics.asStateFlow()
+    private val _diagnostics = MutableStateFlow(NativeDiagnosticsState())
+    val diagnostics = _diagnostics.asStateFlow()
+    private val _updateState = MutableStateFlow(NativeUpdateState())
+    val updateState = _updateState.asStateFlow()
+    private val _issueState = MutableStateFlow(NativeIssueState())
+    val issueState = _issueState.asStateFlow()
+    private var statisticsJob: Job? = null
+    private val _cache = MutableStateFlow<NativeCacheStats?>(null)
     val cache = _cache.asStateFlow()
+    private val _cacheBusy = MutableStateFlow(false)
+    val cacheBusy = _cacheBusy.asStateFlow()
+    private val _cacheError = MutableStateFlow(false)
+    val cacheError = _cacheError.asStateFlow()
     private val preferenceStore = NativePreferenceStore(application.getSharedPreferences("native-ui", 0))
     val preferences = preferenceStore.state
     private val backStack = mutableListOf<NativeRoute>()
@@ -212,7 +236,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue")) return
+        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics", "diagnostics", "about", "issue-report")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)
@@ -585,11 +609,189 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         core.invoke("provider_sign_out", provider()); refreshAccount(); pageCache.clear(); load(refresh = true)
     }
 
-    fun cacheStats(clear: Boolean = false) = action {
-        if (clear) core.invoke("provider_clear_cache", provider())
-        val stats = core.objectResult("provider_cache_stats", provider())
-        _cache.value = stats.optLong("totalBytes") / 1024 / 1024
-        if (clear) _message.value = NativeText(R.string.native_cache_cleared)
+    fun previewIssue(category: String, summary: String, description: String) {
+        if (category !in setOf("bug", "playback", "provider", "lyrics", "ui", "other") ||
+            summary.isBlank() || _issueState.value.busy) return
+        val draftKey = listOf(category, summary, description).joinToString("\u0000")
+        _issueState.value = NativeIssueState(draftKey = draftKey, busy = true)
+        action {
+            try {
+                val result = core.objectResult("issue_reporter_preview", JSONObject()
+                    .put("draft", JSONObject().put("category", category)
+                        .put("summary", summary).put("description", description))
+                    .put("request", JSONObject()))
+                _issueState.value = NativeIssueState(draftKey = draftKey, preview = NativeIssuePreview(
+                    result.text("title"), result.text("body"), result.text("url"), result.optBoolean("tooLongForBrowser")))
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { _issueState.value = NativeIssueState(draftKey = draftKey, error = true) }
+        }
+    }
+
+    fun openIssuePreview(context: Context) {
+        val preview = _issueState.value.preview ?: return
+        if (preview.tooLong || _issueState.value.busy) return
+        _issueState.value = _issueState.value.copy(busy = true)
+        action {
+            try {
+                core.invoke("issue_reporter_validate_url", JSONObject().put("url", preview.url))
+                openProjectUrl(context, preview.url)
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) { _message.value = errorText(error, R.string.native_issue_failed) }
+            finally { _issueState.value = _issueState.value.copy(busy = false) }
+        }
+    }
+
+    fun loadDiagnostics() {
+        if (_diagnostics.value.busy || _diagnostics.value.loading) return
+        _diagnostics.value = _diagnostics.value.copy(loading = true, error = false)
+        action {
+            try {
+                val result = core.objectResult("diagnostics_snapshot", JSONObject().put("request", JSONObject()))
+                val errors = result.optJSONArray("recentErrors").objects().takeLast(20).map {
+                    listOf(it.text("domain"), it.text("code"), it.text("message")).filter(String::isNotBlank).joinToString(" · ")
+                }
+                _diagnostics.value = NativeDiagnosticsState(
+                    logLevel = result.text("logLevel", "info"), recentErrors = errors,
+                )
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { _diagnostics.value = _diagnostics.value.copy(loading = false, error = true) }
+        }
+    }
+
+    fun setDiagnosticsLevel(level: String) {
+        if (level !in setOf("info", "debug", "trace") || _diagnostics.value.busy || _diagnostics.value.loading) return
+        _diagnostics.value = _diagnostics.value.copy(busy = true)
+        action {
+            try {
+                core.invoke("diagnostics_set_log_level", JSONObject().put("level", level))
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                loadDiagnostics()
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+        }
+    }
+
+    fun clearDiagnosticLogs() {
+        if (_diagnostics.value.busy || _diagnostics.value.loading) return
+        _diagnostics.value = _diagnostics.value.copy(busy = true)
+        action {
+            try {
+                val result = core.invoke("diagnostics_clear_logs")
+                val deleted = (result as? Number)?.toLong()
+                _message.value = if (deleted == null) NativeText(R.string.native_diag_logs_cleared)
+                    else NativeText(R.string.native_diag_logs_cleared_count, deleted)
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                loadDiagnostics()
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _diagnostics.value = _diagnostics.value.copy(busy = false)
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+        }
+    }
+
+    fun shareDiagnosticBundle(context: Context) {
+        if (_diagnostics.value.busy || _diagnostics.value.loading) return
+        _diagnostics.value = _diagnostics.value.copy(busy = true)
+        action {
+            try {
+                val directory = File(getApplication<Application>().cacheDir, "diagnostics").apply { mkdirs() }
+                val file = File(directory, "YAQMC-diagnostics-" + System.currentTimeMillis() + ".zip")
+                val result = core.objectResult("diagnostics_export_bundle_to", JSONObject()
+                    .put("path", file.absolutePath)
+                    .put("request", JSONObject().put("includeLogs", true).put("overrideUnresolved", false)))
+                val target = File(result.text("path")).canonicalFile
+                if (target.parentFile != directory.canonicalFile || !target.isFile || target.length() == 0L) {
+                    throw CoreFailure("core.protocol", "")
+                }
+                val uri = FileProvider.getUriForFile(context, context.packageName + ".diagnostics", target)
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/zip"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(send, localizedString(R.string.native_diag_export))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) { _message.value = errorText(error, R.string.native_diag_export_failed) }
+            finally { _diagnostics.value = _diagnostics.value.copy(busy = false) }
+        }
+    }
+
+    fun checkForUpdates() {
+        if (_updateState.value.loading) return
+        _updateState.value = NativeUpdateState(loading = true)
+        action {
+            val result = withContext(Dispatchers.IO) { checkUpdate() }
+            _updateState.value = when (result) {
+                is AndroidUpdateResult.Available -> NativeUpdateState(
+                    checked = true, availableVersion = result.release.versionName,
+                    releaseUrl = result.release.releaseUrl, notes = result.release.notes)
+                AndroidUpdateResult.NotAvailable -> NativeUpdateState(checked = true)
+                is AndroidUpdateResult.Error -> NativeUpdateState(checked = true, error = true)
+            }
+        }
+    }
+
+    fun openProjectLink(context: Context, url: String) = action {
+        try { openProjectUrl(context, url) }
+        catch (_: Exception) { _message.value = NativeText(R.string.native_action_failed) }
+    }
+
+    fun loadStatistics(range: String = _statistics.value.range) {
+        if (range !in setOf("7-days", "30-days", "365-days", "all-time") || _statistics.value.clearing) return
+        statisticsJob?.cancel()
+        // Different ranges must not display stale numbers under the newly selected label.
+        val previous = _statistics.value
+        _statistics.value = NativeStatisticsState(range, if (range == previous.range) previous.snapshot else null, loading = true)
+        statisticsJob = viewModelScope.launch {
+            try {
+                val result = core.objectResult("statistics_snapshot", JSONObject().put("range", range))
+                _statistics.value = NativeStatisticsState(range, NativeStatisticsSnapshot.parse(result))
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+                _statistics.value = _statistics.value.copy(loading = false, error = true)
+            }
+        }
+    }
+
+    fun clearStatistics() {
+        if (_statistics.value.clearing) return
+        statisticsJob?.cancel()
+        _statistics.value = _statistics.value.copy(clearing = true, loading = false)
+        viewModelScope.launch {
+            try {
+                val result = core.objectResult("statistics_clear")
+                _statistics.value = _statistics.value.copy(clearing = false, snapshot = null)
+                _message.value = NativeText(R.string.native_stats_cleared_count, result.optLong("deletedSessions"))
+                loadStatistics()
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _statistics.value = _statistics.value.copy(clearing = false, error = true)
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+        }
+    }
+
+    fun cacheStats(clear: Boolean = false) {
+        if (_cacheBusy.value) return
+        _cacheBusy.value = true
+        _cacheError.value = false
+        viewModelScope.launch {
+            try {
+                if (clear) core.invoke("provider_clear_cache", provider())
+                _cache.value = NativeCacheStats.parse(core.objectResult("provider_cache_stats", provider()))
+                if (clear) _message.value = NativeText(R.string.native_cache_cleared)
+            } catch (error: CancellationException) { throw error }
+            catch (error: Exception) {
+                _cacheError.value = true
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
+            finally { _cacheBusy.value = false }
+        }
     }
 
     fun refreshAccountSession() = accountAction {

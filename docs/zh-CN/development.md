@@ -115,14 +115,14 @@ adb shell am instrument -w -r -e notClass org.yaqmc.android.nativeui.NativeProvi
 上述默认运行器会启动真实应用。仅验证离线播放器 UI 与个性化时，先设置 `$env:YAQMC_ANDROID_OFFLINE_UI_TESTS = '1'` 构建并安装测试 APK，再使用专用 `NativeOfflineTestRunner`。该运行器使用普通 `Application` 和轻量 `ComponentActivity`，每项测试前后断言真实 Core 未初始化；恢复其他设备测试前需移除该变量并重新构建、安装测试 APK：
 
 ```powershell
-adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest org.yaqmc.android.nativeui.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner
+adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest org.yaqmc.android.nativeui.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner
 ```
 
 本地 x86_64 模拟器设置 `YAQMC_ANDROID_NATIVE_ABI=x86_64`。纯离线测试可将 `YAQMC_ANDROID_NATIVE_LIB_DIR` 指向事先创建的独立空目录，并使用上述离线运行器；这种 APK 不包含 Rust Core，不能用于真实播放。真实 Core 验证需提供匹配 ABI 的 JNI 库；恢复常规 ARM64 构建前移除模拟器及离线测试环境变量，并重新构建 APK。
 
 离线套件的执行范围与已有结果见[迁移对齐清单](native-parity.md)的验证摘要，不能扩展为真实播放、账号或真机验收。
 
-`.github/workflows/android-native-verify.yml` 对原生相关 PR 执行 JVM、Lint、APK 构建及 API 30 / 35 模拟器检查。CI 使用 `NativeOfflineTestRunner`，仅运行 `NativePlaybackTest` 与 `NativePersonalizationUiTest`，不初始化真实 Core。工作流上传的 `yaqmc-native-offline-test-apks-*` 仅供离线测试，不包含 Rust Core，常规启动和真实播放请使用本机构建入口生成的完整包。
+`.github/workflows/android-native-verify.yml` 对原生相关 PR 执行 JVM、Lint、APK 构建及 API 30 / 35 模拟器检查。CI 使用 `NativeOfflineTestRunner`，运行 `NativePlaybackTest`、`NativePersonalizationUiTest` 与 `NativeMaintenanceUiTest`，不初始化真实 Core。维护套件注入统计、缓存、诊断及更新结果，覆盖清除确认、失败保留、请求互斥、问题草稿恢复与 FileProvider 附件读取；不会清除真实听歌记录或提交 GitHub 问题。工作流上传的 `yaqmc-native-offline-test-apks-*` 仅供离线测试，不包含 Rust Core，常规启动和真实播放请使用本机构建入口生成的完整包。
 
 `NativeProviderSmokeTest` 访问真实服务，只做只读检查，执行时单独说明。模拟 Core、在线只读、真实账号写入和系统媒体验收分别记账。
 `NativePlaybackLiveTest` 会短暂播放并修改本地队列、播放设置和听歌记录；需显式添加 `-e livePlayback true` 并单独运行该类。

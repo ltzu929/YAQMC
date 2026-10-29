@@ -135,6 +135,10 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                     when (route.kind) {
                         "library" -> Library(model)
                         "settings" -> Settings(model, login)
+                        "statistics" -> NativeStatistics(model)
+                        "diagnostics" -> NativeDiagnostics(model)
+                        "issue-report" -> NativeIssueReport(model)
+                        "about" -> NativeAbout(model)
                         "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics) { model.navigate(NativeRoute("lyric-presets")) }
                         "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
                         "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
@@ -203,6 +207,8 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
     val busy by model.accountBusy.collectAsStateWithLifecycle()
     val quality by model.quality.collectAsStateWithLifecycle()
     val cache by model.cache.collectAsStateWithLifecycle()
+    val cacheBusy by model.cacheBusy.collectAsStateWithLifecycle()
+    val cacheError by model.cacheError.collectAsStateWithLifecycle()
     val qualityBusy by model.qualityBusy.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
@@ -245,8 +251,32 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
         item { Text(stringResource(R.string.native_default_quality), style = MaterialTheme.typography.titleLarge) }
         item { QualityPicker(quality, enabled = !qualityBusy) { model.changeQuality(it) } }
         item { OutlinedButton(onClick = { model.navigate(NativeRoute("lyric-settings")) }) { Text(stringResource(R.string.native_lyric_settings)) } }
-        item { Text(cache?.let { stringResource(R.string.native_cache_mb, it) } ?: stringResource(R.string.native_cache_loading)); OutlinedButton(onClick = { confirmClear = true }) { Text(stringResource(R.string.native_clear_cache)) } }
-        item { Text("YAQMC Native · ${org.yaqmc.android.BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall) }
+        item {
+            Text(stringResource(R.string.native_cache_breakdown), style = MaterialTheme.typography.titleLarge)
+            val details = cache
+            if (cacheError) Text(stringResource(R.string.native_load_failed), color = MaterialTheme.colorScheme.error)
+            if (details == null && !cacheError) Text(stringResource(R.string.native_cache_loading))
+            if (details != null) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.native_cache_total, readableBytes(details.totalBytes)))
+                Text(stringResource(R.string.native_cache_media, details.mediaEntries, readableBytes(details.mediaBytes)))
+                Text(stringResource(R.string.native_cache_artwork, details.artworkEntries, readableBytes(details.artworkBytes)))
+                Text(stringResource(R.string.native_cache_metadata, details.metadataEntries))
+                Text(stringResource(R.string.native_cache_lyrics, details.lyricEntries))
+                Text(stringResource(R.string.native_cache_limits, readableBytes(details.mediaLimitBytes), readableBytes(details.artworkLimitBytes)),
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            if (cacheBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { model.cacheStats() }, enabled = !cacheBusy) { Text(stringResource(R.string.native_refresh)) }
+                OutlinedButton(onClick = { confirmClear = true }, enabled = !cacheBusy) { Text(stringResource(R.string.native_clear_cache)) }
+            }
+        }
+        item { OutlinedButton(onClick = { model.navigate(NativeRoute("diagnostics")) }) {
+            Text(stringResource(R.string.native_diag_title))
+        } }
+        item { OutlinedButton(onClick = { model.navigate(NativeRoute("about")) }) {
+            Text(stringResource(R.string.native_about_title))
+        } }
     }
     if (confirmSignOut) Confirm(stringResource(R.string.native_confirm_sign_out), { confirmSignOut = false }) { model.signOut() }
     if (confirmClear) Confirm(stringResource(R.string.native_confirm_clear_cache), { confirmClear = false }) { model.cacheStats(clear = true) }

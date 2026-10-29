@@ -113,7 +113,7 @@ jobs:
           target: google_apis
           profile: pixel_6
           disable-animations: true
-          script: cd apps/android/android && bash gradlew --no-daemon :nativeApp:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest
+          script: cd apps/android/android && bash gradlew --no-daemon :nativeApp:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest
       - name: Upload UI instrumentation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
