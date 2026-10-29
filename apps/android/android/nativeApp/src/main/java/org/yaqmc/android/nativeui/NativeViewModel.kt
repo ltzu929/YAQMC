@@ -70,6 +70,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     private val _issueState = MutableStateFlow(NativeIssueState())
     val issueState = _issueState.asStateFlow()
     private var statisticsJob: Job? = null
+    private var statisticsRefreshJob: Job? = null
+    private var lastStatisticsRevision = 0L
     private val _cache = MutableStateFlow<NativeCacheStats?>(null)
     val cache = _cache.asStateFlow()
     private val _cacheBusy = MutableStateFlow(false)
@@ -148,6 +150,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         observing = false
         CoreManager.removeCallback(this)
         revalidationJob?.cancel()
+        statisticsRefreshJob?.cancel()
     }
 
     override fun onCleared() {
@@ -162,7 +165,10 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
             "player://snapshot" -> snapshots.trySend(json)
             "api://event" -> viewModelScope.launch {
                 runCatching { JSONObject(json) }.getOrNull()?.let { event ->
-                    if (event.text("type") == "continuation.changed") event.optJSONObject("data")?.let(::acceptContinuation)
+                    when (event.text("type")) {
+                        "continuation.changed" -> event.optJSONObject("data")?.let(::acceptContinuation)
+                        "statistics.changed" -> onStatisticsChanged(event.optJSONObject("data")?.optLong("revision") ?: 0L)
+                    }
                 }
             }
             "account://changed" -> viewModelScope.launch {
@@ -176,6 +182,18 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
                     }
                 }
             }
+        }
+    }
+
+    private fun onStatisticsChanged(revision: Long) {
+        if (revision <= lastStatisticsRevision) return
+        lastStatisticsRevision = revision
+        if (_route.value.kind != "statistics" || _statistics.value.clearing) return
+        statisticsRefreshJob?.cancel()
+        statisticsRefreshJob = viewModelScope.launch {
+            // Repeated playback checkpoints should not trigger a Core query per event.
+            delay(250)
+            if (_route.value.kind == "statistics" && !_statistics.value.clearing) loadStatistics(quiet = true)
         }
     }
 
@@ -203,6 +221,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (next == _route.value && !root) return
         if (root) backStack.clear() else backStack += _route.value
         _route.value = next
+        if (next.kind != "statistics") statisticsRefreshJob?.cancel()
         pageNumber = 1
         load()
     }
@@ -741,12 +760,13 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         catch (_: Exception) { _message.value = NativeText(R.string.native_action_failed) }
     }
 
-    fun loadStatistics(range: String = _statistics.value.range) {
+    fun loadStatistics(range: String = _statistics.value.range, quiet: Boolean = false) {
         if (range !in setOf("7-days", "30-days", "365-days", "all-time") || _statistics.value.clearing) return
         statisticsJob?.cancel()
         // Different ranges must not display stale numbers under the newly selected label.
         val previous = _statistics.value
-        _statistics.value = NativeStatisticsState(range, if (range == previous.range) previous.snapshot else null, loading = true)
+        val snapshot = previous.snapshot.takeIf { previous.range == range }
+        _statistics.value = NativeStatisticsState(range, snapshot, loading = !quiet || snapshot == null)
         statisticsJob = viewModelScope.launch {
             try {
                 val result = core.objectResult("statistics_snapshot", JSONObject().put("range", range))
@@ -760,11 +780,13 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun clearStatistics() {
         if (_statistics.value.clearing) return
+        statisticsRefreshJob?.cancel()
         statisticsJob?.cancel()
         _statistics.value = _statistics.value.copy(clearing = true, loading = false)
         viewModelScope.launch {
             try {
                 val result = core.objectResult("statistics_clear")
+                lastStatisticsRevision = maxOf(lastStatisticsRevision, result.optLong("revision"))
                 _statistics.value = _statistics.value.copy(clearing = false, snapshot = null)
                 _message.value = NativeText(R.string.native_stats_cleared_count, result.optLong("deletedSessions"))
                 loadStatistics()
