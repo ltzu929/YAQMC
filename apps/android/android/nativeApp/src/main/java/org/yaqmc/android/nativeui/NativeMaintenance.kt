@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -41,6 +42,7 @@ internal fun NativeDiagnostics(model: NativeViewModel) {
     val state by model.diagnostics.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var confirmClear by remember { mutableStateOf(false) }
+    val idle = !state.busy && !state.loading
     LaunchedEffect(Unit) { model.loadDiagnostics() }
     LazyColumn(Modifier.fillMaxSize().testTag("diagnostics-list"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -49,22 +51,23 @@ internal fun NativeDiagnostics(model: NativeViewModel) {
         if (state.loading || state.busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (state.error) item { Column {
             Text(stringResource(R.string.native_load_failed), color = MaterialTheme.colorScheme.error)
-            TextButton(onClick = model::loadDiagnostics) { Text(stringResource(R.string.native_refresh)) }
+            TextButton(onClick = model::loadDiagnostics, enabled = idle) { Text(stringResource(R.string.native_refresh)) }
         } }
         item { Text(stringResource(R.string.native_diag_log_level), style = MaterialTheme.typography.titleMedium) }
         item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("info" to R.string.native_diag_info, "debug" to R.string.native_diag_debug,
                 "trace" to R.string.native_diag_trace).forEach { (level, label) ->
-                FilterChip(state.logLevel == level, onClick = { model.setDiagnosticsLevel(level) },
-                    label = { Text(stringResource(label)) }, enabled = !state.busy,
+                val selectedLevel = if (state.logLevel in setOf("warn", "error")) "info" else state.logLevel
+                FilterChip(selectedLevel == level, onClick = { model.setDiagnosticsLevel(level) },
+                    label = { Text(stringResource(label)) }, enabled = idle,
                     modifier = Modifier.testTag("diagnostics-level-" + level))
             }
         } }
-        item { OutlinedButton(onClick = { model.shareDiagnosticBundle(context) }, enabled = !state.busy) {
+        item { OutlinedButton(onClick = { model.shareDiagnosticBundle(context) }, enabled = idle) {
             Text(stringResource(R.string.native_diag_export))
         } }
         item { Text(stringResource(R.string.native_diag_privacy), style = MaterialTheme.typography.bodySmall) }
-        item { OutlinedButton(onClick = { confirmClear = true }, enabled = !state.busy) {
+        item { OutlinedButton(onClick = { confirmClear = true }, enabled = idle) {
             Text(stringResource(R.string.native_diag_clear_logs))
         } }
         item { Text(stringResource(R.string.native_diag_recent_errors), style = MaterialTheme.typography.titleMedium) }
@@ -91,7 +94,7 @@ internal fun NativeAbout(model: NativeViewModel) {
         item { Text(stringResource(R.string.native_about_title),
             style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
         item { Text("YAQMC · " + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleMedium) }
-        item { Text(stringResource(R.string.native_about_build, BuildConfig.YAQMC_BUILD_COMMIT)) }
+        item { Text(stringResource(R.string.native_about_build, BuildConfig.YAQMC_BUILD_COMMIT.take(12))) }
         item { Text(stringResource(R.string.native_about_platform, Build.VERSION.RELEASE,
             Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.firstOrNull() ?: "-")) }
         item { Text(stringResource(R.string.native_about_audio_engine)) }
@@ -108,13 +111,13 @@ internal fun NativeAbout(model: NativeViewModel) {
             Text(stringResource(R.string.native_update_check))
         } }
         if (update.releaseUrl.isNotBlank()) item {
-            Button(onClick = { openProjectUrl(context, update.releaseUrl) }) {
+            Button(onClick = { model.openProjectLink(context, update.releaseUrl) }) {
                 Text(stringResource(R.string.native_update_open_release))
             }
             if (update.notes.isNotBlank()) Text(update.notes, style = MaterialTheme.typography.bodySmall)
         }
         item { TextButton(onClick = {
-            openProjectUrl(context, "https://github.com/YAQMC/YAQMC")
+            model.openProjectLink(context, "https://github.com/YAQMC/YAQMC")
         }) { Text(stringResource(R.string.native_about_repository)) } }
     }
 }
@@ -133,9 +136,9 @@ internal data class NativeIssueState(
 internal fun NativeIssueReport(model: NativeViewModel) {
     val state by model.issueState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var category by remember { mutableStateOf("bug") }
-    var summary by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("bug") }
+    var summary by rememberSaveable { mutableStateOf("") }
+    var description by rememberSaveable { mutableStateOf("") }
     val key = listOf(category, summary, description).joinToString("\u0000")
     val preview = state.preview?.takeIf { state.draftKey == key }
     val categoryLabels = listOf("bug" to R.string.native_issue_bug,

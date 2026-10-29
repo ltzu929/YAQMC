@@ -36,7 +36,11 @@ internal data class NativeRoute(val kind: String = "home", val id: String = "", 
 internal data class PageState(val page: CatalogPage = CatalogPage(titleFor("home")), val loading: Boolean = false, val error: NativeText? = null, val loadingMore: Boolean = false, val moreError: NativeText? = null, val loaded: Boolean = false)
 
 @UnstableApi
-internal class NativeViewModel(application: Application, val core: NativeCoreApi) : AndroidViewModel(application), CoreManager.Callback {
+internal class NativeViewModel(application: Application, val core: NativeCoreApi,
+    private val checkUpdate: () -> AndroidUpdateResult = {
+        AndroidUpdateChecker(BuildConfig.VERSION_NAME.substringBefore("-native-")).check()
+    },
+) : AndroidViewModel(application), CoreManager.Callback {
     constructor(application: Application) : this(application, NativeCore(application))
     private val _route = MutableStateFlow(NativeRoute())
     val route = _route.asStateFlow()
@@ -70,6 +74,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     val cache = _cache.asStateFlow()
     private val _cacheBusy = MutableStateFlow(false)
     val cacheBusy = _cacheBusy.asStateFlow()
+    private val _cacheError = MutableStateFlow(false)
+    val cacheError = _cacheError.asStateFlow()
     private val preferenceStore = NativePreferenceStore(application.getSharedPreferences("native-ui", 0))
     val preferences = preferenceStore.state
     private val backStack = mutableListOf<NativeRoute>()
@@ -636,7 +642,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun loadDiagnostics() {
-        if (_diagnostics.value.busy) return
+        if (_diagnostics.value.busy || _diagnostics.value.loading) return
         _diagnostics.value = _diagnostics.value.copy(loading = true, error = false)
         action {
             try {
@@ -653,7 +659,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun setDiagnosticsLevel(level: String) {
-        if (level !in setOf("info", "debug", "trace") || _diagnostics.value.busy) return
+        if (level !in setOf("info", "debug", "trace") || _diagnostics.value.busy || _diagnostics.value.loading) return
         _diagnostics.value = _diagnostics.value.copy(busy = true)
         action {
             try {
@@ -669,7 +675,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun clearDiagnosticLogs() {
-        if (_diagnostics.value.busy) return
+        if (_diagnostics.value.busy || _diagnostics.value.loading) return
         _diagnostics.value = _diagnostics.value.copy(busy = true)
         action {
             try {
@@ -688,7 +694,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun shareDiagnosticBundle(context: Context) {
-        if (_diagnostics.value.busy) return
+        if (_diagnostics.value.busy || _diagnostics.value.loading) return
         _diagnostics.value = _diagnostics.value.copy(busy = true)
         action {
             try {
@@ -719,8 +725,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (_updateState.value.loading) return
         _updateState.value = NativeUpdateState(loading = true)
         action {
-            val current = BuildConfig.VERSION_NAME.substringBefore("-native-")
-            val result = withContext(Dispatchers.IO) { AndroidUpdateChecker(current).check() }
+            val result = withContext(Dispatchers.IO) { checkUpdate() }
             _updateState.value = when (result) {
                 is AndroidUpdateResult.Available -> NativeUpdateState(
                     checked = true, availableVersion = result.release.versionName,
@@ -729,6 +734,11 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
                 is AndroidUpdateResult.Error -> NativeUpdateState(checked = true, error = true)
             }
         }
+    }
+
+    fun openProjectLink(context: Context, url: String) = action {
+        try { openProjectUrl(context, url) }
+        catch (_: Exception) { _message.value = NativeText(R.string.native_action_failed) }
     }
 
     fun loadStatistics(range: String = _statistics.value.range) {
@@ -769,13 +779,17 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     fun cacheStats(clear: Boolean = false) {
         if (_cacheBusy.value) return
         _cacheBusy.value = true
+        _cacheError.value = false
         viewModelScope.launch {
             try {
                 if (clear) core.invoke("provider_clear_cache", provider())
                 _cache.value = NativeCacheStats.parse(core.objectResult("provider_cache_stats", provider()))
                 if (clear) _message.value = NativeText(R.string.native_cache_cleared)
             } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { _message.value = errorText(error, R.string.native_action_failed) }
+            catch (error: Exception) {
+                _cacheError.value = true
+                _message.value = errorText(error, R.string.native_action_failed)
+            }
             finally { _cacheBusy.value = false }
         }
     }

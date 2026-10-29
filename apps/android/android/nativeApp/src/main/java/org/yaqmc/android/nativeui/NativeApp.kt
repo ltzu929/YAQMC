@@ -208,6 +208,7 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
     val quality by model.quality.collectAsStateWithLifecycle()
     val cache by model.cache.collectAsStateWithLifecycle()
     val cacheBusy by model.cacheBusy.collectAsStateWithLifecycle()
+    val cacheError by model.cacheError.collectAsStateWithLifecycle()
     val qualityBusy by model.qualityBusy.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
@@ -253,8 +254,9 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
         item {
             Text(stringResource(R.string.native_cache_breakdown), style = MaterialTheme.typography.titleLarge)
             val details = cache
-            if (details == null) Text(stringResource(R.string.native_cache_loading))
-            else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (cacheError) Text(stringResource(R.string.native_load_failed), color = MaterialTheme.colorScheme.error)
+            if (details == null && !cacheError) Text(stringResource(R.string.native_cache_loading))
+            if (details != null) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.native_cache_total, readableBytes(details.totalBytes)))
                 Text(stringResource(R.string.native_cache_media, details.mediaEntries, readableBytes(details.mediaBytes)))
                 Text(stringResource(R.string.native_cache_artwork, details.artworkEntries, readableBytes(details.artworkBytes)))

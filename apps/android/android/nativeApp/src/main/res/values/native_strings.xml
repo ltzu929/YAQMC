@@ -347,6 +347,7 @@
     <string name="native_stats_albums">Top albums</string>
     <string name="native_stats_qualities">Listening by quality</string>
     <string name="native_stats_providers">Listening by provider</string>
+    <string name="native_stats_qqmusic">QQ Music</string>
     <string name="native_stats_storage">Listening database size: %1$s</string>
     <string name="native_stats_clear">Clear listening history</string>
     <string name="native_stats_confirm_clear">Clear all listening history? This cannot be undone.</string>

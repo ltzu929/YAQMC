@@ -347,6 +347,7 @@
     <string name="native_stats_albums">常听专辑</string>
     <string name="native_stats_qualities">音质分布</string>
     <string name="native_stats_providers">音乐来源分布</string>
+    <string name="native_stats_qqmusic">QQ 音乐</string>
     <string name="native_stats_storage">听歌记录数据库大小：%1$s</string>
     <string name="native_stats_clear">清除听歌记录</string>
     <string name="native_stats_confirm_clear">确定清除全部听歌记录？此操作不可撤销。</string>

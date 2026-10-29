@@ -1,11 +1,14 @@
 package org.yaqmc.android.nativeui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -98,15 +101,21 @@ internal fun NativeStatistics(model: NativeViewModel) {
                 if (snapshot.daily.isNotEmpty()) {
                     val max = snapshot.daily.maxOf { it.listenedMs }.coerceAtLeast(1)
                     item { Text(stringResource(R.string.native_stats_trend), style = MaterialTheme.typography.titleLarge) }
-                    items(snapshot.daily, key = { it.startMs }) { day ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(DateFormat.getDateInstance(DateFormat.SHORT, locale).format(Date(day.startMs)),
-                                modifier = Modifier.width(85.dp), style = MaterialTheme.typography.labelSmall)
-                            LinearProgressIndicator(progress = { (day.listenedMs.toFloat() / max.toFloat()).coerceIn(0f, 1f) },
-                                modifier = Modifier.weight(1f))
-                            Text(listeningDuration(day.listenedMs), style = MaterialTheme.typography.labelSmall)
+                    item { LazyRow(Modifier.fillMaxWidth().testTag("statistics-trend"),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(snapshot.daily, key = { it.startMs }) { day ->
+                            Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.BottomCenter) {
+                                    Box(Modifier.width(20.dp).fillMaxHeight((day.listenedMs.toFloat() / max.toFloat()).coerceIn(0.02f, 1f))
+                                        .background(MaterialTheme.colorScheme.primary))
+                                }
+                                Text(DateFormat.getDateInstance(DateFormat.SHORT, locale).format(Date(day.startMs)),
+                                    style = MaterialTheme.typography.labelSmall)
+                                Text(listeningDuration(day.listenedMs), style = MaterialTheme.typography.labelSmall)
+                            }
                         }
-                    }
+                    } }
                 }
                 item { Text(stringResource(R.string.native_top_songs), style = MaterialTheme.typography.titleLarge) }
                 items(snapshot.songs) { StatisticEntry(it, "song", model) }
@@ -114,8 +123,8 @@ internal fun NativeStatistics(model: NativeViewModel) {
                 items(snapshot.artists) { StatisticEntry(it, "artist", model) }
                 item { Text(stringResource(R.string.native_stats_albums), style = MaterialTheme.typography.titleLarge) }
                 items(snapshot.albums) { StatisticEntry(it, "album", model) }
-                item { StatisticDimensions(R.string.native_stats_qualities, snapshot.qualities) }
-                item { StatisticDimensions(R.string.native_stats_providers, snapshot.providers) }
+                item { StatisticDimensions(R.string.native_stats_qualities, snapshot.qualities, quality = true) }
+                item { StatisticDimensions(R.string.native_stats_providers, snapshot.providers, quality = false) }
             }
             item { Text(stringResource(R.string.native_stats_storage, readableBytes(snapshot.databaseBytes))) }
             item { OutlinedButton(enabled = !state.clearing, onClick = { confirmClear = true }) {
@@ -148,12 +157,14 @@ private fun StatisticEntry(item: StatisticsEntity, kind: String, model: NativeVi
     }
 }
 @Composable
-private fun StatisticDimensions(title: Int, items: List<StatisticsDimension>) {
+private fun StatisticDimensions(title: Int, items: List<StatisticsDimension>, quality: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(title), style = MaterialTheme.typography.titleLarge)
         items.forEach { item ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(item.label.ifBlank { stringResource(R.string.native_unknown) })
+                Text(if (quality) stringResource(NativePlayback.qualityLabel(item.label.ifBlank { "unknown" }))
+                    else if (item.label == "qqmusic") stringResource(R.string.native_stats_qqmusic)
+                    else item.label.ifBlank { stringResource(R.string.native_unknown) })
                 Text(listeningDuration(item.listenedMs))
             }
         }
