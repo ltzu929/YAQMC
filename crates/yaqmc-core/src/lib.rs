@@ -5,16 +5,12 @@ pub mod audio;
 pub mod continuation;
 pub mod credentials;
 pub mod diagnostics;
-pub mod fullscreen_watch;
 pub mod issue_reporter;
-#[cfg(feature = "local-api")]
-pub mod local_api;
-#[cfg(not(feature = "local-api"))]
+
 #[path = "local_api_unavailable.rs"]
 pub mod local_api;
 pub mod logging;
 pub mod media;
-pub mod pidfile;
 pub mod platform;
 pub mod playback_session;
 pub mod playback_types;
@@ -24,16 +20,11 @@ pub mod server;
 pub mod statistics;
 pub mod storage;
 pub mod streaming;
-#[cfg(feature = "system-media")]
-pub mod system_media;
-#[cfg(not(feature = "system-media"))]
+
 #[path = "system_media_unavailable.rs"]
 pub mod system_media;
 
 mod bootstrap;
-
-#[cfg(test)]
-mod system_media_runtime_tests;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -250,7 +241,6 @@ pub fn bootstrap(
 ) -> Result<CoreHandle, CoreBootstrapError> {
     let (shutdown_state, _) = watch::channel(false);
     let host_command_publisher = HostCommandPublisher::default();
-    let runtime = inputs.runtime.clone();
     let services = bootstrap::CoreServices::construct(&config, inputs)?;
 
     let handle = CoreHandle {
@@ -260,10 +250,5 @@ pub fn bootstrap(
         is_shutdown: AtomicBool::new(false),
         services: Arc::new(services),
     };
-    fullscreen_watch::maybe_spawn_platform_watch(
-        &runtime,
-        handle.host_command_publisher.clone(),
-        handle.subscribe_shutdown(),
-    );
     Ok(handle)
 }

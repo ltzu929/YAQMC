@@ -27,7 +27,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "../app/proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         // Optimized, locally installable comparison build. Never uses the production signing key.
         create("benchmark") {
@@ -38,10 +38,9 @@ android {
         }
     }
     sourceSets["main"].apply {
-        res.srcDir("../app/src/main/res")
-        jniLibs.srcDir(System.getenv("YAQMC_ANDROID_NATIVE_LIB_DIR") ?: "../app/build/generated/jniLibs")
+        jniLibs.srcDir(System.getenv("YAQMC_ANDROID_NATIVE_LIB_DIR") ?: "build/generated/jniLibs")
     }
-    sourceSets["test"].resources.srcDir("../../../../packages/yaqmc-client/fixtures")
+    sourceSets["test"].resources.srcDir("../../../../crates/yaqmc-protocol/fixtures")
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -53,10 +52,6 @@ android {
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
-kotlin.sourceSets.getByName("main").kotlin.apply {
-    srcDir("../app/src/main/java")
-    exclude("**/MainActivity.kt", "**/plugin/**")
-}
 
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
@@ -74,6 +69,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
     implementation("rustls:rustls-platform-verifier:0.1.1")
+    testImplementation(kotlin("test-junit"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.10.01"))

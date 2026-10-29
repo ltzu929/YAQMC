@@ -7,7 +7,7 @@ import {
   resolveAndroidJava,
   resolveAndroidToolchain,
   resolveRustlsVerifierMaven,
-} from './build-android.mjs';
+} from './android-toolchain.mjs';
 import { rootVersion } from './ci/android-version.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,7 +21,7 @@ const version = rootVersion(root);
 const nativeDir =
   args.has('--reuse-core') && process.env.YAQMC_ANDROID_NATIVE_LIB_DIR
     ? path.resolve(process.env.YAQMC_ANDROID_NATIVE_LIB_DIR)
-    : path.join(android, args.has('--reuse-core') ? 'app' : 'nativeApp', 'build/generated/jniLibs');
+    : path.join(android, 'nativeApp', 'build/generated/jniLibs');
 const commit = spawnSync('git', ['rev-parse', 'HEAD'], {
   cwd: root,
   encoding: 'utf8',

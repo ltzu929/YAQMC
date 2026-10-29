@@ -16,7 +16,7 @@ export const FIXTURE_FILES = [
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function committedFixturesDir(root = repositoryRoot) {
-  return path.join(root, 'packages', 'yaqmc-client', 'fixtures');
+  return path.join(root, 'crates', 'yaqmc-protocol', 'fixtures');
 }
 
 export function emittedFixturesDir(root = repositoryRoot) {

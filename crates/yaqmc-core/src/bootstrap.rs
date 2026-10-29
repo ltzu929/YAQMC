@@ -57,18 +57,7 @@ impl CoreServices {
             )
             .map_err(CoreBootstrapError::from_error)?,
         );
-        #[cfg(feature = "plugins")]
-        let plugins = match ExtensionHost::open(config.paths.data_dir.join("plugins")) {
-            Ok(host) => Arc::new(host),
-            Err(error) => {
-                tracing::error!(target: "plugin.host", error = %error, "plugin host could not open");
-                Arc::new(
-                    ExtensionHost::open(inputs.plugin_fallback_dir)
-                        .map_err(CoreBootstrapError::from_error)?,
-                )
-            }
-        };
-        #[cfg(not(feature = "plugins"))]
+
         let plugins = Arc::new(
             ExtensionHost::open(config.paths.data_dir.join("plugins"))
                 .map_err(CoreBootstrapError::from_error)?,
@@ -101,15 +90,7 @@ impl CoreServices {
             ProviderRegistry::new("qqmusic", [Arc::clone(&qq_music)])
                 .map_err(CoreBootstrapError::from_error)?,
         );
-        #[cfg(feature = "plugins")]
-        plugins
-            .attach_provider_runtime(
-                Arc::clone(&providers),
-                Arc::clone(&credentials),
-                config.paths.cache_dir.join("plugin-components"),
-                inputs.runtime.clone(),
-            )
-            .map_err(CoreBootstrapError::from_error)?;
+
         let audio = inputs.audio;
         if let Ok(Some(device_id)) = storage.get_setting(AUDIO_OUTPUT_DEVICE_SETTING) {
             if let Err(error) = audio.set_output_device(&device_id) {

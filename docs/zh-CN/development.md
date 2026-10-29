@@ -4,18 +4,20 @@
 
 ## 工程结构与当前边界
 
-| 位置                             | 用途                                                                        |
-| -------------------------------- | --------------------------------------------------------------------------- |
-| `apps/android/android/nativeApp` | 当前 Kotlin / Compose 原生界面与测试                                        |
-| `apps/android/android/app`       | 旧 Capacitor Android 客户端；原生模块仍复用其中部分宿主源码、资源与混淆配置 |
-| `crates/yaqmc-android`           | Rust JNI 桥，与宿主 `CoreManager` 通信                                      |
-| `crates/yaqmc-core`              | 播放、队列、推荐会话、持久化等共享能力                                      |
-| `crates/yaqmc-provider-qqmusic`  | QQ 音乐提供器适配及精确固定的 `qqmusic-api` 依赖                            |
-| `src`、`apps/desktop`            | 保留的旧 React / Electron 体系，按需核对旧行为                              |
+| 位置                                                             | 用途                                                         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------ |
+| `apps/android/android/nativeApp`                                 | 当前 Kotlin / Compose 原生界面与测试                         |
+| `apps/android/android/nativeApp/src/main/java/org/yaqmc/android` | 登录、凭据、JNI 宿主、媒体服务与更新；与原生界面同属一个模块 |
+| `crates/yaqmc-android`                                           | Rust JNI 桥，与宿主 `CoreManager` 通信                       |
+| `crates/yaqmc-core`                                              | 播放、队列、推荐会话、持久化等共享能力                       |
+| `crates/yaqmc-provider-qqmusic`                                  | QQ 音乐提供器适配及精确固定的 `qqmusic-api` 依赖             |
+| `crates/yaqmc-protocol/fixtures`                                 | Rust 协议生成的契约样本，供原生 JVM 测试使用                 |
+
+工作目录按以下职责保留：`apps/` 与 `crates/` 是源码，`scripts/` 与 `.github/` 是构建和检查，`docs/` 是当前中文主文档及必要的来源资料，`assets/` 保留品牌资源。`target/`、`node_modules/`、Gradle `build/` 是可重建缓存；`artifacts/` 保存本机验证记录，`release-android/` 只保留当前候选包，均不提交。旧包和对应说明在本机 `artifacts/android-native-comparison/pre-cleanup-packages/` 留档。机器本地 `.codex/`、SDK 路径和签名配置保持私有。
 
 当前调用链为 Compose → `NativeViewModel` / repository → `NativeCore` → `CoreManager` → JNI → Rust Core。
 Media3 负责系统媒体投影，Rust 负责实际播放与时钟；界面和宿主不另建播放事实源。主题、语言、歌词与外观设置保存在 `native-ui` SharedPreferences，图片背景使用应用私有副本。
-原生 APK 不打包旧 Web 界面，但 Gradle settings 仍依赖 npm 安装的 Capacitor 模块。
+Gradle 仅包含 `:nativeApp`，不依赖 npm、Capacitor 或旧 Web 界面。Node 用于构建与检查脚本，npm 仅安装文档格式化工具。Rust 核心保留 Android 使用的能力与协议兼容响应，已删除桌面插件运行时、本地 HTTP API、桌面系统媒体实现及独立进程入口。
 
 ## 环境与构建
 
@@ -45,15 +47,15 @@ $env:YAQMC_ANDROID_NATIVE_LIB_DIR = '<已构建的 JNI 输出目录>'
 node scripts/build-android-native.mjs --reuse-core
 ```
 
-未指定目录时，`--reuse-core` 查找旧 `app/build/generated/jniLibs`，不会自动使用上次 `nativeApp` 输出。
+未指定目录时，`--reuse-core` 使用 `nativeApp/build/generated/jniLibs` 中上次构建的 Core。
 修改 Rust 后应重编或明确使用本次产物；同一 Gradle 工程避免重叠构建。
-`npm run android:build:debug` / `android:build:release` 面向旧 `:app`，`npm run dev` 面向旧 React 假数据界面，均不能替代原生构建与验收。
+`npm run android:build` 构建原生 benchmark 包，`npm run android:build:debug` 构建原生 debug 包；旧 WebView、桌面和网站构建入口已经移除。
 
 ## Android Studio 本地工作流
 
 2026-10-27 起，本地 Codex 将 Android Studio 纳入日常开发与审查。网页端继续通过分支 / PR 交付；本地使用 IDE 阅读 Kotlin / Compose、断点调试、查看 Logcat，以及管理模拟器和连接设备。界面问题按需使用 Layout Inspector；卡顿、内存与播放后台问题按需使用 Profiler，并按改动保留必要的测试和真机验收。
 
-打开的是 `apps/android/android` Gradle 工程，运行模块选择 `nativeApp`、日常调试选择 `debug`，优化比较使用 `benchmark`。旧 `app` 仍作为共享宿主保留。SDK、NDK、Gradle wrapper 和 JDK 沿用上节版本，不因 IDE 的升级提示自动调整。
+打开的是 `apps/android/android` Gradle 工程，运行模块选择 `nativeApp`、日常调试选择 `debug`，优化比较使用 `benchmark`。宿主源码和测试已全部纳入 `nativeApp`。SDK、NDK、Gradle wrapper 和 JDK 沿用上节版本，不因 IDE 的升级提示自动调整。
 
 先在终端加载本机已有的 Node 26.7.0、Cargo、JDK 21、SDK 36 和 Gradle 缓存环境，再从仓库根目录启动（可执行文件路径按本机安装位置填写）：
 
@@ -73,7 +75,7 @@ Gradle JDK 选择 **JDK 21**（`GRADLE_LOCAL_JAVA_HOME` 或上述 `JAVA_HOME`）
 
 2026-10-26 确认采用：**网页端 GPT 修改文件、提交代码及创建 PR，本地 Codex 拉取审查，按改动在本机验证和构建。** Android 验证与安装包交付由本机完成，使用已有本机签名配置。仓库原有通用 CI 的结果可作为补充证据。
 
-当前通用 CI 仍检查保留的旧 React / Electron 工程，包括 Windows / Linux 桌面构建，以及共享 Rust 质量和契约检查。这些任务服务于迁移期间的回归，产品方向仍为 Android；它们不代替原生 Android 的测试、Lint、APK 构建和设备验收。CI 向 Android 收敛的调整另行处理。
+CI 收敛为原生 Android JVM、Lint、离线 APK / 模拟器验证，以及 Rust 核心、协议、脚本和文档检查。旧 Electron / WebView 发布与网站工作流已移除；正式发布流程尚未启用。
 
 用户已确认当前使用的网页端具备提交代码和创建 PR 的能力，本项目按此能力通过独立分支 / PR 交付源码及相关测试。网页端无需为这一分工搭建 Android 编译或签名环境。
 
@@ -96,13 +98,13 @@ Gradle JDK 选择 **JDK 21**（`GRADLE_LOCAL_JAVA_HOME` 或上述 `JAVA_HOME`）
 | 改动                 | 检查                                                                                |
 | -------------------- | ----------------------------------------------------------------------------------- |
 | 文档、入口与模板     | `npm run docs:check`；对改动文件执行 Prettier 检查                                  |
-| 文档检查脚本         | 对应 `node --test`、ESLint 与文档检查                                               |
+| 文档检查脚本         | 对应 `node --test`与文档检查                                                        |
 | 原生界面、状态、偏好 | 相关 JVM 单元测试、lint、构建及对应真机场景                                         |
 | Rust / JNI / 协议    | 受影响 crate 的 fmt / clippy / test、契约与原生包回归；共享影响扩大时检查 workspace |
 | 账号、系统媒体、交付 | 对应真机 / 真实账号验证；签名、升级和数据兼容分别检查                               |
 
 ```powershell
-node scripts/run-android-gradle.mjs :nativeApp:testDebugUnitTest :app:testDebugUnitTest :nativeApp:lintDebug
+node scripts/run-android-gradle.mjs :nativeApp:testDebugUnitTest :nativeApp:lintDebug
 node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
 ```
 
@@ -167,5 +169,5 @@ adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlayback
 按风险验证，如实说明命令、结果和未覆盖范围。代码、构建通过、模拟响应和真机通过不能互相替代。
 
 完成后只更新受影响的主文档：范围或决定进规划，构建和工作方式进本指南，能力状态及关键验证结论进对齐清单。
-文档仅维护中文，应用文案仍遵循已有语言能力。旧参考文档、英文副本暂留，其去留另议；不自动增加报告、进度页、规范文件或新审批步骤。
+文档仅维护中文，应用文案仍遵循已有语言能力。旧参考文档和英文副本已清理；历史行为通过清单中的固定提交链接回查。许可、第三方归属与来源证据单独保留。
 不提交账号秘密、原始诊断包或无关改动；账号保护、日志脱敏、播放权益与许可证边界继续适用。

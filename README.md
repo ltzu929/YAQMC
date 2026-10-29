@@ -6,16 +6,16 @@
 
 希望软件轻量、使用舒服，同时降低个人开发的工程与维护负担。当前先完整移植旧 Android 已开放的功能、交互和设置；具体范围与关键决定见[项目规划](docs/zh-CN/project-plan.md)。
 
-基础界面、浏览与账号已有实现和部分验证，播放器、队列、歌词个性化、统计维护与正式交付仍有迁移任务。
+仓库已收敛为 Kotlin / Compose 原生 Android 应用与 Rust 核心，旧 React / Electron / Capacitor 工程已退出。各模块已有实现，完整设备回归与正式交付仍需按清单完成。
 实现覆盖与验收结果统一看[迁移对齐清单](docs/zh-CN/native-parity.md)，不以页面存在或构建成功认定迁移完成。
 
 仓库版本为 `0.1.1`，不表示原生版已经正式发布：
 
 - 原生模块为 `:nativeApp`，包名 `org.yaqmc.android.nativeui`，最低 Android 8.0，目前仅构建 ARM64 APK。
 - 默认产物为本地调试签名的 benchmark 比较包，可与旧包 `org.yaqmc.android` 共存，两者数据独立。
-- 现有发布工作流仍产出旧 React / Capacitor Android 包，原生版的正式签名、升级与数据兼容待落实。
+- 旧版发布工作流已移除；原生版的正式签名、升级与数据兼容待落实。
 
-公开安装包见 [Releases](https://github.com/YAQMC/YAQMC/releases)，按具体 Release 核对版本、包名、签名和验证范围。
+当前原生安装包按[开发指南](docs/zh-CN/development.md)在本机生成，尚未正式发布。
 
 ## 开发入口
 
@@ -28,7 +28,7 @@
 | [迁移对齐清单](docs/zh-CN/native-parity.md) | 迁移期的旧版能力、原生覆盖、验收状态与关键证据   |
 
 本 README 负责项目介绍、当前阶段和入口。[AGENTS.md](AGENTS.md)只为助手提供简短的阅读指引。
-其他现有文档暂时保留，可能描述旧体系，其去留后续再决定；目前不维护成套英文副本。
+旧实现与文档可通过 Git 历史回查；仓库另保留许可证、第三方声明及来源证据，不维护成套英文副本。
 
 ## 使用边界与许可
 

@@ -164,11 +164,3 @@ fn prepare_returns_allowlist_and_cancel_consumes_the_attempt() {
         .expect("cancel");
     });
 }
-
-#[test]
-fn electron_oauth_window_consumes_the_protocol_methods() {
-    let source = include_str!("../../../apps/desktop/main/windows/oauth-window.ts");
-    assert!(source.contains("deps.auth_oauth_prepare"));
-    assert!(source.contains("auth_oauth_complete"));
-    assert!(source.contains("auth_oauth_cancel"));
-}

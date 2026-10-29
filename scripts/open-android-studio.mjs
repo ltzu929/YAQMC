@@ -7,7 +7,7 @@ import {
   resolveAndroidJava,
   resolveAndroidToolchain,
   resolveRustlsVerifierMaven,
-} from './build-android.mjs';
+} from './android-toolchain.mjs';
 import { rootVersion } from './ci/android-version.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

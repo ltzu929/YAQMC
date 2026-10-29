@@ -1,8 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
-
-use base64::Engine;
-use serde_json::{json, Value};
 
 use crate::app_preferences::{
     self, ManagedBackgroundImage, PreferencesChangeSink, PreferencesRepository, PREFERENCES_KEY,
@@ -10,24 +7,15 @@ use crate::app_preferences::{
 use crate::audio::{AudioOutputDevice, AUDIO_OUTPUT_DEVICE_SETTING};
 use crate::diagnostics::{
     self, AppSection, BundleExportResult, BundleOptions, DiagnosticsSnapshot, PlaybackSection,
-    PluginDiagnostic as WirePluginDiagnostic, PluginStatus as WirePluginStatus, ProviderSection,
+    ProviderSection,
 };
 use crate::issue_reporter::{self, IssueDraft, IssuePreview};
 use crate::local_api::{LocalApiService, LocalApiStatus};
 use crate::logging::{self, ErrorRecord, LogLevel, LoggingHandle, LOG_LEVEL_SETTING_KEY};
 use crate::player::{PlayerService, PlayerSnapshot, RepeatMode};
-#[cfg(feature = "plugins")]
-use crate::plugin::api::{
-    PluginBridgeRequest, PluginEnableRequest, PluginInspectResult, PluginInstallRequest,
-    PluginSettingsWrite, PluginUninstallRequest,
-};
-#[cfg(feature = "plugins")]
-use crate::plugin::host::{ActivePluginResources, PluginRecord};
-#[cfg(feature = "plugins")]
-use crate::plugin::permissions::parse_permission;
+
 use crate::plugin::ExtensionHost;
-#[cfg(feature = "plugins")]
-use crate::plugin::{PluginDiagnostic, PluginStatus};
+
 use crate::storage::StorageService;
 use crate::CoreHandle;
 use yaqmc_provider_api::{
@@ -74,18 +62,6 @@ impl<F: Fn(&str)> PreferencesChangeSink for FnSink<F> {
 
 fn stringify(error: impl std::fmt::Display) -> String {
     error.to_string()
-}
-
-#[cfg(feature = "plugins")]
-pub fn parse_grants(values: &[String]) -> Result<Vec<String>, String> {
-    values
-        .iter()
-        .map(|value| {
-            parse_permission(value)
-                .map(|_| value.clone())
-                .map_err(|error| error.to_string())
-        })
-        .collect()
 }
 
 fn build_playback_section(snapshot: &PlayerSnapshot) -> PlaybackSection {
@@ -149,35 +125,11 @@ fn map_provider_section(status: ProviderStatus, request: &DiagnosticsRequest) ->
     }
 }
 
-#[cfg(feature = "plugins")]
-fn map_plugin_diagnostic(diagnostic: PluginDiagnostic) -> WirePluginDiagnostic {
-    let status = match diagnostic.status {
-        PluginStatus::Installed => WirePluginStatus::Installed,
-        PluginStatus::Disabled => WirePluginStatus::Disabled,
-        PluginStatus::Enabling => WirePluginStatus::Enabling,
-        PluginStatus::Active => WirePluginStatus::Active,
-        PluginStatus::Disabling => WirePluginStatus::Disabling,
-        PluginStatus::Failed => WirePluginStatus::Failed,
-        PluginStatus::Incompatible => WirePluginStatus::Incompatible,
-    };
-    WirePluginDiagnostic {
-        id: diagnostic.id,
-        version: diagnostic.version,
-        enabled: diagnostic.enabled,
-        status,
-        entrypoint_kinds: diagnostic.entrypoint_kinds,
-        api_version: diagnostic.api_version,
-        package_sha256: diagnostic.package_sha256,
-        permissions: diagnostic.permissions,
-        risk_rating: diagnostic.risk_rating,
-    }
-}
-
 pub async fn assemble_diagnostics_snapshot(
     player: &PlayerService,
     provider: &dyn MusicProvider,
     logging: &LoggingHandle,
-    plugins: Option<&ExtensionHost>,
+    _plugins: Option<&ExtensionHost>,
     platform: crate::platform::PlatformDiagnostics,
     app: AppSection,
     request: DiagnosticsRequest,
@@ -192,17 +144,7 @@ pub async fn assemble_diagnostics_snapshot(
         app,
     );
     snapshot.lyrics_preset = request.lyrics_preset;
-    #[cfg(feature = "plugins")]
-    {
-        snapshot.plugins = plugins
-            .map(|host| {
-                host.diagnostics()
-                    .into_iter()
-                    .map(map_plugin_diagnostic)
-                    .collect()
-            })
-            .unwrap_or_default();
-    }
+
     snapshot
 }
 
@@ -211,11 +153,6 @@ pub fn map_provider_section_for_test(
     request: &DiagnosticsRequest,
 ) -> ProviderSection {
     map_provider_section(status, request)
-}
-
-#[cfg(feature = "plugins")]
-pub fn map_plugin_diagnostic_for_test(diagnostic: PluginDiagnostic) -> WirePluginDiagnostic {
-    map_plugin_diagnostic(diagnostic)
 }
 
 pub fn perf_sample_header() -> String {
@@ -632,211 +569,6 @@ pub async fn issue_reporter_preview(
     issue_reporter::prepare_preview(&draft, &snapshot, &label)
 }
 
-#[cfg(feature = "plugins")]
-pub fn plugin_inspect_path(
-    host: &ExtensionHost,
-    path: String,
-) -> Result<PluginInspectResult, String> {
-    let inspection = host.inspect_path(&PathBuf::from(path)).map_err(stringify)?;
-    Ok(PluginInspectResult {
-        sha256: inspection.sha256,
-        compressed_bytes: inspection.compressed_bytes,
-        expanded_bytes: inspection.expanded_bytes,
-        file_count: inspection.file_count,
-        permissions: inspection.manifest.requested_permission_keys(),
-        manifest: inspection.manifest,
-        style_scan: inspection.style_scan,
-        script_scan: inspection.script_scan,
-        files: inspection.files.into_iter().map(|file| file.path).collect(),
-    })
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_install(
-    host: &ExtensionHost,
-    request: PluginInstallRequest,
-    notify: impl FnOnce(),
-) -> Result<PluginRecord, String> {
-    let grants = parse_grants(&request.grant)?;
-    let path = PathBuf::from(&request.path);
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    let record = match extension.as_str() {
-        "css" => host.install_loose_css(&path).map_err(stringify)?,
-        "js" => host.install_loose_script(&path).map_err(stringify)?,
-        "ts" => {
-            return Err(
-                "TypeScript plugins must be built to dist/main.js with the Plugin SDK".into(),
-            )
-        }
-        _ if path.is_dir() => {
-            return Err("unpacked plugin folders can only be installed from Developer Mode".into())
-        }
-        _ => host
-            .install(&path, request.enable, &grants)
-            .map_err(stringify)?,
-    };
-    notify();
-    Ok(record)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_install_from(
-    host: &ExtensionHost,
-    request: PluginInstallRequest,
-    notify: impl FnOnce(),
-) -> Result<PluginRecord, String> {
-    plugin_install(host, request, notify)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_set_enabled(
-    host: &ExtensionHost,
-    request: PluginEnableRequest,
-    notify: impl FnOnce(),
-) -> Result<PluginRecord, String> {
-    let grants = parse_grants(&request.grant)?;
-    let record = host
-        .set_enabled_with_grants(&request.id, request.enabled, &grants)
-        .map_err(stringify)?;
-    notify();
-    Ok(record)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_uninstall(
-    host: &ExtensionHost,
-    request: PluginUninstallRequest,
-    notify: impl FnOnce(),
-) -> Result<(), String> {
-    host.uninstall(&request.id, request.remove_data)
-        .map_err(stringify)?;
-    notify();
-    Ok(())
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_set_safe_mode(
-    host: &ExtensionHost,
-    enabled: bool,
-    notify: impl FnOnce(),
-) -> Result<bool, String> {
-    host.set_safe_mode(enabled).map_err(stringify)?;
-    notify();
-    Ok(host.safe_mode())
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_set_developer_mode(
-    host: &ExtensionHost,
-    enabled: bool,
-    notify: impl FnOnce(),
-) -> Result<bool, String> {
-    host.set_developer_mode(enabled).map_err(stringify)?;
-    notify();
-    Ok(host.developer_mode())
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_install_unpacked(
-    host: &ExtensionHost,
-    request: PluginInstallRequest,
-    notify: impl FnOnce(),
-) -> Result<PluginRecord, String> {
-    let grants = parse_grants(&request.grant)?;
-    let record = host
-        .install_unpacked(&PathBuf::from(&request.path), request.enable, &grants)
-        .map_err(stringify)?;
-    notify();
-    Ok(record)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_reload(
-    host: &ExtensionHost,
-    id: &str,
-    notify: impl FnOnce(),
-) -> Result<PluginRecord, String> {
-    let record = host.reload(id).map_err(stringify)?;
-    notify();
-    Ok(record)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_read_asset(
-    host: &ExtensionHost,
-    plugin_id: &str,
-    path: &str,
-) -> Result<Value, String> {
-    let (mime, bytes) = host.read_asset(plugin_id, path).map_err(stringify)?;
-    Ok(json!({
-        "mime": mime,
-        "dataBase64": base64::engine::general_purpose::STANDARD.encode(bytes),
-    }))
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_settings_set(
-    host: &ExtensionHost,
-    request: PluginSettingsWrite,
-    notify: impl FnOnce(),
-) -> Result<Value, String> {
-    let value = host
-        .settings_set(&request.id, request.values)
-        .map_err(stringify)?;
-    notify();
-    Ok(value)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_mark_failed(
-    host: &ExtensionHost,
-    id: &str,
-    reason: &str,
-    notify: impl FnOnce(),
-) -> Result<PluginRecord, String> {
-    let record = host.mark_failed(id, reason).map_err(stringify)?;
-    notify();
-    Ok(record)
-}
-
-#[cfg(feature = "plugins")]
-pub async fn plugin_bridge(
-    host: &ExtensionHost,
-    player: &PlayerService,
-    request: PluginBridgeRequest,
-) -> Result<Value, String> {
-    crate::plugin::bridge::dispatch_bridge(host, player, &request).await
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_list(host: &ExtensionHost) -> Vec<PluginRecord> {
-    host.list()
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_active_resources(host: &ExtensionHost) -> ActivePluginResources {
-    host.active_resources()
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_diagnostics(host: &ExtensionHost) -> Vec<PluginDiagnostic> {
-    host.diagnostics()
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_runtime_start(host: &ExtensionHost, plugin_id: &str) -> Result<String, String> {
-    Ok(host.start_runtime(plugin_id).map_err(stringify)?.token)
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_runtime_stop(host: &ExtensionHost, token: &str) {
-    host.stop_runtime(token);
-}
-
 pub fn live_platform_diagnostics(
     core: &CoreHandle,
     host: &dyn HostDispatchHooks,
@@ -849,11 +581,6 @@ pub fn live_platform_diagnostics(
         display_backend_override: host.linux_display_backend(),
         graphics_mode: host.linux_graphics_mode(),
     })
-}
-
-#[cfg(feature = "plugins")]
-pub fn plugin_settings_get(host: &ExtensionHost, id: &str) -> Result<Value, String> {
-    host.settings_get(id, false).map_err(stringify)
 }
 
 pub fn platform_export_diagnostics(
