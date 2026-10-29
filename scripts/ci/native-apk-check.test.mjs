@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import {
-  assertNativeApkContents,
-  parseNativeApkSigner,
-  verifyNativeApk,
-} from './native-apk-check.mjs';
+import { assertNativeApkContents, parseNativeApkSigner, verifyNativeApk } from './native-apk-check.mjs';
 
 const version = { versionName: '0.1.1', versionCode: 1_019_000 };
 const packageLine =
@@ -93,8 +89,7 @@ test('inspects built APK before allowing it to be staged', () => {
       commands.push([command, args]);
       return {
         status: 0,
-        stdout:
-          args[0] === 'dump' ? badging : args[0] === 'list' ? files : signature,
+        stdout: args[0] === 'dump' ? badging : args[0] === 'list' ? files : signature,
         stderr: '',
       };
     },
