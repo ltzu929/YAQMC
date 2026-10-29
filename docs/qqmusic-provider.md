@@ -162,8 +162,8 @@ snapshot; a missing recent-history capability suppresses that request rather tha
 Account commands are limited to the main renderer by both the Electron Main IPC router ACL and a Core caller/role
 guard. Each account
 operation captures the authentication generation plus random opaque cache scope. Logout or a replacement session
-cancels old I/O and prevents its cache/UI result from committing. See [authentication](authentication.md),
-[account library](account-library.md), and [entitlement](entitlement.md).
+cancels old I/O and prevents its cache/UI result from committing. See [authentication](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/docs/authentication.md),
+[account library](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/docs/account-library.md), and [entitlement](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/docs/entitlement.md).
 
 ## Stability and verification
 

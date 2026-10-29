@@ -13,8 +13,7 @@ pub use events::{
     FanoutActions,
 };
 pub use methods::{core_dispatch_methods, dispatch, DispatchError};
-#[cfg(feature = "plugins")]
-pub use ops::map_plugin_diagnostic_for_test;
+
 pub use ops::{
     map_provider_section_for_test, perf_sample_header, perf_sample_line, write_perf_sample,
 };

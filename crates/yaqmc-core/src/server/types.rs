@@ -388,12 +388,6 @@ pub struct EnabledParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PortParams {
-    pub port: u16,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ValueParams {
     pub value: String,
 }
@@ -419,18 +413,6 @@ pub struct DiagnosticsExportToParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PluginIdParams {
-    pub plugin_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenParams {
-    pub token: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SettingKeyParams {
     pub key: String,
 }
@@ -440,20 +422,6 @@ pub struct SettingKeyParams {
 pub struct SettingWriteParams {
     pub key: String,
     pub value: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginReadAssetParams {
-    pub plugin_id: String,
-    pub path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginMarkFailedParams {
-    pub id: String,
-    pub reason: String,
 }
 
 #[derive(Deserialize)]

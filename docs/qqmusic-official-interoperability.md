@@ -35,7 +35,7 @@ restart. Only then may YAQMC add an allowlisted parser and reversible opt-in reg
 `L-1124/QQMusicApi` at commit `108617ffe80abefec6358717b9f4d3677550db10` was used as a GPL-3.0-or-later
 interoperability research reference. No GPL implementation was copied into YAQMC. The complete reference ledger and
 other pinned projects are in [QQ Music provider](qqmusic-provider.md); credit and license boundaries are in the
-repository [acknowledgements](../ACKNOWLEDGEMENTS-EN.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+repository [acknowledgements](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/ACKNOWLEDGEMENTS-EN.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
 Tencent and QQ Music do not endorse YAQMC. Provider behavior can change without notice, so the deterministic tests
 use sanitized fixtures rather than proprietary binaries or live account credentials.

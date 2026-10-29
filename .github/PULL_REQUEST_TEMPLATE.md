@@ -10,16 +10,15 @@
 
 - [ ] `npm run docs:check`
 - [ ] `npm run format:check`
-- [ ] `npm run check`
+- [ ] 受影响的原生 JVM 测试、Lint 与 APK 构建（注明实际执行范围）
 - [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy --workspace --all-targets --locked -- -D warnings`
-- [ ] `cargo test --workspace --all-targets --locked`
+- [ ] 受影响 Rust crate 的 clippy / test 与协议契约检查
 - [ ] 行为变化有回归测试；界面变化有截图/无障碍检查（如适用）
 
 ## 安全与隐私
 
 - [ ] 未提交 Cookie、OAuth code、token、vkey/ekey、签名 URL、真实账号资料或原始诊断包
-- [ ] 未扩大 OAuth/歌词窗口/preload IPC 权限或放宽 Electron 安全配置
+- [ ] 未扩大 OAuth、JNI 或文件分享权限
 - [ ] 未实现会员、地区、版权、DRM 或 VMP 绕过
 
 ## 文档与发布影响

@@ -8,24 +8,24 @@ unlicensed repositories, are recorded in
 [docs/qqmusic-provider.md](docs/qqmusic-provider.md) and are not reproduced
 here.
 
-## Apple Music-like Lyrics
+## Apple Music-like Lyrics（历史 Web 客户端）
 
 Source: <https://github.com/amll-dev/applemusic-like-lyrics>
 
 Packages: `@applemusic-like-lyrics/core` `0.5.2` and `@applemusic-like-lyrics/react` `0.5.2`
 
-License: GNU Affero General Public License version 3 only (`AGPL-3.0-only`). These official packages are used by
-the desktop lyric renderer without vendoring or local modification. The package license text and corresponding
+License: GNU Affero General Public License version 3 only (`AGPL-3.0-only`). These official packages were used by
+the retired desktop lyric renderer without vendoring or local modification. The current native Android app does not depend on them. The package license text and corresponding
 source are available from the upstream project; distributors of YAQMC must satisfy the GPLv3/AGPLv3 obligations
-described in [docs/lyrics.md](docs/lyrics.md#amll-decision).
+described in [docs/lyrics.md](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/docs/lyrics.md#amll-decision).
 
 `mzj3920/qqmusic-decrypt`, AynaLivePlayer/miaosic, and official QQ Music Electron ASAR contents are **not**
 in-tree YAQMC sources. The `mzj3920` and ASAR claims were removed from the current pinned `qm-api-rs` revision;
 miaosic was protocol corroboration only.
 
-## Rust Provider Component examples
+## Rust Provider Component examples（历史插件示例）
 
-The optional, unsigned API v3 example packages under `examples/plugins/packages/` contain WebAssembly Components
+The optional, unsigned API v3 example packages formerly under `examples/plugins/packages/` contain WebAssembly Components
 built from the checked-in Rust sources and lockfiles. They are not built into the YAQMC desktop executable. The
 complete platform example directly uses:
 

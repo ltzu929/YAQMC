@@ -73,9 +73,13 @@ fn registry_core_methods_match_dispatch_arms() {
         .collect();
     assert_eq!(registry, core_dispatch_methods());
     let source = include_str!("../src/server/methods.rs");
+    let arms = source
+        .split_once("match method_name {")
+        .expect("dispatch match")
+        .1;
     for name in core_dispatch_methods() {
         assert!(
-            source.contains(&format!("\"{name}\" =>")),
+            arms.contains(&format!("\"{name}\"")),
             "missing dispatch arm for {name}"
         );
     }

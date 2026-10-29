@@ -220,7 +220,7 @@ fn preferences_set_background_from_accepts_jpeg_and_unicode_source_paths() {
 }
 
 #[test]
-fn plugin_install_from_wraps_plugin_install_for_an_explicit_path() {
+fn plugin_install_from_is_unavailable_on_android() {
     let (_root, runtime, core, host) = boot();
     runtime.block_on(async {
         let error = dispatch(
@@ -237,9 +237,9 @@ fn plugin_install_from_wraps_plugin_install_for_an_explicit_path() {
             })),
         )
         .await
-        .expect_err("missing package");
+        .expect_err("Android does not load desktop plugins");
         let core_error = error.into_core_error();
-        assert_eq!(core_error.code, "core.command_error");
+        assert_eq!(core_error.code, "core.unavailable");
         assert!(!core_error.message.is_empty());
     });
 }

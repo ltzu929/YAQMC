@@ -1,13 +1,13 @@
 # Android 原生完整移植对齐清单
 
-内容核对日期：2026-10-25。比较基线：当前仓库旧 Android 客户端（React / Capacitor）与 `nativeApp`（Kotlin / Compose）。
+内容核对日期：2026-10-25。比较基线：清理前提交 `b0b5acf` 中的旧 Android 客户端（React / Capacitor）与 `nativeApp`（Kotlin / Compose）。旧实现现通过下方固定提交链接回查。
 初次盘点依据源码、Android 能力开关和已有首页截图，当时未重新操作应用。
 本清单集中维护迁移覆盖、验收要求与关键验证结论；各批执行日期与验证范围见文末。
 
 ## 目标与判定方式
 
 先完整迁移旧 Android 已开放的功能、交互、设置及状态反馈。保留 Rust 核心。
-原生版目前具备基本播放和通用页面，但大量页面内操作、配置和呈现能力尚未对齐。
+当前各批实现与实际验收状态以各行和文末记录为准；移除旧工程不表示所有待验收项已经完成。
 用户明确希望完整移植；“听歌用途”不作为省略旧功能的依据。
 
 表中“已有代码”仅表示代码中存在实现；“部分”表示只覆盖一部分用户能力；“缺失”表示原生界面或调用未接入。
@@ -29,9 +29,9 @@
 | S03  | 滚动自动加载更多、分页独立状态、分页错误重试                                 | 已有代码：滚动自动加载、独立分页等待 / 错误 / 重试、去重、页码恢复与过期查询保护                                                                 |
 | S04  | 空关键词时的推荐歌单浏览入口                                                 | 已有代码：空查询从首页数据展示推荐歌单，提供打开 / 播放入口                                                                                      |
 
-依据：[Sidebar](../../src/components/Sidebar.tsx)、[TopBar](../../src/components/TopBar.tsx)、
-[HomePage](../../src/pages/HomePage.tsx)、[ExplorePage](../../src/pages/ExplorePage.tsx)、
-[AreaPage](../../src/pages/AreaPage.tsx)、[SearchPage](../../src/pages/SearchPage.tsx)；
+依据：[Sidebar](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/Sidebar.tsx)、[TopBar](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/TopBar.tsx)、
+[HomePage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/HomePage.tsx)、[ExplorePage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/ExplorePage.tsx)、
+[AreaPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/AreaPage.tsx)、[SearchPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SearchPage.tsx)；
 原生对应为 [NativeApp](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeApp.kt)、
 [NativeModels](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeModels.kt)及
 [NativeViewModel](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt)。
@@ -53,10 +53,10 @@
 | A06  | 按权限重命名 / 删除歌单，添加 / 移除当前歌曲及确认 / 结果反馈 | 已有代码：按权限重命名 / 删除、添加 / 移除当前歌曲、确认及结果反馈；真实写入待验收                                                                                                                             |
 | A07  | 收藏 / 取消收藏歌单                                           | 已有代码：按权限收藏 / 取消收藏歌单及结果投影；真实写入待验收                                                                                                                                                  |
 
-依据：[SongPage](../../src/pages/SongPage.tsx)、[AlbumPage](../../src/pages/AlbumPage.tsx)、
-[ArtistPage](../../src/pages/ArtistPage.tsx)、[PlaylistPage](../../src/pages/PlaylistPage.tsx)、
-[LibraryPage](../../src/pages/LibraryPage.tsx)、[AddToPlaylistPicker](../../src/components/AddToPlaylistPicker.tsx)、
-[账号运行时](../../src/application/account-runtime.ts)及[设置页](../../src/pages/SettingsPage.tsx)。
+依据：[SongPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SongPage.tsx)、[AlbumPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/AlbumPage.tsx)、
+[ArtistPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/ArtistPage.tsx)、[PlaylistPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/PlaylistPage.tsx)、
+[LibraryPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/LibraryPage.tsx)、[AddToPlaylistPicker](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/AddToPlaylistPicker.tsx)、
+[账号运行时](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/application/account-runtime.ts)及[设置页](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SettingsPage.tsx)。
 原生浏览实现拆分为 `NativeCatalog` / `NativeCatalogRepository`，账号界面与投影位于 `NativeAccount` / `NativeAccountModels`；协调状态仍在 `NativeViewModel`。
 
 浏览与账号的原生入口见 [NativeCatalog](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalog.kt)、
@@ -78,9 +78,9 @@
 | I01  | 系统媒体通知、锁屏、蓝牙 / 耳机、焦点、后台服务与深链     | 复用宿主 / 部分验收：已检查通知、后台、媒体控制和歌曲深链；焦点打断真机未通过，锁屏、蓝牙 / 耳机与长期后台仍待验收；详情见文末                                                      |
 | I02  | 公开歌曲链接、YAQMC 深链、纯文本三种系统分享动作          | 已有代码：列表、播放条、完整播放器与队列共用三种选择；公开目标校验身份 / HTTPS，深链和纯文本可离线生成；单元与模拟 Core 真机覆盖失败 / 取消；三种真实内容均已在系统分享面板核对     |
 
-依据：[PlayerBar](../../src/components/PlayerBar.tsx)、[TrackList](../../src/components/TrackList.tsx)、
-[QueuePanel](../../src/components/QueuePanel.tsx)、[SongShareActions](../../src/components/SongShareActions.tsx)、
-[Android 宿主](../../apps/android/android/app/src/main/java/org/yaqmc/android/media/PlaybackService.kt)。
+依据：[PlayerBar](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/PlayerBar.tsx)、[TrackList](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/TrackList.tsx)、
+[QueuePanel](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/QueuePanel.tsx)、[SongShareActions](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/SongShareActions.tsx)、
+[Android 宿主](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/apps/android/android/app/src/main/java/org/yaqmc/android/media/PlaybackService.kt)。
 “播放全部”仅提交已加载曲目在旧账号列表中也存在，不将其直接计为新增迁移退化；应按对应页面的旧行为验收。
 旧 Android 紧凑布局隐藏的音量工具也不直接计为原生手机界面遗漏。
 
@@ -99,9 +99,9 @@
 | O04  | 界面字号缩放与字体族                                            | 已有代码：80%–130% 应用字号与应用 / 系统 / 衬线 / 等宽字体；保留系统字号影响，Android 应用字体使用本机无衬线回退；待真机验收                                                                                                                                                                                                |
 | O05  | 跟随系统 / 简体中文 / 英文                                      | 已有代码：第一批接入系统 / 简体中文 / 英文与静态文案资源；缓存标签可随语言更新，服务端内容保留原文                                                                                                                                                                                                                          |
 
-依据：[LyricsPanel](../../src/components/LyricsPanel.tsx)、[歌词场景](../../src/components/lyrics-scene/LyricsScene.tsx)、
-[LyricsPresetEditor](../../src/components/LyricsPresetEditor.tsx)、[偏好模型](../../src/application/preferences.ts)、
-[设置页](../../src/pages/SettingsPage.tsx)；原生入口为 `NativePlayback` / `NativeLyrics` / `NativeLyricSettings` / `NativeAppearance` 与 `NativePreferences`。
+依据：[LyricsPanel](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/LyricsPanel.tsx)、[歌词场景](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/lyrics-scene/LyricsScene.tsx)、
+[LyricsPresetEditor](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/LyricsPresetEditor.tsx)、[偏好模型](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/application/preferences.ts)、
+[设置页](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SettingsPage.tsx)；原生入口为 `NativePlayback` / `NativeLyrics` / `NativeLyricSettings` / `NativeAppearance` 与 `NativePreferences`。
 此处迁移目标是原生等效能力和原有交互意图，AMLL 的 React / DOM 实现本身不能直接作为 Compose 实现。
 
 ## 统计、维护与交付
@@ -115,14 +115,14 @@
 | T05  | 应用偏好保存与升级兼容                                                        | 部分：主题 / 语言 / 歌词 / 外观分别保存，保留原生旧主题键与无关偏好；其余模块设置、预设及旧客户端跨包升级兼容仍待后续批次                                                                                                                                                                           |
 | T06  | 正式签名包、原包名升级、数据延续、发布工作流                                  | 未完成：当前 nativeui 为独立包，默认构建为 benchmark，工作流仍产出旧 app；兼容方案待决定                                                                                                                                                                                                            |
 
-依据：[StatisticsPage](../../src/pages/StatisticsPage.tsx)、[设置页](../../src/pages/SettingsPage.tsx)、
-[Android 桥](../../packages/yaqmc-client/src/bridges/android.ts)、
+依据：[StatisticsPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/StatisticsPage.tsx)、[设置页](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SettingsPage.tsx)、
+[Android 桥](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/packages/yaqmc-client/src/bridges/android.ts)、
 [原生 Gradle](../../apps/android/android/nativeApp/build.gradle.kts)、
-[原生构建脚本](../../scripts/build-android-native.mjs)、[发布流程](../../.github/workflows/electron-release.yml)。
+[原生构建脚本](../../scripts/build-android-native.mjs)、[发布流程](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/.github/workflows/electron-release.yml)。
 
 ## 旧 Android 已关闭或未开放的能力
 
-按当前 [Android 能力表](../../packages/yaqmc-client/src/bridge.ts)及布局 / 客户端门禁单列：
+按当前 [Android 能力表](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/packages/yaqmc-client/src/bridge.ts)及布局 / 客户端门禁单列：
 
 - 桌面歌词 / 歌词岛、桌面窗口 / 托盘 / 全局快捷键、插件、本地 HTTP API：旧 Android 未开放。
 - 常规文件导出与统计 JSON / CSV 导出：客户端受 `fileExport = false` 限制；不能因为共享统计页有按钮就算作旧 Android 可用。
@@ -218,6 +218,7 @@ B4-02 / B4-04 低版本模糊增量（同 PR #8）：Android 8–11 歌词远处
 ### 第六批：交付与替换（进行中）
 
 - **B6-01：原生安装包交付校验（T06）。** 已编写独立校验器并接入原生构建脚本，只有包名、版本、ARM64 Rust Core 和签名检查通过才导出 APK。本次 CI、完整 ARM64 构建和设备安装结果分别记录，离线 UI 包不可当作可播放候选包。
+  2026-10-29 本地审查：校验器的 6 项测试及整套 37 项 Node 测试通过，使用清理后已重编 Core 的真实 benchmark APK 调用校验器，包名、版本、ARM64 库和签名校验通过；文档与格式检查通过。本轮未安装设备或验证签名升级连续性。
 - **B6-02：正式包名与签名连续性（T06）。** 待定：正式版是否沿用旧包名及签名需先确认。现有 benchmark 使用 debug key，不是正式签名包。
 - **B6-03：数据延续与升级（T05–T06）。** 待验证：`nativeui` 和旧包的数据隔离，未经授权不得搬运账号凭据或执行数据迁移。
 - **B6-04：完整回归与交付（T05–T06）。** 待验收：真实账号、真实播放、后台媒体、歌词 / 统计 / 维护、升级 / 回滚、最低系统版本及发布产物来源，通过后再决定正式发布。
@@ -262,3 +263,16 @@ B4-02 / B4-04 低版本模糊增量（同 PR #8）：Android 8–11 歌词远处
 - 日志与截图回执在被忽略的 `artifacts/android-native-comparison/`，对应 `batch1-*`、`batch2-*`、`batch3-*`、`login-fix-validation.json`；原生测试源码位于 `nativeApp/src/test/`、`src/androidTest/`。第三批真实播放检查恢复了原队列内容、位置与设置，随机模式冷启检查还原原模式，测试辅助包已清理；这些本地回执不是公开检出的必备文件。
 
 后续只补充对能力状态有影响的关键结果、执行日期和未覆盖项，避免重复记录操作过程。
+
+## 2026-10-29 工程整理与待复核反馈
+
+用户要求先整理项目，本轮不修复体验问题。截图包名为 `org.yaqmc.android`，诊断页源码标记为 `947db5f`，属于旧 WebView 包；当前原生包为 `org.yaqmc.android.nativeui`。以下反馈保留，后续在原生包逐项复核：
+
+- QQ 音乐登录页顶部与状态栏重叠。
+- 会员到期时间未显示。
+- 播放器上滑过渡期间希望保留来源页面作为背景。
+- 设置中的更新页面仍为英文。
+- 诊断包生成失败，提示 `diagnostics_export_bundle_to is not allowed from host`。
+- 切换 HI-RES 后网络播放失败，切回自动及换曲仍失败。
+
+原生宿主及其测试已迁入 `nativeApp`，协议样本迁入 `crates/yaqmc-protocol/fixtures`。旧 UI、桌面宿主、Capacitor、插件 SDK / 示例和专属脚本已移除，Rust 中 Android 原先禁用的桌面实现同步清理；保留协议层的不可用响应，不改账号数据、音质策略或原生交互。当前已通过 103 项原生 JVM 测试、Debug Lint（0 错误、46 警告）、Debug 主包及 instrumentation APK 构建；Rust 回归经桌面能力退出相关断言调整后通过，严格 Clippy、协议样本一致性、31 项 Node 测试与文档格式检查通过。ARM64 Core 已重新编译，完整 benchmark 包构建通过；核对包名 `org.yaqmc.android.nativeui`、ARM64 ABI、debug 签名和包内 Core 与本次编译结果一致，包中没有旧 WebView 资源。本轮未安装应用或执行真机 / 真实播放验收。Android Studio MCP 服务可连接，但返回空模块列表，文件尚不在 IDE 内容根中，未计为 IDE 检查通过。

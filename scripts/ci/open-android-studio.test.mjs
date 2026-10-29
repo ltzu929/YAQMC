@@ -30,7 +30,7 @@ function fixture(t) {
   writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '0.1.1' }));
   // Toolchain discovery is covered separately; these tests exercise the launcher.
   writeFileSync(
-    path.join(root, 'scripts/build-android.mjs'),
+    path.join(root, 'scripts/android-toolchain.mjs'),
     `export const resolveAndroidJava = () => process.execPath;
 export const resolveAndroidToolchain = () => ({ sdk: 'fixture-sdk', ndk: 'fixture-ndk' });
 export const resolveRustlsVerifierMaven = () => 'fixture-maven';

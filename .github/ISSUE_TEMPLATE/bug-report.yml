@@ -23,20 +23,15 @@ body:
     attributes:
       label: 操作系统
       options:
-        - Windows 11
-        - Windows 10
-        - Arch Linux
-        - Debian / Ubuntu
-        - Fedora / openSUSE
-        - 其他 Linux
+        - Android
     validations:
       required: true
   - type: input
     id: environment
     attributes:
-      label: 架构与桌面环境
-      description: 例如 x86_64 + Windows WebView2，或 x86_64 + Hyprland/Wayland。
-      placeholder: x86_64，Hyprland，Wayland
+      label: 设备与 Android 版本
+      description: 请填写手机型号、Android 版本及原生安装包名称。
+      placeholder: ARM64，Android 16，YAQMC 原生 debug
     validations:
       required: true
   - type: dropdown
@@ -50,9 +45,9 @@ body:
         - 收藏 / 账号歌单 / 最近播放
         - 播放 / 队列 / 随机 / 循环
         - 音质 / 试听 / QMC / mflac
-        - 主歌词 / 桌面歌词 / 歌词岛
+        - 歌词 / 布局 / 预设
         - 主题 / 布局 / 无障碍
-        - 托盘 / 媒体键 / 本地 API
+        - 通知 / 系统媒体控制 / 后台播放
         - 其他
     validations:
       required: true

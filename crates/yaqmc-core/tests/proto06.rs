@@ -125,7 +125,7 @@ async fn handshake_core_ping_and_stdin_eof_shut_the_server_down() {
 }
 
 #[tokio::test]
-async fn platform_attach_and_shutdown_prepare_then_shutdown_ack() {
+async fn desktop_platform_attach_is_unavailable_then_shutdown_completes() {
     let (_root, core, host) = boot();
     let (mut host_transport, core_transport) = duplex_pair();
     let server = tokio::spawn(async move { serve_protocol(core, host, core_transport).await });
@@ -153,7 +153,10 @@ async fn platform_attach_and_shutdown_prepare_then_shutdown_ack() {
     match recv_until_non_event(&mut host_transport).await {
         CoreMessage::Response { id, body } => {
             assert_eq!(id, 2);
-            assert_eq!(body, ResponseBody::success(json!({ "ok": true })));
+            match body {
+                ResponseBody::Failure { error } => assert_eq!(error.code, "core.unavailable"),
+                other => panic!("desktop media must be unavailable: {other:?}"),
+            }
         }
         other => panic!("expected response, got {other:?}"),
     }
@@ -341,12 +344,4 @@ async fn app_preferences_set_emits_preferences_changed_string_payload() {
         .await
         .expect("server task")
         .expect("EOF shutdown is success");
-}
-
-#[test]
-fn cargo_defines_the_yaqmc_core_stdio_binary() {
-    let manifest = include_str!("../Cargo.toml");
-    assert!(manifest.contains("name = \"yaqmc-core\""));
-    assert!(manifest.contains("path = \"src/bin/yaqmc-core.rs\""));
-    let _bin = include_str!("../src/bin/yaqmc-core.rs");
 }
