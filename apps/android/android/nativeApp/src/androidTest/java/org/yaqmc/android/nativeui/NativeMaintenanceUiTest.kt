@@ -81,6 +81,42 @@ class NativeMaintenanceUiTest {
         capture("pr9-statistics")
     }
 
+    @Test fun statisticsChangesCoalesceAndIgnoreStaleOrOffScreenEvents() {
+        val snapshots = java.util.concurrent.atomic.AtomicInteger(0)
+        respond = { method, _ ->
+            if (method == "statistics_snapshot")
+                JSONObject().put("recordCount", 1).put("qualifiedPlayCount", snapshots.incrementAndGet())
+            else JSONObject()
+        }
+        install("statistics")
+        compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 1L }
+        fun changed(revision: Long) = JSONObject().put("type", "statistics.changed")
+            .put("data", JSONObject().put("revision", revision)).toString()
+        compose.runOnIdle {
+            model.onCoreEvent(1, "api://event", changed(5))
+            model.onCoreEvent(2, "api://event", changed(6))
+            model.onCoreEvent(3, "api://event", changed(7))
+        }
+        compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 2L }
+        Thread.sleep(400)
+        compose.runOnIdle {
+            assertEquals(2, snapshots.get())
+            assertFalse(model.statistics.value.loading) // quiet refresh keeps the UI usable
+            model.onCoreEvent(4, "api://event", changed(6)) // stale revision
+        }
+        Thread.sleep(400)
+        compose.runOnIdle {
+            assertEquals(2, snapshots.get())
+            model.navigate(NativeRoute("settings"), root = true)
+            model.onCoreEvent(5, "api://event", changed(8))
+        }
+        Thread.sleep(400)
+        compose.runOnIdle { assertEquals(2, snapshots.get()) }
+        // The page always fetches a fresh snapshot upon returning.
+        compose.runOnIdle { model.navigate(NativeRoute("statistics"), root = true) }
+        compose.waitUntil(5000) { model.statistics.value.snapshot?.playCount == 3L }
+    }
+
     @Test fun diagnosticsSerializesLoadingAndMutationsAndRecoversFromFailure() {
         val pending = CompletableDeferred<JSONObject>()
         var level = "info"
