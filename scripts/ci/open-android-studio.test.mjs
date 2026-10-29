@@ -97,6 +97,10 @@ test('Studio receives Core that survives Clean Project, and local settings are p
     readFileSync(path.join(f.android, 'local.properties'), 'utf8'),
     /^unrelated=value$/mu,
   );
+  assert.match(
+    readFileSync(path.join(f.android, 'local.properties'), 'utf8'),
+    /^yaqmc\.rustlsVerifierMavenDir=fixture-maven$/mu,
+  );
 });
 
 test('prepare-only stages the selected ABI and refreshes Core without launching Studio', (t) => {
