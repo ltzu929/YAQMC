@@ -67,7 +67,10 @@ run(
 const output = path.join(root, 'release-android');
 mkdirSync(output, { recursive: true });
 const destination = path.join(output, `YAQMC-${version.versionName}-android-native-${variant}.apk`);
-const builtApk = path.join(android, `nativeApp/build/outputs/apk/${variant}/nativeApp-${variant}.apk`);
+const builtApk = path.join(
+  android,
+  `nativeApp/build/outputs/apk/${variant}/nativeApp-${variant}.apk`,
+);
 const identity = verifyNativeApk({
   apkPath: builtApk,
   sdk: toolchain.sdk,
