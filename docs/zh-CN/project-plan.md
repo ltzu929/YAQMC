@@ -89,6 +89,6 @@
 
 这些事项尚未成为已批准实施方案。每项工作的准备、验证与交付方式见[开发指南](development.md)。
 
-## 当前待合入工作
+## 最近交付
 
-2026-10-29 整理：工程收敛通过 [PR #12](https://github.com/ltzu929/YAQMC/pull/12) 交付，APK 完整性校验通过 [PR #11](https://github.com/ltzu929/YAQMC/pull/11) 接续。#11 以 #12 的清理分支为基线，只展示 APK 校验增量；审查顺序为 #12、#11。两项尚未合入 `main`，保留各自分支直至确认合入，随后按开发指南清理分支。
+2026-10-30，工程清理 [PR #12](https://github.com/ltzu929/YAQMC/pull/12) 与 APK 完整性校验 [PR #11](https://github.com/ltzu929/YAQMC/pull/11) 已依次合入 `main`。合并前 Core、Android 构建和 API 30 / 35 模拟器检查全部通过；Core CI 已恢复音频回归所需的虚拟输出。对应工作分支已清理，后续开发从最新 `main` 创建新分支。真机与真实播放验收仍按迁移清单推进。
