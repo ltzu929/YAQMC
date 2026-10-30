@@ -1529,15 +1529,14 @@ impl PlayerService {
             Err(error) => Err(error),
         };
         // A successful vkey response does not prove the CDN file is readable.
-        // Refresh once above, then descend through automatic qualities only.
+        // Refresh once above, then descend through available lower qualities.
         // Strict descent bounds recovery even if a provider returns a bad fallback.
         while matches!(
             &preparation,
             Err(PlaybackSourceError::UrlExpired
                 | PlaybackSourceError::UrlUnavailable
                 | PlaybackSourceError::Network)
-        ) && failed_selection.requested_quality == AudioQualityPreference::Automatic
-            && !failed_selection.preview
+        ) && !failed_selection.preview
             && failed_selection.resolved_quality != AudioQuality::Standard
         {
             if generation != self.load_generation.load(Ordering::Acquire) {
@@ -1550,7 +1549,7 @@ impl PlayerService {
                 target: "player.source",
                 failed_quality = ?failed_selection.resolved_quality,
                 failure = ?preparation.as_ref().err(),
-                "refreshed automatic source is unavailable; trying a lower quality"
+                "selected source is unavailable; trying a lower quality"
             );
             let fallback = match self
                 .resolver
@@ -1566,7 +1565,7 @@ impl PlayerService {
             if let Err(error) = source_guard.validate() {
                 return self.fail_load(generation, &error).await;
             }
-            if fallback.selection.requested_quality != AudioQualityPreference::Automatic
+            if fallback.selection.requested_quality != failed_selection.requested_quality
                 || quality_rank(fallback.selection.resolved_quality)
                     >= quality_rank(failed_selection.resolved_quality)
             {
@@ -1576,7 +1575,7 @@ impl PlayerService {
             }
             failed_selection = fallback.selection.clone();
             tracing::info!(target: "player.source", resolved = ?failed_selection.resolved_quality,
-                "trying automatic quality fallback");
+                "trying lower quality fallback");
             source_guard = fallback.epoch_guard.clone();
             preparation = self.preparer.prepare(fallback).await;
         }
@@ -3043,6 +3042,7 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(120)).await;
             }
             let mut source = resolved(song);
+            source.selection.requested_quality = failed.requested_quality;
             source.selection.resolved_quality = quality;
             source.selection.fallback_reason = Some(PlaybackFallbackReason::SourceUnavailable);
             Ok(source)
@@ -4825,7 +4825,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn explicit_hires_url_rejection_is_not_hidden_by_a_lower_quality() {
+    async fn explicit_hires_url_rejection_reports_requested_and_actual_fallback_quality() {
         let (player, resolver_calls, preparer_calls) = unavailable_quality_runtime(
             AudioQualityPreference::HiRes,
             Some(AudioQuality::Lossless),
@@ -4834,24 +4834,35 @@ mod tests {
         );
         let mut track = song("explicit-hires", 10_000);
         track.quality = AudioQuality::HiRes;
-        assert!(player
+        let snapshot = player
             .play_tracks(PlayTracksRequest {
                 tracks: vec![track],
                 start_at_id: None,
                 shuffle: None,
             })
             .await
-            .is_err());
-        let expected = vec![AudioQuality::HiRes, AudioQuality::HiRes];
+            .expect("manual preference can recover with a lower available source");
+        let selection = snapshot.source_selection.expect("selection");
+        assert_eq!(selection.requested_quality, AudioQualityPreference::HiRes);
+        assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
+        assert_eq!(
+            selection.fallback_reason,
+            Some(PlaybackFallbackReason::SourceUnavailable)
+        );
+        let expected = vec![
+            AudioQuality::HiRes,
+            AudioQuality::HiRes,
+            AudioQuality::Lossless,
+        ];
         assert_eq!(*resolver_calls.lock().unwrap(), expected);
         assert_eq!(*preparer_calls.lock().unwrap(), expected);
     }
 
     #[tokio::test]
-    async fn automatic_network_failure_falls_back_but_explicit_quality_does_not() {
-        for (requested, should_play) in [
-            (AudioQualityPreference::Automatic, true),
-            (AudioQualityPreference::HiRes, false),
+    async fn network_failure_falls_back_for_automatic_and_explicit_preferences() {
+        for requested in [
+            AudioQualityPreference::Automatic,
+            AudioQualityPreference::HiRes,
         ] {
             let (player, _, calls) = unavailable_quality_runtime(
                 requested,
@@ -4868,8 +4879,13 @@ mod tests {
                     shuffle: None,
                 })
                 .await;
-            assert_eq!(result.is_ok(), should_play);
-            assert_eq!(calls.lock().unwrap().len(), if should_play { 2 } else { 1 });
+            let selection = result
+                .expect("lower quality plays")
+                .source_selection
+                .unwrap();
+            assert_eq!(selection.requested_quality, requested);
+            assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
+            assert_eq!(calls.lock().unwrap().len(), 2);
         }
     }
 

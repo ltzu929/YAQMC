@@ -237,7 +237,7 @@ pub async fn qqmusic_set_preferred_quality(
     quality: AudioQualityPreference,
 ) -> ProviderResult<ProviderStatus> {
     let status = provider.set_preferred_quality(quality).await?;
-    reload_provider_track(player, "qqmusic").await?;
+    reload_provider_track(player, "qqmusic").await;
     Ok(status)
 }
 
@@ -248,27 +248,23 @@ pub async fn provider_set_preferred_quality(
     quality: AudioQualityPreference,
 ) -> ProviderResult<ProviderStatus> {
     let status = provider.playback_set_preferred_quality(quality).await?;
-    reload_provider_track(player, provider_id).await?;
+    reload_provider_track(player, provider_id).await;
     Ok(status)
 }
 
-async fn reload_provider_track(player: &PlayerService, provider_id: &str) -> ProviderResult<()> {
+async fn reload_provider_track(player: &PlayerService, provider_id: &str) {
     let current = player.current_track().await;
     let current_matches = current
         .as_ref()
         .and_then(|song| song.provider.as_ref())
         .is_some_and(|reference| reference.provider_id == provider_id);
     if current_matches {
-        player
-            .reload_current()
-            .await
-            .map_err(|error| ProviderCommandError {
-                code: "player-reload-failed".to_owned(),
-                message: error.to_string(),
-                retryable: true,
-            })?;
+        // The preference is already saved. Reload failures are published in the
+        // player snapshot; they must not make the UI retain its old setting.
+        if player.reload_current().await.is_err() {
+            tracing::warn!(target: "player.source", "quality preference saved; current track reload failed");
+        }
     }
-    Ok(())
 }
 
 pub async fn qqmusic_set_current_quality(
@@ -597,4 +593,91 @@ pub fn platform_export_diagnostics(
         },
     )
     .map(|path| path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::credentials::MemoryCredentialStore;
+    use crate::media::{PlaybackSourceError, PlaybackSourceResolver, ResolvedPlaybackSource};
+    use crate::player::Song;
+
+    struct NetworkFailure;
+
+    #[async_trait::async_trait]
+    impl PlaybackSourceResolver for NetworkFailure {
+        async fn resolve(
+            &self,
+            _song: &Song,
+        ) -> Result<ResolvedPlaybackSource, PlaybackSourceError> {
+            Err(PlaybackSourceError::Network)
+        }
+    }
+
+    #[tokio::test]
+    async fn saved_quality_is_returned_even_when_the_current_track_cannot_reload() {
+        let root = tempfile::tempdir().expect("temp root");
+        let storage = Arc::new(
+            StorageService::open(root.path().join("data"), root.path().join("cache"))
+                .expect("storage"),
+        );
+        let provider = yaqmc_provider_qqmusic::create_intree_provider(
+            Arc::clone(&storage),
+            Arc::new(MemoryCredentialStore::default()),
+            root.path().join("fixtures"),
+        )
+        .expect("provider");
+        let registry =
+            yaqmc_provider_api::ProviderRegistry::new("qqmusic", [Arc::clone(&provider)])
+                .expect("registry");
+        let playback = registry
+            .require_playback_provider("qqmusic")
+            .expect("playback provider");
+        let player = PlayerService::with_runtime(
+            Arc::new(crate::audio::TestAudioEngine::default()),
+            Arc::new(NetworkFailure),
+            Arc::new(crate::media::PassthroughMediaPreparer),
+        );
+        let track: Song = serde_json::from_value(serde_json::json!({
+            "id":"track", "title":"Track", "artists":[], "album":{"id":"album","title":"Album"},
+            "artwork":{"src":"","alt":"","dominantColor":"#000000"}, "durationMs":1000,
+            "trackNumber":1,"isFavorite":false,"quality":"standard","availability":{"status":"available"},
+            "provider":{"providerId":"qqmusic","trackId":"track"}
+        })).expect("track");
+        player.hydrate_queue(vec![track]).await;
+
+        let status = qqmusic_set_preferred_quality(
+            provider.as_ref(),
+            &player,
+            AudioQualityPreference::HiRes,
+        )
+        .await
+        .expect("saved preference survives reload failure");
+        assert_eq!(status.preferred_quality, AudioQualityPreference::HiRes);
+        let status = provider_set_preferred_quality(
+            "qqmusic",
+            playback.as_ref(),
+            &player,
+            AudioQualityPreference::Automatic,
+        )
+        .await
+        .expect("switching back to automatic also reports the saved value");
+        assert_eq!(status.preferred_quality, AudioQualityPreference::Automatic);
+        assert_eq!(
+            storage
+                .get_setting("preferred-quality")
+                .expect("setting")
+                .as_deref(),
+            Some("automatic")
+        );
+        let snapshot = player.snapshot().await;
+        assert!(!snapshot.is_playing);
+        assert_eq!(
+            snapshot
+                .playback_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("network-failure")
+        );
+    }
 }

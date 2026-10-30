@@ -43,6 +43,7 @@ class NativeMaintenanceUiTest {
         model = NativeViewModel(compose.activity.application, object : NativeCoreApi {
             override suspend fun invoke(method: String, params: JSONObject, host: Boolean): Any? {
                 calls += method
+                if (method == "diagnostics_export_bundle_to") assertFalse("export uses the main UI origin", host)
                 return respond(method, params)
             }
         }, checkUpdate = { update })
@@ -270,6 +271,32 @@ class NativeMaintenanceUiTest {
         }
         compose.runOnIdle { model.openProjectLink(unavailable, "https://github.com/YAQMC/YAQMC") }
         capture("pr9-about")
+    }
+
+    @Test fun chineseUpdatePageAndAccountContentStayBelowTheStatusBar() {
+        respond = { method, _ -> if (method == "provider_account_snapshot") JSONObject("""{
+            "state":"authenticated", "revision":1, "profile":{"nickname":"已登录用户"},
+            "entitlement":{"tier":"super-vip","membership":"active","expiresAtMs":1893558896000}
+        }""") else JSONObject() }
+        install("settings")
+        compose.runOnIdle {
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(compose.activity.window, false)
+            model.setLanguage("zh-CN")
+            kotlinx.coroutines.runBlocking { model.refreshAccount() }
+        }
+        val inset = androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+            ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars())?.top ?: 0
+        val heading = compose.onNodeWithText("设置").fetchSemanticsNode().boundsInRoot
+        assertTrue("settings heading clears status bar", heading.top >= inset)
+        compose.onNodeWithText("已登录用户").assertIsDisplayed()
+        compose.onNodeWithText("2030", substring = true).assertIsDisplayed()
+        capture("feedback-settings-insets")
+        compose.runOnIdle { model.navigate(NativeRoute("about")) }
+        compose.waitUntil(5000) { model.updateState.value.checked }
+        compose.onNodeWithText("检查更新").assertIsDisplayed()
+        compose.onNodeWithText("当前没有可用的新版本。").assertIsDisplayed()
+        compose.onNodeWithText("Check for updates").assertDoesNotExist()
+        capture("feedback-updates-chinese")
     }
 
     @Test fun yearlyTrendKeepsRankingsReachableAndLocalizesDimensions() {

@@ -540,6 +540,8 @@ impl QQMusicService {
             .set_setting("preferred-quality", quality.as_setting())
             .map_err(|_| QQMusicError::Storage)?;
         *self.preferred_quality.write().await = quality;
+        // The settings command reloads the current track with this preference.
+        *self.current_quality_override.write().await = None;
         Ok(self.status().await)
     }
 
@@ -1777,7 +1779,7 @@ impl PlaybackSourceResolver for QQMusicService {
             self.session_invalid.store(true, Ordering::Release);
         }
         let mut source = source.map_err(map_provider_source_error)?;
-        source.selection.requested_quality = AudioQualityPreference::Automatic;
+        source.selection.requested_quality = failed.requested_quality;
         if !source.selection.preview {
             source.selection.fallback_reason = Some(PlaybackFallbackReason::SourceUnavailable);
         }
@@ -1862,7 +1864,7 @@ impl PlaybackSourceResolver for QQMusicService {
 fn unavailable_fallback_preference(
     failed: &PlaybackSourceSelection,
 ) -> Option<AudioQualityPreference> {
-    if failed.requested_quality != AudioQualityPreference::Automatic || failed.preview {
+    if failed.preview {
         return None;
     }
     match failed.resolved_quality {
@@ -5760,6 +5762,18 @@ mod tests {
         assert_eq!(
             service.playback_quality_for("TRACK_A").await,
             AudioQualityPreference::High
+        );
+        service
+            .set_current_quality("TRACK_A".to_owned(), AudioQualityPreference::HiRes)
+            .await
+            .expect("manual current quality");
+        service
+            .set_preferred_quality(AudioQualityPreference::Automatic)
+            .await
+            .expect("change default");
+        assert_eq!(
+            service.playback_quality_for("TRACK_A").await,
+            AudioQualityPreference::Automatic
         );
     }
 

@@ -39,6 +39,35 @@ class NativePlaybackTest {
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()
     @After fun clear() { compose.runOnIdle { if (::model.isInitialized) model.viewModelScope.cancel() } }
 
+    @Test fun playerTransitionKeepsTheSourcePageVisibleUntilItIsCovered() {
+        install("library")
+        val source = compose.onNodeWithText("Guest")
+        source.assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { model.navigate(NativeRoute("player")) }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithTag("player-surface").assertExists()
+            compose.mainClock.advanceTimeBy(112)
+            source.assertIsDisplayed()
+            val panel = compose.onNodeWithTag("player-surface").getUnclippedBoundsInRoot()
+            assertTrue(source.getUnclippedBoundsInRoot().bottom < panel.top)
+            capture("feedback-player-opening")
+            compose.mainClock.advanceTimeBy(500)
+            source.assertDoesNotExist()
+            compose.runOnUiThread { assertTrue(model.back()) }
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeBy(112)
+            source.assertIsDisplayed()
+            assertTrue(source.getUnclippedBoundsInRoot().bottom <
+                compose.onNodeWithTag("player-surface").getUnclippedBoundsInRoot().top)
+            capture("feedback-player-closing")
+            compose.mainClock.advanceTimeBy(500)
+            compose.onNodeWithTag("player-surface").assertDoesNotExist()
+            assertFalse(core.calls.any { it.first.startsWith("player_") })
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun movedAndScaledTransportKeepsAllControlsInsideTheViewport() {
         install("player")
         for (offset in listOf(-0.2f, 0.2f)) {
@@ -325,6 +354,7 @@ class NativePlaybackTest {
     private fun openPlayerMenu() = compose.onNodeWithContentDescription("More actions for Current song").performScrollTo().performClick()
     private fun awaitCall(method: String) = compose.waitUntil(5000) { core.calls.any { it.first == method } }
     private fun capture(name: String) {
+        compose.waitForIdle()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         File(context.getExternalFilesDir(null), "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
