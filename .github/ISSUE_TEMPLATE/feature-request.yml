@@ -29,10 +29,7 @@ body:
       label: 目标平台
       multiple: true
       options:
-        - Windows
-        - Linux X11 / XWayland
-        - Linux 原生 Wayland
-        - 所有桌面平台
+        - Android
   - type: checkboxes
     id: boundaries
     attributes:

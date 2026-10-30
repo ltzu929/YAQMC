@@ -1,4 +1,4 @@
-//! Player event fan-out: §3.2 channel map, lagged-resync, SMTC feed, queue persist.
+//! Player event fan-out: 搂3.2 channel map, lagged-resync, SMTC feed, queue persist.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -210,13 +210,10 @@ pub fn spawn_account_restore_fanout(
 ) {
     let sink = SequencedSink::new(sink);
     runtime.spawn(async move {
-        #[cfg(feature = "plugins")]
-        core.plugins().restore_provider_accounts().await;
-
         // Reduced hosts (notably Android) do not compile the extension host. Its
         // compatibility stub cannot restore the in-tree provider, so restore the
         // registry directly instead of leaving a persisted account at revision 0.
-        #[cfg(not(feature = "plugins"))]
+
         {
             let providers = core.providers();
             for provider_id in providers.provider_ids() {
@@ -248,7 +245,7 @@ pub fn spawn_account_restore_fanout(
     });
 }
 
-/// Subscribe to `PlayerService` and emit protocol events with the §3.2 map.
+/// Subscribe to `PlayerService` and emit protocol events with the 搂3.2 map.
 ///
 /// SMTC feed and queue persistence stay in this task. The host sink is responsible
 /// for delivering frames over the stdio transport.

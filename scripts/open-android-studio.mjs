@@ -7,7 +7,7 @@ import {
   resolveAndroidJava,
   resolveAndroidToolchain,
   resolveRustlsVerifierMaven,
-} from './build-android.mjs';
+} from './android-toolchain.mjs';
 import { rootVersion } from './ci/android-version.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +72,11 @@ function setLocalProperty(file, key, value) {
   writeFileSync(file, [...remaining, `${key}=${escaped}`, ''].join('\n'));
 }
 setLocalProperty(path.join(android, 'local.properties'), 'sdk.dir', toolchain.sdk);
+setLocalProperty(
+  path.join(android, 'local.properties'),
+  'yaqmc.rustlsVerifierMavenDir',
+  environment.YAQMC_RUSTLS_VERIFIER_MAVEN_DIR,
+);
 setLocalProperty(path.join(android, '.gradle/config.properties'), 'java.home', javaHome);
 const gradleSettings = path.join(android, '.idea/gradle.xml');
 if (!existsSync(gradleSettings)) {

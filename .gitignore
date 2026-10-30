@@ -1,68 +1,34 @@
+# Node tooling
 node_modules/
-dist/
-dist-android/
-coverage/
-output/
-/release/
-release-electron/
-corresponding-source/
-.corresponding-source/
-.playwright-cli/
-playwright-report/
-test-results/
-blob-report/
-playwright/.cache/
-.DS_Store
-*.log
-.env
-.env.*
-!.env.example
-artifacts/branding/yaqmc-logo-chroma.png
-GPT-Readme.md
-GPT-Read-me.md
 
-# Rust
+# Rust build outputs
 /target/
-examples/plugins/provider-catalog-rust/target/
-examples/plugins/provider-catalog-rust/component/provider.wasm
-examples/plugins/provider-platform-rust/target/
-examples/plugins/provider-platform-rust/component/provider.wasm
-crates/yaqmc-core/tests/fixtures/component-host-guest/target/
 
-# Staged Electron core binary (scripts/stage-core.mjs)
-apps/desktop/resources/core/yaqmc-core
-apps/desktop/resources/core/yaqmc-core.exe
-apps/desktop/resources/core/core.sha256
-apps/desktop/resources/core/manifest.json
-
-# Android generated outputs and local SDK configuration
+# Android local configuration and generated outputs
 apps/android/android/.gradle/
 apps/android/android/.kotlin/
 apps/android/android/build/
-apps/android/android/app/build/
 apps/android/android/nativeApp/build/
-artifacts/android-native-comparison/
-apps/android/android/app/src/main/assets/
-apps/android/android/app/capacitor.build.gradle
-apps/android/android/capacitor.settings.gradle
-apps/android/android/capacitor-cordova-android-plugins/
 apps/android/android/local.properties
 release-android/
+
+# Local validation evidence and scratch files
+artifacts/
+coverage/
+output/
+*.log
+
+# Local secrets and signing configuration
+.env
+.env.*
+!.env.example
 *.jks
 *.keystore
+*.p12
 
-# Local acceptance reports
-artifacts/perf-baseline.md
-artifacts/soak-last.json
-artifacts/acc03-windows-last.json
-
-# Example plugin entrypoints (root `dist/` would hide plug01 fixtures)
-!examples/plugins/script-network/dist/
-!examples/plugins/script-network/dist/main.js
-!examples/plugins/script-actions/dist/
-!examples/plugins/script-actions/dist/main.js
-
-# Editors
+# Editors and machine-local agent configuration
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.codex/
+.DS_Store

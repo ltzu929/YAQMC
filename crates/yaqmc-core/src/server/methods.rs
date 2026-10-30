@@ -8,11 +8,7 @@ use yaqmc_protocol::{
 
 use crate::continuation::{ContinuationStartRequest, ContinuationTerminalReason};
 use crate::player::PlayTracksRequest;
-#[cfg(feature = "plugins")]
-use crate::plugin::api::{
-    PluginBridgeRequest, PluginEnableRequest, PluginInstallRequest, PluginSettingsWrite,
-    PluginUninstallRequest,
-};
+
 use crate::statistics::{StatisticsChanged, StatisticsExportRequest};
 use crate::CoreHandle;
 use yaqmc_provider_api::{
@@ -26,16 +22,15 @@ use super::types::{
     DiagnosticsExportToParams, EnabledParams, EncAreaParams, EntryIdParams, FrontendLogParams,
     IdParams, IndexParams, IssueReporterPreviewParams, LevelParams, LyricsDocumentParams,
     NamedRequest, OAuthCompleteParams, OAuthPrepareParams, OptionalAttemptParams, PathParams,
-    PlaylistTracksParams, PluginIdParams, PluginMarkFailedParams, PluginReadAssetParams,
-    PortParams, PrimaryModeParams, ProviderAreaParams, ProviderArtistCatalogParams,
+    PlaylistTracksParams, PrimaryModeParams, ProviderAreaParams, ProviderArtistCatalogParams,
     ProviderAttemptParams, ProviderAuthHeartbeatParams, ProviderAuthStartParams,
     ProviderCursorPageParams, ProviderEntityParams, ProviderIdParams, ProviderNamedRequest,
     ProviderOAuthCompleteParams, ProviderOAuthPrepareParams, ProviderOptionalAttemptParams,
     ProviderPlaylistTracksParams, ProviderQualityParams, ProviderRefreshParams,
     ProviderSearchParams, ProviderUrlParams, QualityParams, RecordErrorRequest, ReferenceParams,
     ReorderParams, RepeatParams, SampleParams, SearchParams, SeekParams, SettingKeyParams,
-    SettingWriteParams, ShareSongParams, SongIdParams, StatisticsRangeParams, TokenParams,
-    TrackParams, TracksParams, UrlParams, ValueParams, VolumeParams,
+    SettingWriteParams, ShareSongParams, SongIdParams, StatisticsRangeParams, TrackParams,
+    TracksParams, UrlParams, ValueParams, VolumeParams,
 };
 use super::HostDispatchHooks;
 
@@ -336,41 +331,12 @@ fn payload_len(value: &Value) -> u32 {
 }
 
 fn apply_platform_attach(
-    core: &CoreHandle,
-    attach: PlatformAttach,
+    _core: &CoreHandle,
+    _attach: PlatformAttach,
 ) -> Result<Value, DispatchError> {
-    #[cfg(not(feature = "system-media"))]
-    {
-        let _ = (core, attach);
-        return Err(DispatchError::Unavailable {
-            feature: "system media",
-        });
-    }
-    #[cfg(feature = "system-media")]
-    {
-        if let Some(handle) = attach
-            .main_window_handle
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            let hwnd = crate::system_media::parse_window_handle_hex(handle)
-                .map_err(DispatchError::InvalidParams)?;
-            core.start_system_media().attach_hwnd(
-                hwnd,
-                core.player(),
-                core.host_command_publisher(),
-                tokio::runtime::Handle::current(),
-            );
-        } else {
-            // Linux: MPRIS needs no HWND. Windows with no handle keeps the
-            // current unavailable SMTC status. A hidden message-window fallback
-            // is not implemented (plan R-3, NEEDS ACCEPTANCE TEST).
-            let _ = attach.platform_kind;
-            let _ = attach.display_backend;
-        }
-        ok(json!({ "ok": true }))
-    }
+    Err(DispatchError::Unavailable {
+        feature: "system media",
+    })
 }
 
 #[allow(clippy::too_many_lines)]
@@ -413,7 +379,6 @@ async fn invoke_core(
     method_name: &str,
     params: Value,
 ) -> Result<Value, DispatchError> {
-    let notify_plugin = || host.notify_plugin_changed();
     match method_name {
         "platform_diagnostics" => ok(ops::live_platform_diagnostics(core, host)),
         "platform_export_diagnostics" => cmd(ops::platform_export_diagnostics(core, host)),
@@ -1170,40 +1135,7 @@ async fn invoke_core(
             let ReferenceParams { reference } = parse(&params)?;
             cmd(ops::appearance_background_load(&core.config().paths.data_dir, reference).await)
         }
-        #[cfg(feature = "local-api")]
-        "local_api_status" => ok(core.local_api().status().await),
-        #[cfg(feature = "local-api")]
-        "local_api_set_enabled" => {
-            let EnabledParams { enabled } = parse(&params)?;
-            cmd(core
-                .local_api()
-                .set_enabled(enabled)
-                .await
-                .map_err(|error| error.to_string()))
-        }
-        #[cfg(feature = "local-api")]
-        "local_api_set_port" => {
-            let PortParams { port } = parse(&params)?;
-            cmd(ops::local_api_set_port(&core.local_api(), port).await)
-        }
-        #[cfg(feature = "local-api")]
-        "local_api_set_token" => {
-            let TokenParams { token } = parse(&params)?;
-            cmd(core
-                .local_api()
-                .set_token(token)
-                .await
-                .map_err(|error| error.to_string()))
-        }
-        #[cfg(feature = "local-api")]
-        "local_api_reveal_token" => ok(core.local_api().reveal_token().await),
-        #[cfg(feature = "local-api")]
-        "local_api_regenerate_token" => cmd(core
-            .local_api()
-            .regenerate_token()
-            .await
-            .map_err(|error| error.to_string())),
-        #[cfg(not(feature = "local-api"))]
+
         "local_api_status"
         | "local_api_set_enabled"
         | "local_api_set_port"
@@ -1278,117 +1210,7 @@ async fn invoke_core(
             let UrlParams { url } = parse(&params)?;
             cmd(crate::issue_reporter::validate_open_url(&url).map_err(str::to_owned))
         }
-        #[cfg(feature = "plugins")]
-        "plugin_list" => ok(ops::plugin_list(&core.plugins())),
-        #[cfg(feature = "plugins")]
-        "plugin_inspect_path" => {
-            let PathParams { path } = parse(&params)?;
-            cmd(ops::plugin_inspect_path(&core.plugins(), path))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_install" => {
-            let NamedRequest::<PluginInstallRequest> { request } = parse(&params)?;
-            cmd(ops::plugin_install(&core.plugins(), request, notify_plugin))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_set_enabled" => {
-            let NamedRequest::<PluginEnableRequest> { request } = parse(&params)?;
-            cmd(ops::plugin_set_enabled(
-                &core.plugins(),
-                request,
-                notify_plugin,
-            ))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_uninstall" => {
-            let NamedRequest::<PluginUninstallRequest> { request } = parse(&params)?;
-            cmd(ops::plugin_uninstall(
-                &core.plugins(),
-                request,
-                notify_plugin,
-            ))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_set_safe_mode" => {
-            let EnabledParams { enabled } = parse(&params)?;
-            cmd(ops::plugin_set_safe_mode(
-                &core.plugins(),
-                enabled,
-                notify_plugin,
-            ))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_set_developer_mode" => {
-            let EnabledParams { enabled } = parse(&params)?;
-            cmd(ops::plugin_set_developer_mode(
-                &core.plugins(),
-                enabled,
-                notify_plugin,
-            ))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_active_resources" => ok(ops::plugin_active_resources(&core.plugins())),
-        #[cfg(feature = "plugins")]
-        "plugin_diagnostics" => ok(ops::plugin_diagnostics(&core.plugins())),
-        #[cfg(feature = "plugins")]
-        "plugin_runtime_start" => {
-            let PluginIdParams { plugin_id } = parse(&params)?;
-            cmd(ops::plugin_runtime_start(&core.plugins(), &plugin_id))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_runtime_stop" => {
-            let TokenParams { token } = parse(&params)?;
-            ops::plugin_runtime_stop(&core.plugins(), &token);
-            Ok(Value::Null)
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_mark_failed" => {
-            let PluginMarkFailedParams { id, reason } = parse(&params)?;
-            cmd(ops::plugin_mark_failed(
-                &core.plugins(),
-                &id,
-                &reason,
-                notify_plugin,
-            ))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_bridge" => {
-            let NamedRequest::<PluginBridgeRequest> { request } = parse(&params)?;
-            cmd(ops::plugin_bridge(&core.plugins(), &core.player(), request).await)
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_install_unpacked" => {
-            let NamedRequest::<PluginInstallRequest> { request } = parse(&params)?;
-            cmd(ops::plugin_install_unpacked(
-                &core.plugins(),
-                request,
-                notify_plugin,
-            ))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_reload" => {
-            let IdParams { id } = parse(&params)?;
-            cmd(ops::plugin_reload(&core.plugins(), &id, notify_plugin))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_read_asset" => {
-            let PluginReadAssetParams { plugin_id, path } = parse(&params)?;
-            cmd(ops::plugin_read_asset(&core.plugins(), &plugin_id, &path))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_settings_get" => {
-            let IdParams { id } = parse(&params)?;
-            cmd(ops::plugin_settings_get(&core.plugins(), &id))
-        }
-        #[cfg(feature = "plugins")]
-        "plugin_settings_set" => {
-            let NamedRequest::<PluginSettingsWrite> { request } = parse(&params)?;
-            cmd(ops::plugin_settings_set(
-                &core.plugins(),
-                request,
-                notify_plugin,
-            ))
-        }
+
         "core_ping" => ok(json!({})),
         "platform_attach" => apply_platform_attach(core, parse(&params)?),
         "core_shutdown_prepare" => {
@@ -1506,16 +1328,7 @@ async fn invoke_core(
             let PathParams { path } = parse(&params)?;
             cmd(ops::preferences_set_background_from(&core.config().paths.data_dir, path).await)
         }
-        #[cfg(feature = "plugins")]
-        "plugin_install_from" => {
-            let NamedRequest::<PluginInstallRequest> { request } = parse(&params)?;
-            cmd(ops::plugin_install_from(
-                &core.plugins(),
-                request,
-                notify_plugin,
-            ))
-        }
-        #[cfg(not(feature = "plugins"))]
+
         "plugin_list"
         | "plugin_inspect_path"
         | "plugin_install"

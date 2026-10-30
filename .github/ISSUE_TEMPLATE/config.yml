@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/YAQMC/YAQMC/security/advisories/new
     about: OAuth、凭据、越权、路径或本地 API 漏洞请通过私有漏洞报告提交。
   - name: 中文使用文档
-    url: https://github.com/YAQMC/YAQMC/blob/main/docs/zh-CN/README.md
-    about: 安装、Linux、歌词、登录、音质和本地 API 的说明。
+    url: https://github.com/YAQMC/YAQMC/blob/main/README.md
+    about: Android 原生客户端的状态、构建与开发入口。

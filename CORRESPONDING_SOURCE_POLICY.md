@@ -11,6 +11,8 @@ Every release source manifest must identify the exact YAQMC commit, the SHA-256 
 complete corresponding source does not cure missing copyright permission, missing relicensing authority, or an
 unresolved proprietary extraction; those remain separate release blockers.
 
+Current native Android builds no longer include AMLL or the old plugin examples. Their obligations below apply to historical binaries that shipped them. The old release automation has been retired; any future release must provide the corresponding source for its actual dependencies.
+
 ## Required source set
 
 The source delivery must include:
@@ -30,7 +32,7 @@ references, and hashes of all delivered archives.
 
 Do not publish a binary release if the required corresponding source is unavailable.
 
-The YAQMC release workflow enforces provider readiness and provenance before
+The retired YAQMC release workflow enforced provider readiness and provenance before
 desktop and Android packaging. Its assembly job checks out the exact `qm-api-rs` and AMLL revisions with
 `persist-credentials: false`, runs
 `scripts/ci/corresponding-source.mjs`, and refuses to create a draft unless all

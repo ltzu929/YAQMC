@@ -1,7 +1,5 @@
 use std::{
     collections::HashMap,
-    fs::{self, File},
-    io::Write,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -11,15 +9,8 @@ use serde_json::json;
 use tempfile::TempDir;
 use yaqmc_core::{
     credentials::{CredentialError, CredentialStore, SpawnBlockingCredentialStore},
-    plugin::{
-        host::ExtensionHost,
-        package::{inspect_package, PackageError},
-        permissions::PluginPermission,
-        COMPONENT_MAX_COMPRESSED_BYTES,
-    },
     storage::StorageService,
 };
-use zip::{write::SimpleFileOptions, ZipWriter};
 
 fn table_names(database: &Path) -> Vec<String> {
     let connection = Connection::open(database).expect("database opens");
@@ -165,137 +156,4 @@ async fn credentials_round_trip_and_keep_blocking_failures_sanitized() {
         .expect_err("panic is a join failure");
     assert!(matches!(error, CredentialError::JoinFailed));
     assert_eq!(error.to_string(), "the secure credential worker failed");
-}
-
-fn manifest() -> &'static str {
-    r#"{
-        "manifestVersion": 1,
-        "id": "dev.example.task6",
-        "name": "Task 6",
-        "version": "1.0.0",
-        "apiVersion": 1,
-        "entrypoints": { "styles": ["styles/main.css"] }
-    }"#
-}
-
-fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
-    let file = File::create(path).expect("archive creates");
-    let mut archive = ZipWriter::new(file);
-    for (name, contents) in entries {
-        archive
-            .start_file(*name, SimpleFileOptions::default())
-            .expect("archive entry starts");
-        archive.write_all(contents).expect("archive entry writes");
-    }
-    archive.finish().expect("archive finishes");
-}
-
-#[test]
-fn plugin_host_persists_safety_and_enforces_runtime_and_package_contracts() {
-    let root = TempDir::new().expect("temporary root");
-    let package = root.path().join("plugin.yaqmc-plugin");
-    write_zip(
-        &package,
-        &[
-            ("manifest.json", manifest().as_bytes()),
-            ("styles/main.css", b"body { color: white; }"),
-        ],
-    );
-
-    let host = ExtensionHost::open(root.path().join("host")).expect("host opens");
-    host.install(&package, true, &[]).expect("plugin installs");
-    let runtime = host
-        .start_runtime("dev.example.task6")
-        .expect("runtime starts");
-    assert_eq!(runtime.plugin_id, "dev.example.task6");
-    assert!(host
-        .check_permission(&runtime.token, PluginPermission::StyleRegister)
-        .is_ok());
-    assert!(host
-        .check_permission(&runtime.token, PluginPermission::PlayerControl)
-        .is_err());
-    host.storage_set("dev.example.task6", "key", "value")
-        .expect("storage write");
-    assert_eq!(
-        host.storage_get("dev.example.task6", "key").as_deref(),
-        Some("value")
-    );
-    assert!(host
-        .storage_set("dev.example.task6", "oversized", &"x".repeat(70_000))
-        .is_err());
-    host.mark_clean_exit();
-    drop(host);
-
-    let clean_reopened = ExtensionHost::open(root.path().join("host")).expect("clean host reopens");
-    assert!(!clean_reopened.safe_mode());
-    drop(clean_reopened);
-
-    fs::write(
-        root.path().join("host/journal.json"),
-        r#"{"bootId":"task6","activationStarted":true,"cleanExit":false}"#,
-    )
-    .expect("unclean journal writes");
-    let recovered = ExtensionHost::open(root.path().join("host")).expect("host reopens");
-    assert!(recovered.safe_mode());
-    assert!(!recovered.list()[0].enabled);
-
-    let traversal = root.path().join("traversal.yaqmc-plugin");
-    write_zip(
-        &traversal,
-        &[
-            ("manifest.json", manifest().as_bytes()),
-            ("../escape.css", b"body{}"),
-        ],
-    );
-    assert_eq!(
-        inspect_package(&traversal).unwrap_err(),
-        PackageError::UnsafePath
-    );
-
-    let duplicate = root.path().join("duplicate.yaqmc-plugin");
-    write_zip(
-        &duplicate,
-        &[
-            ("manifest.json", manifest().as_bytes()),
-            ("styles/main.css", b"a{}"),
-            ("styles/./main.css", b"b{}"),
-        ],
-    );
-    assert_eq!(
-        inspect_package(&duplicate).unwrap_err(),
-        PackageError::UnsafePath
-    );
-
-    let symlink = root.path().join("symlink.yaqmc-plugin");
-    let file = File::create(&symlink).expect("symlink archive creates");
-    let mut archive = ZipWriter::new(file);
-    archive
-        .add_symlink(
-            "styles/main.css",
-            "../escape.css",
-            SimpleFileOptions::default(),
-        )
-        .expect("symlink entry starts");
-    archive
-        .start_file("manifest.json", SimpleFileOptions::default())
-        .expect("manifest entry starts");
-    archive
-        .write_all(manifest().as_bytes())
-        .expect("manifest writes");
-    archive.finish().expect("symlink archive finishes");
-    assert_eq!(
-        inspect_package(&symlink).unwrap_err(),
-        PackageError::Symlink
-    );
-
-    let oversized = root.path().join("oversized.yaqmc-plugin");
-    let oversized_file = File::create(&oversized).expect("oversized package creates");
-    oversized_file
-        .set_len(COMPONENT_MAX_COMPRESSED_BYTES + 1)
-        .expect("oversized package length sets");
-    drop(oversized_file);
-    assert_eq!(
-        inspect_package(&oversized).unwrap_err(),
-        PackageError::Oversize
-    );
 }

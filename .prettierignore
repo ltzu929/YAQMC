@@ -1,24 +1,11 @@
-dist
-release-electron
-release-android
-dist-android
 node_modules
-playwright-report
-test-results
-blob-report
-package-lock.json
-GPT-Read-me.md
-packages/yaqmc-client/fixtures
-
-# Workspace scratch, worktrees, and generated Rust artifacts
-.superpowers/**
-.worktrees/**
-worktrees/**
 target
+artifacts
+release-android
+package-lock.json
+crates/yaqmc-protocol/fixtures
 /apps/android/android/**/build/**
 /apps/android/android/.gradle/**
-/apps/android/android/app/src/main/assets/**
-
-# Untracked legacy Tauri tree
-/src-tauri/**
-/YAQMC_ELECTRON_MIGRATION_PLAN.md
+/apps/android/android/.kotlin/**
+**/.idea/**
+**/.codex/**

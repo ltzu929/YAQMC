@@ -15,38 +15,19 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "yaqmc-android"
-include(":app")
 include(":nativeApp")
 
-// Capacitor may be npm-hoisted to the workspace root or kept beside this app.
-val capacitorAndroid = requireNotNull(
-    sequenceOf(
-        file("../node_modules/@capacitor/android/capacitor"),
-        file("../../node_modules/@capacitor/android/capacitor"),
-        file("../../../node_modules/@capacitor/android/capacitor"),
-    ).firstOrNull { it.isDirectory },
-) { "@capacitor/android is missing; run npm ci at the repository root" }
-include(":capacitor-android")
-project(":capacitor-android").projectDir = capacitorAndroid
-
-val capacitorApp = requireNotNull(
-    sequenceOf(
-        file("../node_modules/@capacitor/app/android"),
-        file("../../node_modules/@capacitor/app/android"),
-        file("../../../node_modules/@capacitor/app/android"),
-    ).firstOrNull { it.isDirectory },
-) { "@capacitor/app is missing; run npm ci at the repository root" }
-include(":capacitor-app")
-project(":capacitor-app").projectDir = capacitorApp
-
+val localProperties = java.util.Properties().apply {
+    val propertiesFile = file("local.properties")
+    if (propertiesFile.isFile) propertiesFile.inputStream().use { load(it) }
+}
 val rustlsVerifierMaven = System.getenv("YAQMC_RUSTLS_VERIFIER_MAVEN_DIR")
+    ?.takeIf { it.isNotBlank() }
+    ?: localProperties.getProperty("yaqmc.rustlsVerifierMavenDir")
 require(!rustlsVerifierMaven.isNullOrBlank()) {
-    "YAQMC_RUSTLS_VERIFIER_MAVEN_DIR is required; invoke Gradle through scripts/build-android.mjs"
+    "Rust TLS Maven repository is not configured; run npm run android:studio -- <Studio executable> --prepare-only at the repository root, then sync Gradle again"
 }
 dependencyResolutionManagement.repositories.maven {
     name = "rustlsPlatformVerifier"
     url = uri(rustlsVerifierMaven)
 }
-
-// Capacitor modules are linked explicitly because the generated Groovy settings
-// fragment would declare :capacitor-android a second time in this Kotlin project.

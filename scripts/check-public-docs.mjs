@@ -10,15 +10,7 @@ const primaryDocuments = [
   'docs/zh-CN/development.md',
   'docs/zh-CN/native-parity.md',
 ];
-const supplementaryDocuments = [
-  '.github/PULL_REQUEST_TEMPLATE.md',
-  'apps/android/README.md',
-  'apps/android/JNI_CONTRACT.md',
-  'apps/android/android/nativeApp/README.md',
-  'examples/plugins/README.md',
-  'examples/plugins/provider-catalog-rust/README.md',
-  'examples/plugins/provider-platform-rust/README.md',
-];
+const supplementaryDocuments = ['.github/PULL_REQUEST_TEMPLATE.md'];
 const forbiddenContent = [
   {
     pattern: /\[PROJECT_NAME\]|\$PROJECT_NAME_API_TOKEN|GPT-Read-?me\.md/iu,
