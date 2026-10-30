@@ -36,6 +36,9 @@ node scripts/build-android-native.mjs --debug
 ```
 
 默认输出 `release-android/YAQMC-<version>-android-native-benchmark.apk`，使用 Android debug key；benchmark 与 debug 均仅 ARM64。
+
+原生构建脚本在复制 APK 到 `release-android/` 前执行安装包校验：使用 SDK 36 的 `aapt` 核对包名 `org.yaqmc.android.nativeui`、版本号与 ARM64 ABI，检查 APK 中实际包含 `lib/arm64-v8a/libyaqmc_core.so`，再用 `apksigner` 校验签名并输出证书 SHA-256。任一检查失败即停止交付，不把构建成功当作 APK 已通过交付核对。校验器的纯逻辑测试位于 `scripts/ci/native-apk-check.test.mjs`，运行 `node --test scripts/ci/native-apk-check.test.mjs`；此检查不替代设备安装、真实播放及签名连续性检查。
+
 包名为 `org.yaqmc.android.nativeui`，可与旧包共存。正式签名、旧包升级与数据兼容待落实；不要跨包复制凭据。
 本地安装使用 `adb install -r '<APK 路径>'`，遇到设备确认时由用户处理。
 
