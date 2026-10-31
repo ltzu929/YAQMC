@@ -3,9 +3,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const BUILD_TOOLS_VERSION = '36.0.0';
-const PACKAGE_NAME = 'org.yaqmc.android.nativeui';
+const PACKAGE_NAME = 'org.yaqmc.android';
+// Public certificate identity of the existing personal release, not key material.
+export const RELEASE_CERTIFICATE_SHA256 =
+  '2ca3123c8223156ed5e40de5c90299a43a354a8ca0ef1ce75a029e68e345097b';
 const CORE_ENTRY = 'lib/arm64-v8a/libyaqmc_core.so';
-const ALLOWED_VARIANTS = new Set(['debug', 'benchmark']);
+const ALLOWED_VARIANTS = new Set(['release', 'debug', 'benchmark']);
 
 export function parseNativeApkBadging(output) {
   const match = /^package:\s+name='([^']+)' versionCode='(\d+)' versionName='([^']+)'/mu.exec(
@@ -22,8 +25,9 @@ export function parseNativeApkBadging(output) {
 export function assertNativeApkContents({ badging, files, variant, version }) {
   if (!ALLOWED_VARIANTS.has(variant)) throw new Error('Unsupported native APK variant');
   const actual = parseNativeApkBadging(badging);
-  const expectedName = version.versionName + '-native-' + variant;
-  if (actual.packageName !== PACKAGE_NAME) {
+  const expectedName = version.versionName + (variant === 'release' ? '' : '-native-' + variant);
+  const expectedPackage = PACKAGE_NAME + (variant === 'release' ? '' : '.' + variant);
+  if (actual.packageName !== expectedPackage) {
     throw new Error('Native APK package mismatch: ' + actual.packageName);
   }
   if (actual.versionCode !== version.versionCode || actual.versionName !== expectedName) {
@@ -106,5 +110,8 @@ export function verifyNativeApk({
     apkPath,
   ]);
   const certificateSha256 = parseNativeApkSigner(signature);
+  if (variant === 'release' && certificateSha256 !== RELEASE_CERTIFICATE_SHA256) {
+    throw new Error('Release APK signer does not match the existing installation');
+  }
   return { ...identity, certificateSha256 };
 }

@@ -4,6 +4,13 @@ import android.app.Activity
 import android.util.Base64
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -131,8 +138,16 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                     NavigationRailItem(selected = selectedRoot(route.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
                         icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.weight(1f, fill = false).testTag("nav-$kind"))
                 } }
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    when (route.kind) {
+                AnimatedContent(targetState = route, modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentKey = { it.kind == "player" }, label = "player-transition",
+                    transitionSpec = {
+                        (when {
+                            targetState.kind == "player" -> slideInVertically(tween(320)) { it } togetherWith ExitTransition.KeepUntilTransitionsFinished
+                            initialState.kind == "player" -> EnterTransition.None togetherWith slideOutVertically(tween(280)) { it }
+                            else -> EnterTransition.None togetherWith ExitTransition.None
+                        }).apply { targetContentZIndex = if (targetState.kind == "player") 1f else 0f }
+                    }) { destination ->
+                    when (destination.kind) {
                         "library" -> Library(model)
                         "settings" -> Settings(model, login)
                         "statistics" -> NativeStatistics(model)
@@ -143,9 +158,12 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                         "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
                         "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
                             { model.setAppearance(NativeAppearancePreferences()); model.setTheme("system") }, model::notify)
-                        "player" -> NowPlaying(model, openShare)
+                        "player" -> Box(Modifier.fillMaxSize().testTag("player-surface")) {
+                            NativeBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
+                            NowPlaying(model, openShare)
+                        }
                         "queue" -> Queue(model, openShare)
-                        else -> Catalog(model, route, openShare, reportDrawn)
+                        else -> Catalog(model, destination, openShare, reportDrawn)
                     }
                 }
             }

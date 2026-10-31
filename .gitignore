@@ -10,6 +10,7 @@ apps/android/android/.kotlin/
 apps/android/android/build/
 apps/android/android/nativeApp/build/
 apps/android/android/local.properties
+apps/android/android/keystore.properties
 release-android/
 
 # Local validation evidence and scratch files

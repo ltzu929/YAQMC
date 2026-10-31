@@ -25,7 +25,7 @@ val rustlsVerifierMaven = System.getenv("YAQMC_RUSTLS_VERIFIER_MAVEN_DIR")
     ?.takeIf { it.isNotBlank() }
     ?: localProperties.getProperty("yaqmc.rustlsVerifierMavenDir")
 require(!rustlsVerifierMaven.isNullOrBlank()) {
-    "Rust TLS Maven repository is not configured; run npm run android:studio -- <Studio executable> --prepare-only at the repository root, then sync Gradle again"
+    "Set yaqmc.rustlsVerifierMavenDir in local.properties to the pinned rustls-platform-verifier-android Maven directory, then sync Gradle again; see docs/zh-CN/development.md"
 }
 dependencyResolutionManagement.repositories.maven {
     name = "rustlsPlatformVerifier"

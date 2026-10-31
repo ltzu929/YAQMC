@@ -25,6 +25,7 @@ pub(crate) fn account_entitlement_from_qmapi(info: &UserVipInfoResponse) -> Acco
                 "identity": {
                     "vip": info.identity.vip,
                     "HugeVip": info.identity.huge_vip,
+                    "HugeVipEnd": info.identity.huge_vip_end,
                     "yearflag": info.identity.year_flag,
                     "HugeYearFlag": info.identity.huge_year_flag,
                     "twelve": info.identity.twelve,
@@ -202,6 +203,19 @@ mod tests {
         assert_eq!(
             entitlement.permitted_qualities,
             vec![AudioQuality::Standard]
+        );
+    }
+
+    #[test]
+    fn library_vip_info_preserves_identity_expiry_when_numeric_expiry_is_absent() {
+        let info: UserVipInfoResponse = serde_json::from_value(json!({
+            "svip":1, "identity":{"vip":1,"HugeVipEnd":"2030-01-02 12:34:56"},
+            "userinfo":{"expire":0}
+        }))
+        .expect("vip response");
+        assert_eq!(
+            account_entitlement_from_qmapi(&info).expires_at_ms,
+            Some(1_893_558_896_000)
         );
     }
 

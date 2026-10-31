@@ -1,5 +1,6 @@
 use super::account::{AccountEntitlement, EntitlementTier, MembershipState, SecondaryEntitlement};
 use serde_json::Value;
+use time::{format_description::well_known::Rfc3339, macros::format_description};
 use yaqmc_provider_api::{
     AudioCodec, AudioFormat, AudioFormatInfo, AudioQuality, PlaybackSourceError,
 };
@@ -342,6 +343,43 @@ pub(crate) fn choose_source(
     }
 }
 
+fn membership_expiry_ms(value: &Value) -> Option<u64> {
+    let number = value
+        .as_u64()
+        .or_else(|| value.as_str()?.trim().parse().ok());
+    if let Some(number) = number {
+        return (number >= 946_684_800).then(|| {
+            if number < 10_000_000_000 {
+                number.saturating_mul(1_000)
+            } else {
+                number
+            }
+        });
+    }
+    let text = value.as_str()?.trim();
+    if let Ok(date) = time::OffsetDateTime::parse(text, &Rfc3339) {
+        return u64::try_from(date.unix_timestamp_nanos() / 1_000_000).ok();
+    }
+    // QQ Music's membership dates without an offset use China Standard Time.
+    let date = time::PrimitiveDateTime::parse(
+        text,
+        format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
+    )
+    .ok()
+    .or_else(|| {
+        time::Date::parse(text, format_description!("[year]-[month]-[day]"))
+            .ok()?
+            .with_hms(23, 59, 59)
+            .ok()
+    })?;
+    u64::try_from(
+        date.assume_offset(time::UtcOffset::from_hms(8, 0, 0).ok()?)
+            .unix_timestamp_nanos()
+            / 1_000_000,
+    )
+    .ok()
+}
+
 pub(crate) fn normalize_account_entitlement(payload: &Value) -> AccountEntitlement {
     let normalized = payload
         .pointer("/data/entitlement")
@@ -460,15 +498,16 @@ pub(crate) fn normalize_account_entitlement(payload: &Value) -> AccountEntitleme
     let green_diamond = numeric("/identity/vip").unwrap_or_default() > 0
         || numeric("/identity/HugeVip").unwrap_or_default() > 0;
     let super_vip = numeric("/svip").unwrap_or_default() > 0;
-    let expires_at_ms = numeric("/userinfo/expire")
-        .filter(|value| *value >= 946_684_800)
-        .map(|value| {
-            if value < 10_000_000_000 {
-                value.saturating_mul(1_000)
-            } else {
+    let expires_at_ms = raw.and_then(|value| {
+        value
+            .pointer("/userinfo/expire")
+            .and_then(membership_expiry_ms)
+            .or_else(|| {
                 value
-            }
-        });
+                    .pointer("/identity/HugeVipEnd")
+                    .and_then(membership_expiry_ms)
+            })
+    });
     if raw.is_none() {
         return AccountEntitlement {
             tier: EntitlementTier::Unknown,
@@ -676,17 +715,17 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_fallback_stops_at_standard_and_preserves_explicit_or_preview_requests() {
+    fn unavailable_fallback_stops_at_standard_and_does_not_extend_previews() {
         for (requested_quality, resolved_quality, preview) in [
             (
                 AudioQualityPreference::Automatic,
                 AudioQuality::Standard,
                 false,
             ),
-            (AudioQualityPreference::HiRes, AudioQuality::HiRes, false),
+            (AudioQualityPreference::HiRes, AudioQuality::Standard, false),
             (
                 AudioQualityPreference::Lossless,
-                AudioQuality::Lossless,
+                AudioQuality::Standard,
                 false,
             ),
             (AudioQualityPreference::Automatic, AudioQuality::High, true),
@@ -1192,5 +1231,32 @@ mod tests {
         assert_eq!(entitlement.tier, EntitlementTier::Free);
         assert_eq!(entitlement.membership, MembershipState::Inactive);
         assert_eq!(entitlement.expires_at_ms, None);
+    }
+
+    #[test]
+    fn membership_expiry_reads_identity_dates_without_using_secondary_benefit_dates() {
+        for (date, expected) in [
+            ("2030-01-02", 1_893_599_999_000_u64),
+            ("2030-01-02 12:34:56", 1_893_558_896_000),
+            ("2030-01-02T12:34:56+08:00", 1_893_558_896_000),
+            ("1893558896", 1_893_558_896_000),
+            ("1893558896000", 1_893_558_896_000),
+        ] {
+            let payload = serde_json::json!({"req":{"data":{
+                "svip":1, "identity":{"vip":1, "HugeVipEnd":date}, "userinfo":{"expire":0}
+            }}});
+            assert_eq!(
+                normalize_account_entitlement(&payload).expires_at_ms,
+                Some(expected),
+                "{date}"
+            );
+        }
+        for date in ["", "0", "3", "2030-02-30", "unknown"] {
+            assert_eq!(membership_expiry_ms(&Value::String(date.to_owned())), None);
+        }
+        let payload = serde_json::json!({"req":{"data":{
+            "svip":1, "identity":{"vip":1, "eightEnd":"2030-01-02"}, "userinfo":{"expire":0}
+        }}});
+        assert_eq!(normalize_account_entitlement(&payload).expires_at_ms, None);
     }
 }

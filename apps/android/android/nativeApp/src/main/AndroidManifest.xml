@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <application android:name=".YaqmcApplication" android:allowBackup="false"
         android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="YAQMC Native" android:usesCleartextTraffic="false"
+        android:label="${appLabel}" android:usesCleartextTraffic="false"
         android:supportsRtl="true" android:theme="@style/Theme.Yaqmc">
         <profileable android:shell="true" />
         <activity android:name=".OAuthActivity" android:exported="false"
@@ -14,16 +14,19 @@
         <activity android:name=".nativeui.NativeActivity" android:exported="true"
             android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="yaqmc" android:host="catalog" />
             </intent-filter>
         </activity>
+        <activity-alias android:name=".MainActivity" android:targetActivity=".nativeui.NativeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <service android:name=".media.PlaybackService" android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>

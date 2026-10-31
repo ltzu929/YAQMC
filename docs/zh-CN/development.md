@@ -21,58 +21,60 @@ Gradle 仅包含 `:nativeApp`，不依赖 npm、Capacitor 或旧 Web 界面。No
 
 ## 环境与构建
 
-需要 Node.js **26.7.0** 与其自带 npm、Rust **1.88.0 或更高版本**、JDK **21**、Android SDK / Build Tools **36**、NDK **28.2.13676358** 和 cargo-ndk **4.1.2**。
-Windows 使用 MSVC；Gradle 使用仓库 wrapper。Node 版本以 `.node-version` 和 `package.json` 为准；先检查 `node --version`。
-可用 `YAQMC_JAVA_HOME` 指定 JDK，`ANDROID_SDK_ROOT` / `ANDROID_HOME` 指定 SDK。
+需要 Rust **1.88.0 或更高版本**、JDK **21**、Android SDK / Build Tools **36**、NDK **28.2.13676358** 和 cargo-ndk **4.1.2**。Windows 使用 MSVC；Gradle 使用仓库 wrapper。Node.js **26.7.0** 与其自带 npm 用于可选批处理、脚本测试和文档格式化，Studio 打包不依赖 Node。
 
-以下命令在仓库根目录执行：
+Gradle 是统一构建入口：从仓库 `package.json` 读取版本并计算 versionCode，从 Git 读取源码提交；`:nativeApp:buildRustCore` 调用已有 cargo-ndk 编译当前 ABI 的 Rust Core，并作为 Android `preBuild` 依赖。Gradle 跟踪 Rust 输入和输出，只改 Kotlin 时复用未变化的 Core，Clean Project 后自动补建；不再由启动脚本注入版本或复制 Core。
 
-```powershell
-npm ci
-# 重编 ARM64 release Rust Core，构建优化比较包，并运行原生 JVM 单元测试
-node scripts/build-android-native.mjs
-# 开发包
-node scripts/build-android-native.mjs --debug
-```
+本机配置位于 Gradle 工程 `apps/android/android`，均保持私有：
 
-默认输出 `release-android/YAQMC-<version>-android-native-benchmark.apk`，使用 Android debug key；benchmark 与 debug 均仅 ARM64。
+- `local.properties` 保存 SDK 的 `sdk.dir`、Rust TLS 的 `yaqmc.rustlsVerifierMavenDir`，以及需要时的 `yaqmc.cargoHome`、`yaqmc.rustupHome`；Windows 路径使用正斜杠，冒号写成 `\:`。这些路径配置一次后，直接从桌面打开 Studio 也能读取。
+- `.gradle/config.properties` 的 `java.home` 指向 JDK 21，Studio Gradle JDK 选 `GRADLE_LOCAL_JAVA_HOME`。IDE 自身继续使用随附 JBR；两者用途见 [Android 官方 JDK 说明](https://developer.android.com/build/jdks)。
+- `keystore.properties` 使用标准 Android 签名字段 `storeFile`、`storePassword`、`keyAlias`、`keyPassword`，引用既有密钥；可参照同目录 `keystore.properties.example`。真实文件被 Git 忽略，禁止重新生成密钥代替旧密钥。Gradle 同步时即可读取签名，不依赖启动 IDE 的终端。此方式见 [Android 官方签名说明](https://developer.android.com/studio/publish/app-signing#secure-key)。
 
-原生构建脚本在复制 APK 到 `release-android/` 前执行安装包校验：使用 SDK 36 的 `aapt` 核对包名 `org.yaqmc.android.nativeui`、版本号与 ARM64 ABI，检查 APK 中实际包含 `lib/arm64-v8a/libyaqmc_core.so`，再用 `apksigner` 校验签名并输出证书 SHA-256。任一检查失败即停止交付，不把构建成功当作 APK 已通过交付核对。校验器的纯逻辑测试位于 `scripts/ci/native-apk-check.test.mjs`，运行 `node --test scripts/ci/native-apk-check.test.mjs`；此检查不替代设备安装、真实播放及签名连续性检查。
+Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或不符即停止，不退回调试签名。环境变量 `ANDROID_RELEASE_*` 仍可为 CI 或批处理提供签名，本机文件优先。SDK / Cargo 路径也可通过原有环境变量提供。
 
-包名为 `org.yaqmc.android.nativeui`，可与旧包共存。正式签名、旧包升级与数据兼容待落实；不要跨包复制凭据。
-本地安装使用 `adb install -r '<APK 路径>'`，遇到设备确认时由用户处理。
+显式复用已构建 Core 时可指定 `yaqmc.nativeLibDir` / `YAQMC_ANDROID_NATIVE_LIB_DIR`；此模式跳过 Rust 编译，调用者应在 Rust 改动后更新该目录。日常 IDE 构建使用 Gradle 默认目录，无需设置此项。模拟器及离线验证继续按“必要检查”使用独立 ABI 与运行器。
 
-只改 Kotlin 时可以复用兼容的 Core：
+常规包沿用 `org.yaqmc.android`、旧签名、原应用数据目录和 Android Keystore，见项目规划 D004。之前的 `org.yaqmc.android.nativeui` 为独立比较包，其数据不跨包复制。`.debug` / `.benchmark` 只供显式开发验证，使用独立包名和调试签名。
 
-```powershell
-# 此目录需包含 arm64-v8a/libyaqmc_core.so
-$env:YAQMC_ANDROID_NATIVE_LIB_DIR = '<已构建的 JNI 输出目录>'
-node scripts/build-android-native.mjs --reuse-core
-```
-
-未指定目录时，`--reuse-core` 使用 `nativeApp/build/generated/jniLibs` 中上次构建的 Core。
-修改 Rust 后应重编或明确使用本次产物；同一 Gradle 工程避免重叠构建。
-`npm run android:build` 构建原生 benchmark 包，`npm run android:build:debug` 构建原生 debug 包；旧 WebView、桌面和网站构建入口已经移除。
+命令行也可直接在 Gradle 工程运行 `./gradlew.bat :nativeApp:assembleRelease`。原有 `npm run android:build` 作为可选批处理保留，调用同一 Gradle 构建后运行 JVM 测试、用 SDK 的 `aapt` / `apksigner` 检查 APK，再复制到 `release-android/YAQMC-<version>-android-arm64-v8a.apk`；`--reuse-core` 仅供显式复用。安装使用 `adb install -r '<APK 路径>'`，设备确认由用户处理。签名、构建和真实账号 / 播放验收分别记录。
 
 ## Android Studio 本地工作流
 
-2026-10-27 起，本地 Codex 将 Android Studio 纳入日常开发与审查。网页端继续通过分支 / PR 交付；本地使用 IDE 阅读 Kotlin / Compose、断点调试、查看 Logcat，以及管理模拟器和连接设备。界面问题按需使用 Layout Inspector；卡顿、内存与播放后台问题按需使用 Profiler，并按改动保留必要的测试和真机验收。
+本地开发、调试和打包优先使用 Android Studio 及其 MCP，遵循项目规划 D005。打开 `apps/android/android` Gradle 工程，SDK Location 指向已有 SDK 36，Gradle JDK 选择 JDK 21，然后 Sync Project。路径与签名按上节配置，不要求通过脚本启动 Studio。
 
-打开的是 `apps/android/android` Gradle 工程，运行模块选择 `nativeApp`、日常调试选择 `debug`，优化比较使用 `benchmark`。宿主源码和测试已全部纳入 `nativeApp`。SDK、NDK、Gradle wrapper 和 JDK 沿用上节版本，不因 IDE 的升级提示自动调整。
+生成手机覆盖升级包：
 
-先在终端加载本机已有的 Node 26.7.0、Cargo、JDK 21、SDK 36 和 Gradle 缓存环境，再从仓库根目录启动（可执行文件路径按本机安装位置填写）：
+1. 在顶部运行配置选择 **打包 Release APK**，点击绿色运行按钮；该配置只执行 Gradle `:nativeApp:assembleRelease`，无需连接手机。
+2. 等待 Build 窗口显示 `BUILD SUCCESSFUL`。APK 位于 `nativeApp/build/outputs/apk/release/nativeApp-release.apk`，从左侧 Project 视图或文件管理器打开；Studio 的构建通知也可定位产物。
+3. 也可在 Build Variants 把 `nativeApp` 切到 `release`，使用 Build 菜单的 Generate APKs。已有签名由 Gradle 自动使用；如使用 Generate Signed Bundle / APK 向导，仍选择原有密钥。
 
-```powershell
-$env:YAQMC_JAVA_HOME = '<JDK 21 目录>'
-$env:ANDROID_SDK_ROOT = '<现有 SDK 36 目录>'
-npm run android:studio -- 'D:\android\bin\studio64.exe'
-```
+日常使用共享配置 **运行与调试**，指向当前 `nativeApp` 模块：先在 Build Variants 选择 `debug`，再选择模拟器或设备，点击 Run 安装启动，或点击 Debug 使用断点、单步与变量检查。该配置自动显示 Logcat，保留应用存储和现有日志；旧本机配置 `app` 指向已经删除的模块，应在 Run → Edit Configurations 中移除，已有 `nativeApp` 配置可继续使用。
 
-首次使用前先通过原生构建脚本生成 Core。启动脚本默认读取 `nativeApp/build/generated/jniLibs`，也可用 `YAQMC_ANDROID_NATIVE_LIB_DIR` 指定已核对的兼容目录；每次启动将所选 ABI 的 Core 复制到被忽略的 `.gradle/yaqmc-studio/jniLibs`，供 IDE 使用，避免 Clean Project 删除运行所需的 JNI 库。修改 Rust 后先重新构建并重新运行启动命令，更新该副本。脚本向 IDE 注入 SDK / NDK、Rust TLS Maven 仓库、Core 目录、版本和源码提交信息，并在被忽略的 `local.properties`、`.gradle/config.properties` 中保存 SDK 与 JDK 路径，并在 `local.properties` 保存 Rust TLS Maven 仓库路径；Gradle 优先使用显式环境变量，缺失时读取该本机配置，因此从桌面打开或复用已运行的 Studio 窗口也能同步。准备后在 IDE 点击 Sync Project / Try Again；首次创建 `.idea/gradle.xml` 时选择 `GRADLE_LOCAL_JAVA_HOME`，已有 IDE 设置不覆盖。附加 `--prepare-only` 可只准备本地路径和 Core 副本而不启动 IDE。
+完整本地工作流按问题选择以下入口：
 
-Gradle JDK 选择 **JDK 21**（`GRADLE_LOCAL_JAVA_HOME` 或上述 `JAVA_HOME`），IDE 自身继续使用随附 JBR；两者用途见 [Android 官方 JDK 说明](https://developer.android.com/build/jdks)。本机新装 Studio 的 JBR 为 Java 25，不直接用于本工程 Gradle。IDE 的 SDK Location 应指向已有 SDK 36，避免另建一套环境。
+| 工作                 | 优先使用的现成能力                                                                              | 检查结果                        |
+| -------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------- |
+| 工程同步与依赖       | Studio Sync Project、SDK Manager、Gradle JDK；MCP 模块 / 依赖查询                               | 同步完成、模块和依赖可解析      |
+| 阅读、修改与重构     | IDE 导航、检查与重构；MCP 的符号、调用关系、问题检查和 rename refactoring                       | 实际改动、受影响调用和检查结果  |
+| 模拟器与安装运行     | Device Manager、Running Devices、运行与调试配置                                                 | 目标设备上的实际启动与操作      |
+| 断点调试             | Debug、Attach Debugger、断点、单步和变量窗口；跨 JNI 问题按需使用原生调试器                     | 异常位置、调用栈和相关变量      |
+| 日志与崩溃           | View → Tool Windows → Logcat，选择目标设备 / 进程；调试包过滤 `package:org.yaqmc.android.debug` | 复现时段的日志与异常栈          |
+| JVM 与静态检查       | 共享配置 **检查 JVM 与 Lint**；单项测试也可从代码旁运行                                         | Tests 窗口、JUnit 和 Lint 报告  |
+| 离线界面回归         | 启动目标 x86_64 模拟器，执行 **模拟器离线界面测试**                                             | Android 测试结果与实际画面      |
+| 状态栏、遮挡与布局   | Running Devices 的实际画面与 Layout Inspector，检查运行中的 debug 应用                          | 截图、控件边界和 Compose 层级   |
+| 卡顿、内存与后台播放 | Profiler 与系统跟踪；性能比较选 `benchmark`，分配 / 堆分析选 `debug`                            | 与具体操作对应的采样或 trace    |
+| 打包与升级           | 打包 Release APK、Build 输出、Analyze APK、SDK 签名工具                                         | 产物、身份 / 签名及对应升级结果 |
 
-启动前退出已有 Android Studio 进程，使新进程接收完整环境；切换任务分支或更换 Core / ABI / 离线测试变量后也重新启动，刷新源码标记和环境。IDE 同步或构建与命令行 Gradle 任务错开执行。IDE Run 用于开发调试，需要交付 APK 时继续使用 `build-android-native.mjs`，保留本机 debug keystore 与原有签名配置；以脚本测试、Lint、构建及对应设备检查作为交付依据。
+日志、布局与性能入口分别参考 [Logcat](https://developer.android.com/studio/debug/logcat)、[Layout Inspector](https://developer.android.com/studio/debug/layout-inspector) 和 [Profiler](https://developer.android.com/studio/profile)。当前 Manifest 已启用 `profileable`；这表示允许采样，实际性能结论仍需针对具体问题录制。配置完成不等于这些项目都已实际检查过。
+
+同一工程避免 IDE 与命令行 Gradle 重叠构建。SDK、NDK、Gradle wrapper 不因 IDE 的升级提示自动调整。
+
+本地 Codex 优先通过 Studio MCP 检查工程、代码问题和构建结果，执行现有运行配置。2026-10-30 核对的 MCP 接口提供工程 / 依赖、语义查找、重构、检查、构建和运行配置；没有单独的断点控制、Logcat、Layout Inspector 或 Profiler 接口。这些功能使用 IDE 本身，需要自动化补充时使用现成 `adb` / SDK 工具，或请用户完成具体操作，不因 MCP 缺口另造工具。网页端继续按分支 / PR 交付，验证按改动保留必要的测试与真机场景。
+
+已有 `npm run android:studio -- '<Studio executable>' --prepare-only` 只作为可选的首次路径准备工具，写入被忽略的 SDK、JDK、Cargo 与 TLS Maven 路径；不再要求预先编译 Core，也不传入固定版本或源码提交。配置完成后可直接打开 IDE。
+
+保留脚本的范围：Android 启动 / 构建 / 检查脚本是可选批处理；文档格式化使用已有 Prettier，Rust 检查使用 Cargo；契约样本生成、来源台账和日志脱敏检查保留仓库专用规则，这些工作不由 Studio 的通用检查替代。常规更新使用现有签名，`new-android-release-key.ps1` 不属于更新工作流。新增脚本前先确认 IDE、Gradle、Cargo、SDK 或现有工具确实未覆盖所需能力。
 
 ## 跨对话接手与任务交付
 
@@ -88,7 +90,7 @@ CI 收敛为原生 Android JVM、Lint、离线 APK / 模拟器验证，以及 Ru
 
 网页端开工提示需明确仓库、分支或提交，并要求先阅读上述入口与主文档；不能假定普通聊天会自动加载 `AGENTS.md`。先确认迁移编号与旧版行为，再在独立分支修改源码及相关测试、提交代码并创建 PR。交付时提供基准提交、分支及 PR 链接、改动目标和未验证项；如未执行编译或测试，应明确说明。
 
-本地 Codex 先检查工作区并拉取远端分支，审查实际差异，再按本指南的必要检查选择测试、Lint、构建及真机场景。需要安装包时，使用前述原生构建入口和已有本机签名；当前 debug / benchmark 使用本机 Android debug keystore，需保留同一密钥。正式签名、旧包升级和数据兼容仍按 T06 单独验收。
+本地 Codex 先检查工作区并拉取远端分支，审查实际差异，再按本指南的必要检查选择测试、Lint、构建及真机场景。需要安装包时优先使用 Studio 的 release 构建和既有签名；debug / benchmark 使用本机 Android debug keystore。签名、旧包升级和数据兼容仍按 T06 分别验收。
 
 审查问题、验证结果与剩余真机场景直接在当前任务或 PR 中说明；只更新受影响的主文档。文件修改、本地检查、构建与真机验收分别记录实际结果。未经授权不合并 PR、不发布正式包、不卸载应用、不迁移数据或操作真实账号写入。
 
@@ -106,21 +108,22 @@ CI 收敛为原生 Android JVM、Lint、离线 APK / 模拟器验证，以及 Ru
 | Rust / JNI / 协议    | 受影响 crate 的 fmt / clippy / test、契约与原生包回归；共享影响扩大时检查 workspace |
 | 账号、系统媒体、交付 | 对应真机 / 真实账号验证；签名、升级和数据兼容分别检查                               |
 
+优先在 Studio 运行 **检查 JVM 与 Lint**，它直接执行 `:nativeApp:testDebugUnitTest` 和 `:nativeApp:lintDebug`，不需要设备。需要单独构建时，在 Gradle 面板选择 `assembleDebug` / `assembleDebugAndroidTest`。命令行等价入口是在 Gradle 工程执行 `./gradlew.bat` 后接相同任务；原 Node 包装器仅保留作批处理。
+
+离线界面回归使用 **模拟器离线界面测试**：先通过 Device Manager 启动目标 x86_64 模拟器，再运行该配置。它通过标准 Gradle 项目参数设置离线运行器和 ABI，并仅选择 `NativePlaybackTest`、`NativePersonalizationUiTest`、`NativeMaintenanceUiTest` 三个既有套件；Gradle 完成构建、测试包安装、执行和报告，不需要手动逐个安装 APK。`connectedDebugAndroidTest` 使用已连接设备，执行前仅保留目标模拟器。参数只在这个配置中生效；恢复运行 / 调试时正常重建 debug 包。
+
+`NativeOfflineTestRunner` 使用普通 `Application` 和轻量 `ComponentActivity`，每项测试前后断言真实 Core 未初始化。它只验证离线界面，不能用于真实播放或账号功能验收。Gradle 的测试任务、筛选与报告位置见 [Android 官方测试说明](https://developer.android.com/studio/test/command-line)。
+
+以下 `adb` 入口保留作定向诊断或 CI 使用，不作为日常 IDE 操作的前置步骤。手动安装测试包时使用 `adb install -r -t '<测试 APK 路径>'`。隔离和壳层回归可排除在线提供器测试：
+
 ```powershell
-node scripts/run-android-gradle.mjs :nativeApp:testDebugUnitTest :nativeApp:lintDebug
-node scripts/run-android-gradle.mjs :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
+adb shell am instrument -w -r -e notClass org.yaqmc.android.nativeui.NativeProviderSmokeTest,org.yaqmc.android.nativeui.NativePlaybackLiveTest org.yaqmc.android.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-设备测试先安装主包与测试包，测试包使用 `adb install -r -t '<测试 APK 路径>'`。隔离和壳层回归可排除在线提供器测试：
+上述默认运行器会启动真实应用。手动执行离线套件时，构建阶段需设置 `-Pyaqmc.offlineUiTests=1 -Pyaqmc.nativeAbi=x86_64`（或对应原有环境变量），再使用专用运行器；恢复其他设备测试前移除这些参数并重新构建、安装测试 APK：
 
 ```powershell
-adb shell am instrument -w -r -e notClass org.yaqmc.android.nativeui.NativeProviderSmokeTest,org.yaqmc.android.nativeui.NativePlaybackLiveTest org.yaqmc.android.nativeui.test/androidx.test.runner.AndroidJUnitRunner
-```
-
-上述默认运行器会启动真实应用。仅验证离线播放器 UI 与个性化时，先设置 `$env:YAQMC_ANDROID_OFFLINE_UI_TESTS = '1'` 构建并安装测试 APK，再使用专用 `NativeOfflineTestRunner`。该运行器使用普通 `Application` 和轻量 `ComponentActivity`，每项测试前后断言真实 Core 未初始化；恢复其他设备测试前需移除该变量并重新构建、安装测试 APK：
-
-```powershell
-adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest org.yaqmc.android.nativeui.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner
+adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest org.yaqmc.android.debug.test/org.yaqmc.android.nativeui.NativeOfflineTestRunner
 ```
 
 本地 x86_64 模拟器设置 `YAQMC_ANDROID_NATIVE_ABI=x86_64`。纯离线测试可将 `YAQMC_ANDROID_NATIVE_LIB_DIR` 指向事先创建的独立空目录，并使用上述离线运行器；这种 APK 不包含 Rust Core，不能用于真实播放。真实 Core 验证需提供匹配 ABI 的 JNI 库；恢复常规 ARM64 构建前移除模拟器及离线测试环境变量，并重新构建 APK。

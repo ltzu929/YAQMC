@@ -5,12 +5,12 @@ import test from 'node:test';
 import {
   assertNativeApkContents,
   parseNativeApkSigner,
+  RELEASE_CERTIFICATE_SHA256,
   verifyNativeApk,
 } from './native-apk-check.mjs';
 
 const version = { versionName: '0.1.1', versionCode: 1_019_000 };
-const packageLine =
-  "package: name='org.yaqmc.android.nativeui' versionCode='1019000' versionName='0.1.1-native-benchmark'";
+const packageLine = "package: name='org.yaqmc.android' versionCode='1019000' versionName='0.1.1'";
 const badging = packageLine + "\nsdkVersion:'26'\nnative-code: 'arm64-v8a'\n";
 const files = [
   'AndroidManifest.xml',
@@ -18,32 +18,32 @@ const files = [
   'lib/arm64-v8a/libc++_shared.so',
   '',
 ].join('\n');
-const certificate = 'ab'.repeat(32);
+const certificate = RELEASE_CERTIFICATE_SHA256;
 const signature = 'Verifies\nSigner #1 certificate SHA-256 digest: ' + certificate + '\n';
 
 test('accepts only a correctly identified native APK with the packaged ARM64 Core', () => {
-  const identity = assertNativeApkContents({ badging, files, variant: 'benchmark', version });
+  const identity = assertNativeApkContents({ badging, files, variant: 'release', version });
   assert.deepEqual(identity, {
-    packageName: 'org.yaqmc.android.nativeui',
+    packageName: 'org.yaqmc.android',
     versionCode: 1_019_000,
-    versionName: '0.1.1-native-benchmark',
+    versionName: '0.1.1',
   });
 });
 
 test('rejects a wrong package, version, or build variant', () => {
   for (const invalid of [
-    { badging: badging.replace('org.yaqmc.android.nativeui', 'org.yaqmc.android') },
+    { badging: badging.replace('org.yaqmc.android', 'org.yaqmc.android.nativeui') },
     { badging: badging.replace('1019000', '1') },
-    { badging: badging.replace('native-benchmark', 'native-debug') },
+    { badging: badging.replace("versionName='0.1.1'", "versionName='0.1.1-debug'") },
     { badging: 'garbled' },
   ]) {
     assert.throws(
-      () => assertNativeApkContents({ badging, files, variant: 'benchmark', version, ...invalid }),
+      () => assertNativeApkContents({ badging, files, variant: 'release', version, ...invalid }),
       /package|version|identity/i,
     );
   }
   assert.throws(
-    () => assertNativeApkContents({ badging, files, variant: 'release', version }),
+    () => assertNativeApkContents({ badging, files, variant: 'unsigned', version }),
     /Unsupported/,
   );
 });
@@ -54,7 +54,7 @@ test('rejects missing Core and unexpected native library ABIs', () => {
       assertNativeApkContents({
         badging,
         files: 'AndroidManifest.xml\n',
-        variant: 'benchmark',
+        variant: 'release',
         version,
       }),
     /Rust Core/,
@@ -64,7 +64,7 @@ test('rejects missing Core and unexpected native library ABIs', () => {
       assertNativeApkContents({
         badging,
         files: files + 'lib/x86_64/libsomething.so\n',
-        variant: 'benchmark',
+        variant: 'release',
         version,
       }),
     /only package ARM64/,
@@ -74,7 +74,7 @@ test('rejects missing Core and unexpected native library ABIs', () => {
       assertNativeApkContents({
         badging: badging.replace("'arm64-v8a'", "'x86_64'"),
         files,
-        variant: 'benchmark',
+        variant: 'release',
         version,
       }),
     /unexpected ABI/,
@@ -89,10 +89,10 @@ test('refuses to accept an unverified signer certificate', () => {
 test('inspects built APK before allowing it to be staged', () => {
   const commands = [];
   const result = verifyNativeApk({
-    apkPath: path.join('tmp', 'nativeApp-benchmark.apk'),
+    apkPath: path.join('tmp', 'nativeApp-release.apk'),
     sdk: path.join('tmp', 'sdk'),
     java: 'java',
-    variant: 'benchmark',
+    variant: 'release',
     version,
     fileExists: () => true,
     runCommand(command, args) {
@@ -130,7 +130,7 @@ test('fails closed for a missing verification tool or failed signature command',
         apkPath: 'candidate.apk',
         sdk: 'sdk',
         java: 'java',
-        variant: 'benchmark',
+        variant: 'release',
         version,
         fileExists: () => true,
         runCommand(command, args) {
@@ -140,5 +140,50 @@ test('fails closed for a missing verification tool or failed signature command',
         },
       }),
     /verification command failed/,
+  );
+});
+
+test('development APKs use explicit separate identities', () => {
+  for (const variant of ['debug', 'benchmark']) {
+    const developmentBadging = badging
+      .replace("name='org.yaqmc.android'", `name='org.yaqmc.android.${variant}'`)
+      .replace("versionName='0.1.1'", `versionName='0.1.1-native-${variant}'`);
+    assertNativeApkContents({ badging: developmentBadging, files, variant, version });
+    assert.throws(
+      () =>
+        assertNativeApkContents({
+          badging: developmentBadging,
+          files,
+          variant: 'release',
+          version,
+        }),
+      /package|version/i,
+    );
+  }
+});
+
+test('release export rejects a valid signature from a different key', () => {
+  assert.throws(
+    () =>
+      verifyNativeApk({
+        apkPath: 'candidate.apk',
+        sdk: 'sdk',
+        java: 'java',
+        variant: 'release',
+        version,
+        fileExists: () => true,
+        runCommand(command, args) {
+          return {
+            status: 0,
+            stdout:
+              args[0] === 'dump'
+                ? badging
+                : args[0] === 'list'
+                  ? files
+                  : 'Signer #1 certificate SHA-256 digest: ' + 'ab'.repeat(32),
+          };
+        },
+      }),
+    /does not match the existing installation/,
   );
 });
