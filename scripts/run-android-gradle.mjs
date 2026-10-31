@@ -8,7 +8,6 @@ import {
   resolveAndroidToolchain,
   resolveRustlsVerifierMaven,
 } from './android-toolchain.mjs';
-import { rootVersion } from './ci/android-version.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const androidRoot = path.join(repositoryRoot, 'apps', 'android', 'android');
@@ -19,12 +18,6 @@ if (tasks.length === 0 || tasks.some((task) => !/^:[a-zA-Z0-9:_-]+$/u.test(task)
 }
 
 const toolchain = resolveAndroidToolchain();
-const version = rootVersion(repositoryRoot);
-const commit = spawnSync('git', ['rev-parse', '--verify', 'HEAD'], {
-  cwd: repositoryRoot,
-  encoding: 'utf8',
-}).stdout.trim();
-if (!/^[0-9a-f]{40}$/u.test(commit)) throw new Error('unable to resolve the build commit');
 
 const environment = {
   ...process.env,
@@ -32,9 +25,6 @@ const environment = {
   ANDROID_SDK_ROOT: toolchain.sdk,
   ANDROID_NDK_HOME: toolchain.ndk,
   ANDROID_NDK_ROOT: toolchain.ndk,
-  YAQMC_VERSION_NAME: version.versionName,
-  YAQMC_VERSION_CODE: String(version.versionCode),
-  YAQMC_BUILD_COMMIT: commit,
   YAQMC_RUSTLS_VERIFIER_MAVEN_DIR: resolveRustlsVerifierMaven(),
 };
 const wrapperJar = path.join(androidRoot, 'gradle', 'wrapper', 'gradle-wrapper.jar');

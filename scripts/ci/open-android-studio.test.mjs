@@ -16,18 +16,17 @@ import { setTimeout } from 'node:timers/promises';
 import { repositoryRoot } from './repo.mjs';
 
 function fixture(t) {
-  // Keep fixtures in the checkout so the real git revision lookup also runs.
   const parent = path.join(repositoryRoot, 'artifacts/android-native-comparison');
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'studio-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const android = path.join(root, 'apps/android/android');
   mkdirSync(android, { recursive: true });
-  mkdirSync(path.join(root, 'scripts/ci'), { recursive: true });
-  for (const script of ['open-android-studio.mjs', 'ci/android-version.mjs']) {
-    copyFileSync(path.join(repositoryRoot, 'scripts', script), path.join(root, 'scripts', script));
-  }
-  writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '0.1.1' }));
+  mkdirSync(path.join(root, 'scripts'), { recursive: true });
+  copyFileSync(
+    path.join(repositoryRoot, 'scripts/open-android-studio.mjs'),
+    path.join(root, 'scripts/open-android-studio.mjs'),
+  );
   // Toolchain discovery is covered separately; these tests exercise the launcher.
   writeFileSync(
     path.join(root, 'scripts/android-toolchain.mjs'),
@@ -53,13 +52,6 @@ fs.renameSync(process.env.STUDIO_CAPTURE + '.tmp', process.env.STUDIO_CAPTURE);`
   const environment = { ...process.env, STUDIO_CAPTURE: capture };
   delete environment.YAQMC_ANDROID_NATIVE_LIB_DIR;
   environment.YAQMC_ANDROID_NATIVE_ABI = 'arm64-v8a';
-  const source = path.join(android, 'nativeApp/build/generated/jniLibs');
-  function library(directory, abi, contents) {
-    const file = path.join(directory, abi, 'libyaqmc_core.so');
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, contents);
-    return file;
-  }
   function run(...args) {
     return spawnSync(
       process.execPath,
@@ -67,12 +59,14 @@ fs.renameSync(process.env.STUDIO_CAPTURE + '.tmp', process.env.STUDIO_CAPTURE);`
       { cwd: root, env: environment, encoding: 'utf8' },
     );
   }
-  return { root, android, capture, environment, source, library, run };
+  return { root, android, capture, environment, run };
 }
 
-test('Studio receives Core that survives Clean Project, and local settings are preserved', async (t) => {
+test('Studio opens without a prebuilt Core and preserves local settings', async (t) => {
   const f = fixture(t);
-  f.library(f.source, 'arm64-v8a', 'core-before-clean');
+  f.environment.YAQMC_ANDROID_NATIVE_LIB_DIR = 'stale-core';
+  f.environment.YAQMC_VERSION_NAME = 'stale-version';
+  f.environment.YAQMC_BUILD_COMMIT = 'stale-commit';
   const settings = path.join(f.android, '.idea/gradle.xml');
   mkdirSync(path.dirname(settings), { recursive: true });
   writeFileSync(settings, '<existing-IDE-settings />');
@@ -83,15 +77,10 @@ test('Studio receives Core that survives Clean Project, and local settings are p
     await setTimeout(20);
   }
   const inputs = JSON.parse(readFileSync(f.capture, 'utf8'));
-  assert.match(inputs.commit, /^[0-9a-f]{40}$/u);
-  assert.equal(inputs.version, '0.1.1');
+  assert.equal(inputs.commit, undefined);
+  assert.equal(inputs.version, undefined);
+  assert.equal(inputs.core, undefined);
   assert.equal(inputs.maven, 'fixture-maven');
-  // Simulate the directory removed by :nativeApp:clean after the IDE starts.
-  rmSync(path.join(f.android, 'nativeApp/build'), { recursive: true });
-  assert.equal(
-    readFileSync(path.join(inputs.core, 'arm64-v8a/libyaqmc_core.so'), 'utf8'),
-    'core-before-clean',
-  );
   assert.equal(readFileSync(settings, 'utf8'), '<existing-IDE-settings />');
   assert.match(
     readFileSync(path.join(f.android, 'local.properties'), 'utf8'),
@@ -103,27 +92,28 @@ test('Studio receives Core that survives Clean Project, and local settings are p
   );
 });
 
-test('prepare-only stages the selected ABI and refreshes Core without launching Studio', (t) => {
+test('prepare-only persists the Rust toolchain without launching Studio', (t) => {
   const f = fixture(t);
-  const source = path.join(f.root, 'custom-core');
-  f.environment.YAQMC_ANDROID_NATIVE_LIB_DIR = source;
-  f.environment.YAQMC_ANDROID_NATIVE_ABI = 'x86_64';
-  f.library(source, 'x86_64', 'first-core');
-  const staged = path.join(f.android, '.gradle/yaqmc-studio/jniLibs/x86_64/libyaqmc_core.so');
+  f.environment.CARGO_HOME = 'D:/fixture/cargo';
+  f.environment.RUSTUP_HOME = 'D:/fixture/rustup';
   assert.equal(f.run('--prepare-only').status, 0);
-  assert.equal(readFileSync(staged, 'utf8'), 'first-core');
-  f.library(source, 'x86_64', 'rebuilt-core');
-  assert.equal(f.run('--prepare-only').status, 0);
-  assert.equal(readFileSync(staged, 'utf8'), 'rebuilt-core');
+  const properties = readFileSync(path.join(f.android, 'local.properties'), 'utf8');
+  assert.match(properties, /^yaqmc\.cargoHome=D\\:.*fixture\/cargo$/mu);
+  assert.match(properties, /^yaqmc\.rustupHome=D\\:.*fixture\/rustup$/mu);
   assert.equal(existsSync(f.capture), false);
 });
 
-test('missing matching Core stops before changing IDE configuration', (t) => {
+test('prepare-only selects Gradle JDK without injecting version or Core settings', (t) => {
   const f = fixture(t);
-  f.library(f.source, 'x86_64', 'wrong-ABI');
   const result = f.run('--prepare-only');
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Build a matching Rust Core/u);
-  assert.equal(existsSync(path.join(f.android, 'local.properties')), false);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    readFileSync(path.join(f.android, '.idea/gradle.xml'), 'utf8'),
+    /#GRADLE_LOCAL_JAVA_HOME/u,
+  );
+  assert.doesNotMatch(
+    readFileSync(path.join(f.android, 'local.properties'), 'utf8'),
+    /version|nativeLibDir/u,
+  );
   assert.equal(existsSync(f.capture), false);
 });

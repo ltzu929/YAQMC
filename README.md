@@ -9,13 +9,14 @@
 仓库已收敛为 Kotlin / Compose 原生 Android 应用与 Rust 核心，旧 React / Electron / Capacitor 工程已退出。各模块已有实现，完整设备回归与正式交付仍需按清单完成。
 实现覆盖与验收结果统一看[迁移对齐清单](docs/zh-CN/native-parity.md)，不以页面存在或构建成功认定迁移完成。
 
-仓库版本为 `0.1.1`，不表示原生版已经正式发布：
+仓库版本为 `0.1.2`，不表示原生版已经正式发布：
 
-- 原生模块为 `:nativeApp`，包名 `org.yaqmc.android.nativeui`，最低 Android 8.0，目前仅构建 ARM64 APK。
-- 默认产物为本地调试签名的 benchmark 比较包，可与旧包 `org.yaqmc.android` 共存，两者数据独立。
-- 旧版发布工作流已移除；原生版的正式签名、升级与数据兼容待落实。
+- 原生模块为 `:nativeApp`，常规安装包沿用 `org.yaqmc.android` 与旧版签名，最低 Android 8.0，目前交付 ARM64 APK。
+- 默认生成覆盖升级包，保留同包应用的登录和本地数据；后续修复与新功能沿用这一交付方式，见[项目规划 D004](docs/zh-CN/project-plan.md#d004常规安装包保持覆盖升级)。
+- 调试与性能比较包只在显式指定时生成，使用独立开发包名；正式发布工作流尚未启用。
 
-当前原生安装包按[开发指南](docs/zh-CN/development.md)在本机生成，尚未正式发布。
+当前原生安装包按[开发指南](docs/zh-CN/development.md)在本机通过 Android Studio 的“打包 Release APK”配置生成，尚未正式发布。
+2026-10-31，用户安装 `0.1.2` 后确认本轮反馈问题基本修复并通过审核，详细结果见[迁移对齐清单](docs/zh-CN/native-parity.md#2026-10-31-用户安装验收)。
 
 ## 开发入口
 

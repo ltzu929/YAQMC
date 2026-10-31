@@ -5,13 +5,9 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 export const ANDROID_NDK_VERSION = '28.2.13676358';
-export const ANDROID_RELEASE_ABIS = Object.freeze(['arm64-v8a']);
-export const ANDROID_DEBUG_ABIS = Object.freeze(['arm64-v8a', 'x86_64']);
 export const ANDROID_JAVA_VERSION = 21;
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const androidRoot = path.join(repositoryRoot, 'apps', 'android', 'android');
-const nativeOutput = path.join(androidRoot, 'nativeApp', 'build', 'generated', 'jniLibs');
 
 export function androidSdkCandidates(environment = process.env, platform = process.platform) {
   const candidates = [environment.ANDROID_SDK_ROOT, environment.ANDROID_HOME];
@@ -97,15 +93,6 @@ export function resolveAndroidJava(environment = process.env, platform = process
   throw new Error(
     `JDK ${ANDROID_JAVA_VERSION} is required by the Android toolchain; set YAQMC_JAVA_HOME to a JDK ${ANDROID_JAVA_VERSION} installation`,
   );
-}
-
-export function cargoNdkArguments(variant, outputDirectory = nativeOutput) {
-  const abis = variant === 'release' ? ANDROID_RELEASE_ABIS : ANDROID_DEBUG_ABIS;
-  const args = ['ndk', '-P', '26'];
-  for (const abi of abis) args.push('-t', abi);
-  args.push('-o', outputDirectory, 'build', '--locked', '-p', 'yaqmc-android');
-  if (variant === 'release') args.push('--release');
-  return args;
 }
 
 export function rustlsVerifierMavenFromMetadata(metadata) {
