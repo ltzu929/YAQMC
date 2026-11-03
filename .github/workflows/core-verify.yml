@@ -1,6 +1,8 @@
 name: Android Core and repository checks
 
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -32,6 +34,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run docs:check
+      - run: npm run provenance:enforce
       - run: npm run format:check
       - run: cargo fmt --all -- --check
       - run: cargo clippy -p yaqmc-core -p yaqmc-protocol -p yaqmc-provider-api -p yaqmc-provider-qqmusic --all-targets --locked -- -D warnings

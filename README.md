@@ -1,6 +1,27 @@
-# YAQMC
+# YAQMC-Android
 
-一个面向 Android、适合自己使用的非官方 QQ 音乐客户端。界面采用 Kotlin / Jetpack Compose，阶段性复用 Rust 核心。
+基于 [YAQMC](https://github.com/YAQMC/YAQMC) 的非官方 QQ 音乐 Android 客户端，使用 Kotlin / Jetpack Compose 原生界面和 Rust Core，希望把日常听歌做得轻量、顺手。
+
+## 功能与当前阶段
+
+- 浏览推荐、搜索歌曲，查看专辑、歌手、歌单和音乐库。
+- QQ 音乐账号登录、会员信息、收藏与歌单操作。
+- 播放队列、音质选择、歌词显示，以及主题、背景和歌词布局设置。
+- 系统媒体通知、后台播放、听歌统计、缓存管理和诊断分享。
+
+当前进入首个公开预览版的准备阶段，候选版本为 **`0.1.4-beta.1`**，尚未发布。先经过一轮用户测试，再准备正式版；歌词完整自由编排等非关键完善继续迭代。
+
+原生界面与 Rust Core 已整合，Android Studio 可构建签名 APK；现有 CI 包含 JVM、Lint、Rust 和 Android 30 / 35 离线界面回归。已完成的真机使用检查、自动音质提示等已知问题，以及焦点打断、蓝牙和长期后台等发布前检查，统一见[迁移对齐清单](apps/android/android/docs/native-parity.md#公开预览准备)。
+
+## 安装与升级关系
+
+最低支持 Android 8.0，当前提供 ARM64 APK。发布页使用[本仓库 Releases](https://github.com/ltzu929/YAQMC/releases)，公开预览会标为 Pre-release。
+
+应用显示名改为 `YAQMC-Android`，安装身份仍为 `org.yaqmc.android`，沿用本项目既有签名。现有 `0.1.2` / `0.1.3` 用户可通过同签名 APK 覆盖升级，保留登录和本地数据。
+
+上游及其他来源安装包可能使用相同包名；**只有包名相同、签名兼容且 versionCode 满足升级要求时才能覆盖安装**，同包名应用不能作为两个独立应用并装。名称变化不表示可以跨签名更新，当前不提供跨包数据迁移。
+
+当前稳定版本的更新检查只接收正式版；首次试用公开预览需手动下载。预览版检查同一预览通道的新版本，并可升级到后续正式版。
 
 ## 从这里了解和管理项目
 
@@ -14,22 +35,11 @@
 
 Android Studio 日常打开的是仓库内的 `apps/android/android` 子工程。在左侧“项目”视图展开 `android [yaqmc-android] → docs`，即可双击阅读上述三份文档。完整仓库还包含 `crates/` Rust 核心与来源资料；目录地图和功能对应的代码入口见开发指南。
 
-## 当前目标与状态
+## 项目方向
 
-希望软件轻量、使用舒服，同时降低个人开发的工程与维护负担。当前先完整移植旧 Android 已开放的功能、交互和设置；具体范围与关键决定见[项目规划](apps/android/android/docs/project-plan.md)。
+希望软件轻量、使用舒服，同时降低个人开发的工程与维护负担。保留旧 Android 已开放的功能、交互和设置；具体范围、发布准备顺序与关键决定见[项目规划](apps/android/android/docs/project-plan.md)。
 
-仓库已收敛为 Kotlin / Compose 原生 Android 应用与 Rust 核心，旧 React / Electron / Capacitor 工程已退出。各模块已有实现，完整设备回归与正式交付仍需按清单完成。
-实现覆盖与验收结果统一看[迁移对齐清单](apps/android/android/docs/native-parity.md)，不以页面存在或构建成功认定迁移完成。
-
-仓库版本为 `0.1.3`，用户已确认本轮使用结果并同意收尾，尚未正式发布：
-
-- 原生模块为 `:nativeApp`，常规安装包沿用 `org.yaqmc.android` 与旧版签名，最低 Android 8.0，目前交付 ARM64 APK。
-- 默认生成覆盖升级包，保留同包应用的登录和本地数据；后续修复与新功能沿用这一交付方式，见[项目规划 D004](apps/android/android/docs/project-plan.md#d004常规安装包保持覆盖升级)。
-- 调试与性能比较包只在显式指定时生成，使用独立开发包名；正式发布工作流尚未启用。
-
-当前原生安装包按[开发指南](apps/android/android/docs/development.md)在本机通过 Android Studio 的“打包 Release APK”配置生成，尚未正式发布。
-2026-10-31，用户安装 `0.1.2` 后确认本轮反馈问题基本修复并通过审核，详细结果见[迁移对齐清单](apps/android/android/docs/native-parity.md#2026-10-31-用户安装验收)。
-2026-11-03，用户确认 `0.1.3` 息屏续播、音乐通知、返回桌面后的超级岛及音质提示改善，本版本按确认范围收尾；自动音质正常选档时仍显示不可用提示，留待下一轮调整，详见迁移对齐清单文末。
+仓库已收敛为 Kotlin / Compose 原生 Android 应用与 Rust Core，旧 React / Electron / Capacitor 工程已退出。保留上游版权、许可证和来源记录；实现与验收范围统一看[迁移对齐清单](apps/android/android/docs/native-parity.md)。
 
 ## 开发入口
 
@@ -46,7 +56,7 @@ Android Studio 日常打开的是仓库内的 `apps/android/android` 子工程�
 
 ## 使用边界与许可
 
-YAQMC 与腾讯或 QQ 音乐没有从属或合作关系，不绕过会员、地区、版权或账号权益。
+YAQMC-Android 与腾讯或 QQ 音乐没有从属或合作关系，不绕过会员、地区、版权或账号权益。
 不要公开 Cookie、OAuth code、token、vkey/ekey、签名媒体地址或真实账号资料。
 
 项目采用 [GPL-3.0-or-later](LICENSE)。许可证、第三方声明和对应源码交付资料保持各自职责，见

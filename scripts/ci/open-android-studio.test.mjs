@@ -19,7 +19,11 @@ function fixture(t) {
   const parent = path.join(repositoryRoot, 'artifacts/android-native-comparison');
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'studio-test-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => {
+    assert.equal(path.dirname(path.resolve(root)), parent);
+    // The detached capture process can briefly retain its working directory on Windows.
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
   const android = path.join(root, 'apps/android/android');
   mkdirSync(android, { recursive: true });
   mkdirSync(path.join(root, 'scripts'), { recursive: true });

@@ -1,10 +1,11 @@
 # 鸣谢
 
-YAQMC 是独立实现的非官方 QQ 音乐 Android 客户端。感谢下面的个人、项目与工具提供公开知识、协议行为参考、
+YAQMC-Android 基于 YAQMC，使用 Kotlin / Compose 原生界面与 Rust Core，是非官方 QQ 音乐 Android 客户端。感谢下面的个人、项目与工具提供公开知识、协议行为参考、
 测试方法或工程协助。出现在此处不代表其作者认可、参与发布或为 YAQMC 提供支持。
 
 ## 特别感谢
 
+- **[YAQMC/YAQMC](https://github.com/YAQMC/YAQMC)** — 本项目的上游，提供原有客户端、Rust Core 与工程基础；保留原有许可证、版权归属和来源记录。
 - **Flechazo** — 感谢公开分享 QMC/MFLAC、臻品音质取源与本地流式解密链路的研究和工程思路。
   `Flechazo/qmc` 在核对时没有仓库许可证，因此 YAQMC 只将其作为行为参考，未复制、vendoring 或改写其
   源代码；YAQMC 的 Rust 实现与测试独立完成。
@@ -37,7 +38,7 @@ YAQMC 在各自许可证允许的范围内独立适配了以下项目公开的�
 
 ## 核心生态
 
-感谢 Rust、Electron、Chromium、React、Rodio/CPAL 与 i18next 及其维护者。也感谢曾支撑旧版桌面宿主的
+感谢 Kotlin、Jetpack Compose、AndroidX / Media3、Coil、Rust 和 Rodio/CPAL 及其维护者。也感谢曾支撑旧版界面的 Electron、Chromium、React、i18next 和旧版桌面宿主的
 Tauri、WebKitGTK 与 WebView2 维护者；这些历史贡献仍是 YAQMC 演进的一部分。
 
 如有遗漏或归属不准确，请提交 Issue，但不要在 Issue 中粘贴账号 Cookie、token、ekey 或其他秘密。

@@ -130,7 +130,7 @@ Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或�
 
 常规包沿用 `org.yaqmc.android`、旧签名、原应用数据目录和 Android Keystore，见项目规划 D004。之前的 `org.yaqmc.android.nativeui` 为独立比较包，其数据不跨包复制。`.debug` / `.benchmark` 只供显式开发验证，使用独立包名和调试签名。
 
-命令行也可直接在 Gradle 工程运行 `./gradlew.bat :nativeApp:assembleRelease`。原有 `npm run android:build` 作为可选批处理保留，调用同一 Gradle 构建后运行 JVM 测试、用 SDK 的 `aapt` / `apksigner` 检查 APK，再复制到 `release-android/YAQMC-<version>-android-arm64-v8a.apk`；`--reuse-core` 仅供显式复用。安装使用 `adb install -r '<APK 路径>'`，设备确认由用户处理。签名、构建和真实账号 / 播放验收分别记录。
+命令行也可直接在 Gradle 工程运行 `./gradlew.bat :nativeApp:assembleRelease`。原有 `npm run android:build` 作为可选批处理保留，调用同一 Gradle 构建后运行 JVM 测试、用 SDK 的 `aapt` / `apksigner` 检查 APK，再复制到 `release-android/YAQMC-Android-<version>-arm64-v8a.apk`；`--reuse-core` 仅供显式复用。安装使用 `adb install -r '<APK 路径>'`，设备确认由用户处理。签名、构建和真实账号 / 播放验收分别记录。
 
 ## Android Studio 本地工作流
 
@@ -169,11 +169,25 @@ Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或�
 
 保留脚本的范围：Android 启动 / 构建 / 检查脚本是可选批处理；文档格式化使用已有 Prettier，Rust 检查使用 Cargo；契约样本生成、来源台账和日志脱敏检查保留仓库专用规则，这些工作不由 Studio 的通用检查替代。常规更新使用现有签名，`new-android-release-key.ps1` 不属于更新工作流。新增脚本前先确认 IDE、Gradle、Cargo、SDK 或现有工具确实未覆盖所需能力。
 
+## 公开预览发布流程
+
+应用对外名称为 `YAQMC-Android`；继续使用现有包名与签名，按[项目规划 D007](project-plan.md#d007yaqmc-android-先公开预览再正式发布)先公开预览、后正式发布。本地签名构建与 GitHub Release 手动组织材料，不恢复旧跨平台自动发布流程。
+
+1. 完成[公开预览检查](native-parity.md#公开预览准备)中的 P0 项，记录本次手机与账号操作的实际结果。明确保留的非关键问题写进 Release 说明。
+2. 在 `package.json` 与 `package-lock.json` 同步版本；现有 Gradle 和 `android-version.mjs` 按 `alpha < beta < rc < 正式版` 计算 versionCode。使用 `v<version>` 标签；GitHub Pre-release 标记须与预发布后缀一致。首次候选为 `0.1.4-beta.1`，后续正式版为 `0.1.4`。
+3. 完成相关 JVM / Lint、Rust、协议、脚本和文档检查，提交本轮修改。发布构建从最终干净提交生成，包内 `YAQMC_BUILD_COMMIT` 与源码清单保持一致；修改过源码后重新检查、提交和构建。
+4. 在 Studio 执行“打包 Release APK”。使用 SDK `aapt` / `apksigner` 和已有 `verifyNativeApk` 核对版本、`org.yaqmc.android`、ARM64 Core 和既有签名；把最终 APK 复制为 `release-android/YAQMC-Android-<version>-arm64-v8a.apk`。不交付离线 CI APK。
+5. 按[对应源码交付政策](../../../../CORRESPONDING_SOURCE_POLICY.md)收集项目及实际依赖源码、适用许可证和来源证据，填写并验证 `CORRESPONDING-SOURCE-MANIFEST.json`。来源台账检查使用 `npm run provenance:enforce`，其通过结果与源码归档完成分别记录。
+6. 对 APK、源码归档和清单生成 SHA-256，例如 PowerShell `Get-FileHash -Algorithm SHA256 '<文件路径>'`，保存为 `SHA256SUMS`。重新核对归档与发布提交一致。
+7. 在[本仓库 Releases](https://github.com/ltzu929/YAQMC/releases)准备草稿，包含上述附件和中文说明：本次变化、Android / ABI 要求、安装与升级关系、已知问题、源码入口和反馈方式。名称使用 `YAQMC-Android <version> 公开预览版`，标记 Pre-release；材料与设备检查完成后再由用户决定发布。
+
+应用内项目主页、版本检查和问题反馈均指向 `ltzu929/YAQMC`；上游与依赖来源链接按真实归属保留。稳定版默认不订阅预览；预览版接收同通道更新，并允许升级到后续正式版。版本判定与仓库链接检查由 `AndroidUpdateCheckerTest` 覆盖。
+
 ## 跨对话接手与任务交付
 
 2026-11-02 确认：**当前按个人开发组织工作，日常小改直接在 `main` 进行，不默认创建 PR。** 工作方式按[项目规划 D006](project-plan.md#d006小型项目直接在-main-修改)执行。
 
-CI 收敛为原生 Android JVM、Lint、离线 APK / 模拟器验证，以及 Rust 核心、协议、脚本和文档检查。旧 Electron / WebView 发布与网站工作流已移除；正式发布流程尚未启用。
+CI 在 `main` 推送、PR 和手动触发时检查原生 Android JVM、Lint、离线 APK / 模拟器，以及 Rust 核心、协议、脚本、文档和来源台账。旧 Electron / WebView 发布与网站工作流已移除；当前公开预览按上节流程准备，未配置自动签名发布。
 
 网页端可直接修改和提交源码及相关测试；本地 Codex 审查实际差异，并按改动在本机验证、构建。Android 安装包沿用已有本机签名配置，网页端无需搭建签名环境。现有 CI 可以手动触发，结果作为补充证据。
 
@@ -221,9 +235,10 @@ adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlayback
 
 离线套件的执行范围与已有结果见[迁移对齐清单](native-parity.md)的验证摘要，不能扩展为真实播放、账号或真机验收。
 
-`.github/workflows/android-native-verify.yml` 对原生相关 PR 执行 JVM、Lint、APK 构建及 API 30 / 35 模拟器检查。CI 使用 `NativeOfflineTestRunner`，运行 `NativePlaybackTest`、`NativePersonalizationUiTest` 与 `NativeMaintenanceUiTest`，不初始化真实 Core。维护套件注入统计、缓存、诊断及更新结果，覆盖清除确认、失败保留、请求互斥、问题草稿恢复与 FileProvider 附件读取；不会清除真实听歌记录或提交 GitHub 问题。工作流上传的 `yaqmc-native-offline-test-apks-*` 仅供离线测试，不包含 Rust Core，常规启动和真实播放请使用本机构建入口生成的完整包。
+`.github/workflows/android-native-verify.yml` 在 `main` 推送、原生相关 PR 和手动触发时执行 JVM、Lint、APK 构建及 API 30 / 35 模拟器检查。CI 使用 `NativeOfflineTestRunner`，运行 `NativePlaybackTest`、`NativePersonalizationUiTest` 与 `NativeMaintenanceUiTest`，不初始化真实 Core。维护套件注入统计、缓存、诊断及更新结果，覆盖清除确认、失败保留、请求互斥、问题草稿恢复与 FileProvider 附件读取；不会清除真实听歌记录或提交 GitHub 问题。工作流上传的 `yaqmc-native-offline-test-apks-*` 仅供离线测试，不包含 Rust Core，常规启动和真实播放请使用本机构建入口生成的完整包。
 
 `NativeProviderSmokeTest` 访问真实服务，只做只读检查，执行时单独说明。模拟 Core、在线只读、真实账号写入和系统媒体验收分别记账。
+真机测试开始前，简短说明音源、预计占用时间、需要安装的辅助应用，以及临时调整的设备设置。短时专项集中执行；长期后台结合正常使用观察，连续息屏专项安排在用户方便的时段。结束后恢复设备设置并停止辅助程序，辅助应用的保留或卸载按用户决定处理。
 `NativePlaybackLiveTest` 会短暂播放并修改本地队列、播放设置和听歌记录；需显式添加 `-e livePlayback true` 并单独运行该类。
 系统媒体 / 焦点检查使用 Core 本地测试音频，在线播放、推荐补歌和公开分享目标另行调用真实提供器；回执分别标明音源与结果。
 测试结束尝试恢复原队列内容、播放位置与设置，恢复结果单独记录；这不等于真实账号收藏、歌单写入或蓝牙 / 耳机验收。

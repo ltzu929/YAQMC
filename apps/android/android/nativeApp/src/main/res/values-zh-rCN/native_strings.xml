@@ -200,7 +200,7 @@
     <string name="native_repeat_one_active">当前为单曲循环</string>
     <string name="native_queue_empty">没有待播放歌曲</string>
     <string name="native_share_public">分享公开歌曲链接</string>
-    <string name="native_share_yaqmc">分享 YAQMC 歌曲链接</string>
+    <string name="native_share_yaqmc">分享 YAQMC-Android 歌曲链接</string>
     <string name="native_share_text">分享歌曲文字</string>
     <string name="native_share_unavailable">这首歌曲暂时无法分享。</string>
     <string name="native_share_public_unavailable">这首歌曲暂时没有可用的公开 HTTPS 链接。</string>
@@ -375,7 +375,7 @@
     <string name="native_diag_recent_errors">近期错误</string>
     <string name="native_diag_no_errors">暂无近期错误</string>
     <string name="native_diag_report_issue">前往 GitHub 反馈问题</string>
-    <string name="native_about_title">关于 YAQMC</string>
+    <string name="native_about_title">关于 YAQMC-Android</string>
     <string name="native_about_build">源码提交：%1$s</string>
     <string name="native_about_platform">Android %1$s（API %2$d）· %3$s</string>
     <string name="native_about_repository">项目仓库</string>

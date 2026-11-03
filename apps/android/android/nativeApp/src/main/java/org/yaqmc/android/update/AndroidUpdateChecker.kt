@@ -72,7 +72,7 @@ internal fun selectUpdate(
         candidate.version > current &&
             candidate.prerelease == candidate.version.prerelease &&
             if (current.prerelease) {
-                candidate.prerelease && candidate.version.channel == current.channel
+                !candidate.prerelease || candidate.version.channel == current.channel
             } else {
                 !candidate.prerelease && !candidate.version.prerelease
             }
@@ -126,7 +126,7 @@ internal class AndroidUpdateChecker(
             val tag = release.optString("tag_name")
             val version = YaqmcVersion.parse(tag) ?: continue
             val prerelease = release.optBoolean("prerelease")
-            val releaseUrl = release.optString("html_url").takeIf(::isOfficialReleaseUrl) ?: continue
+            val releaseUrl = release.optString("html_url").takeIf(::isProjectReleaseUrl) ?: continue
             add(
                 ReleaseCandidate(
                     version = version,
@@ -141,17 +141,17 @@ internal class AndroidUpdateChecker(
 
     companion object {
         private const val RELEASES_API =
-            "https://api.github.com/repos/YAQMC/YAQMC/releases?per_page=30&page=1"
+            "https://api.github.com/repos/ltzu929/YAQMC/releases?per_page=30&page=1"
         private const val MAX_RESPONSE_CHARS = 2 * 1024 * 1024
         private const val MAX_NOTES_CHARS = 4_000
 
-        private fun isOfficialReleaseUrl(value: String): Boolean = runCatching {
+        internal fun isProjectReleaseUrl(value: String): Boolean = runCatching {
             val uri = URI(value)
             uri.scheme == "https" &&
                 uri.host.equals("github.com", ignoreCase = true) &&
                 uri.port == -1 &&
                 uri.userInfo == null &&
-                uri.path.startsWith("/YAQMC/YAQMC/releases/")
+                uri.path.startsWith("/ltzu929/YAQMC/releases/")
         }.getOrDefault(false)
     }
 }

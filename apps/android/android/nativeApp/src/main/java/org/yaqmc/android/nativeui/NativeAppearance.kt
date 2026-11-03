@@ -139,7 +139,7 @@ private fun AppearancePreview(settings: NativeAppearancePreferences, dark: Boole
         Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(stringResource(R.string.native_preview), style = MaterialTheme.typography.titleLarge)
-                Text("YAQMC · 音乐 / Music", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.app_name) + " · 音乐 / Music", style = MaterialTheme.typography.bodyLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {}) { Text(stringResource(R.string.native_play)) }
                     FilterChip(true, {}, label = { Text(stringResource(R.string.native_favorite)) })

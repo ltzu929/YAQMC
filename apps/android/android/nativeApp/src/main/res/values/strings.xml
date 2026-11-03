@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">YAQMC</string>
+    <string name="app_name">YAQMC-Android</string>
     <string name="oauth_title">Sign in to QQ Music</string>
     <string name="oauth_back">Go back</string>
     <string name="oauth_close">Close sign-in</string>

@@ -105,7 +105,7 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
             containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snack) },
             topBar = {
-                TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface, scrolledContainerColor = colors.surface), title = { Text("YAQMC", fontWeight = FontWeight.Bold) }, navigationIcon = {
+                TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface, scrolledContainerColor = colors.surface), title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = {
                     if (route.kind !in roots.map { it.first }) IconButton(onClick = { if (!model.back()) model.navigate(NativeRoute(), true) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_back))
                     }

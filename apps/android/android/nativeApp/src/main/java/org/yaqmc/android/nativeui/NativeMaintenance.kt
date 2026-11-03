@@ -93,7 +93,7 @@ internal fun NativeAbout(model: NativeViewModel) {
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text(stringResource(R.string.native_about_title),
             style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
-        item { Text("YAQMC · " + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleMedium) }
+        item { Text(stringResource(R.string.app_name) + " · " + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleMedium) }
         item { Text(stringResource(R.string.native_about_build, BuildConfig.YAQMC_BUILD_COMMIT.take(12))) }
         item { Text(stringResource(R.string.native_about_platform, Build.VERSION.RELEASE,
             Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.firstOrNull() ?: "-")) }
@@ -117,7 +117,7 @@ internal fun NativeAbout(model: NativeViewModel) {
             if (update.notes.isNotBlank()) Text(update.notes, style = MaterialTheme.typography.bodySmall)
         }
         item { TextButton(onClick = {
-            model.openProjectLink(context, "https://github.com/YAQMC/YAQMC")
+            model.openProjectLink(context, "https://github.com/ltzu929/YAQMC")
         }) { Text(stringResource(R.string.native_about_repository)) } }
     }
 }

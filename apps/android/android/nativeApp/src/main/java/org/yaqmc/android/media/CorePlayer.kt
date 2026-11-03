@@ -27,6 +27,10 @@ class CorePlayer(
     private val onUserPlay: () -> Unit,
     private val onPlaybackResourcesChanged: (Boolean) -> Unit,
     private val onStopRequested: () -> Unit,
+    private val sendCoreRequest: (String, String, (String) -> Unit) -> Unit = { method, params, response ->
+        CoreManager.invoke(method, params, onResponse = response)
+        Unit
+    },
 ) : SimpleBasePlayer(looper), CoreManager.Callback {
     @Volatile private var positionMs = 0L
     @Volatile private var durationMs = C.TIME_UNSET
@@ -46,7 +50,7 @@ class CorePlayer(
     init {
         CoreManager.addCallback(this)
         runCatching {
-            CoreManager.invoke("player_snapshot", onResponse = ::applyCoreEnvelope)
+            sendCoreRequest("player_snapshot", "{}", ::applyCoreEnvelope)
         }
     }
 
@@ -82,6 +86,10 @@ class CorePlayer(
             .setAudioAttributes(MEDIA_AUDIO_ATTRIBUTES)
             .build()
     }
+
+    // Core owns shuffle traversal and previous-button restart behavior. Media3's adjacent-item
+    // placeholder can briefly publish a song that was never selected or played.
+    override fun getPlaceholderState(suggestedPlaceholderState: State): State = getState()
 
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
         if (playWhenReady) {
@@ -183,10 +191,10 @@ class CorePlayer(
     ): ListenableFuture<*> {
         val future = SettableFuture.create<Any?>()
         runCatching {
-            CoreManager.invoke(
+            sendCoreRequest(
                 method,
                 paramsJson,
-                onResponse = { json ->
+                { json ->
                     handler.post {
                         runCatching {
                             val envelope = JSONObject(json)

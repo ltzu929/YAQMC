@@ -200,7 +200,7 @@
     <string name="native_repeat_one_active">Repeat one is active</string>
     <string name="native_queue_empty">No upcoming songs</string>
     <string name="native_share_public">Share public song link</string>
-    <string name="native_share_yaqmc">Share YAQMC song link</string>
+    <string name="native_share_yaqmc">Share YAQMC-Android song link</string>
     <string name="native_share_text">Share song text</string>
     <string name="native_share_unavailable">This song cannot be shared.</string>
     <string name="native_share_public_unavailable">No public HTTPS link is available for this song.</string>
@@ -375,7 +375,7 @@
     <string name="native_diag_recent_errors">Recent errors</string>
     <string name="native_diag_no_errors">No recent errors</string>
     <string name="native_diag_report_issue">Report a problem on GitHub</string>
-    <string name="native_about_title">About YAQMC</string>
+    <string name="native_about_title">About YAQMC-Android</string>
     <string name="native_about_build">Source commit: %1$s</string>
     <string name="native_about_platform">Android %1$s (API %2$d) · %3$s</string>
     <string name="native_about_repository">Project repository</string>

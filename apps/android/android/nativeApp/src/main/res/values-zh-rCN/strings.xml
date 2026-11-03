@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">YAQMC</string>
+    <string name="app_name">YAQMC-Android</string>
     <string name="oauth_title">登录 QQ 音乐</string>
     <string name="oauth_back">返回</string>
     <string name="oauth_close">关闭登录</string>

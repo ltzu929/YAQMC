@@ -1,6 +1,8 @@
 name: Android native verification
 
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'apps/android/android/nativeApp/**'
@@ -9,6 +11,7 @@ on:
       - 'scripts/**'
       - 'crates/**'
       - 'package-lock.json'
+      - 'package.json'
       - 'Cargo.lock'
       - '.github/workflows/android-native-verify.yml'
   workflow_dispatch:

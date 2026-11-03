@@ -2,6 +2,7 @@ package org.yaqmc.android.nativeui
 
 import android.app.Application
 import android.content.res.Configuration
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +17,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -28,6 +31,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
+import org.yaqmc.android.media.CorePlayer
 
 /** Playback UI and failures use an isolated Core; no real account writes or audio. */
 @UnstableApi
@@ -38,6 +42,54 @@ class NativePlaybackTest {
     private lateinit var model: NativeViewModel
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()
     @After fun clear() { compose.runOnIdle { if (::model.isInitialized) model.viewModelScope.cancel() } }
+
+    @Test fun systemShuffleNextDoesNotPublishAnUnselectedAdjacentSong() {
+        assertAuthoritativeSystemSkip(startIndex = 0, targetIndex = 3, next = true)
+    }
+
+    @Test fun systemPreviousRestartDoesNotPublishThePreviousQueueItem() {
+        assertAuthoritativeSystemSkip(startIndex = 2, targetIndex = 2, next = false)
+    }
+
+    private fun assertAuthoritativeSystemSkip(startIndex: Int, targetIndex: Int, next: Boolean) {
+        val initial = core.snapshot().put("currentIndex", startIndex).put("shuffle", true)
+            .put("playbackState", "playing").put("playWhenReady", true).put("positionMs", 9000)
+        val requests = mutableListOf<String>()
+        val transitions = mutableListOf<Int>()
+        lateinit var response: (String) -> Unit
+        lateinit var player: CorePlayer
+        compose.runOnIdle {
+            player = CorePlayer(Looper.getMainLooper(), { true }, {}, {}, {}, {},
+                sendCoreRequest = { method, _, reply ->
+                    if (method == "player_snapshot") reply(JSONObject().put("ok", true).put("result", initial).toString())
+                    else { requests += method; response = reply }
+                })
+        }
+        try {
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertEquals(startIndex, player.currentMediaItemIndex)
+                player.addListener(object : Player.Listener {
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        transitions += player.currentMediaItemIndex
+                    }
+                })
+                if (next) player.seekToNextMediaItem() else player.seekToPreviousMediaItem()
+                assertEquals(listOf(if (next) "player_next" else "player_previous"), requests)
+                // The request remains pending: no guessed adjacent metadata may reach controllers.
+                assertEquals(startIndex, player.currentMediaItemIndex)
+                assertTrue(transitions.isEmpty())
+                val settled = JSONObject(initial.toString()).put("currentIndex", targetIndex).put("positionMs", 0)
+                response(JSONObject().put("ok", true).put("result", settled).toString())
+            }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertEquals(targetIndex, player.currentMediaItemIndex)
+                assertTrue(transitions.all { it == targetIndex })
+                if (next) assertEquals(listOf(targetIndex), transitions) else assertTrue(transitions.isEmpty())
+            }
+        } finally { compose.runOnIdle { player.close(); player.release() } }
+    }
 
     @Test fun playerTransitionKeepsTheSourcePageVisibleUntilItIsCovered() {
         install("library")

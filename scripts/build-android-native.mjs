@@ -61,8 +61,8 @@ const output = path.join(root, 'release-android');
 mkdirSync(output, { recursive: true });
 const filename =
   variant === 'release'
-    ? `YAQMC-${version.versionName}-android-arm64-v8a.apk`
-    : `YAQMC-${version.versionName}-android-${variant}.apk`;
+    ? `YAQMC-Android-${version.versionName}-arm64-v8a.apk`
+    : `YAQMC-Android-${version.versionName}-${variant}.apk`;
 const destination = path.join(output, filename);
 const builtApk = path.join(
   android,

@@ -1,50 +1,35 @@
-# Corresponding Source Policy
+# 对应源码交付政策
 
-YAQMC binary and executable releases are distributed under GPL-3.0-or-later. For every such release, the release
-manager must provide the complete corresponding source to every recipient on terms that satisfy GPLv3 section 6.
-The source offering must be published with the release and retained as required by that license; private dependency
-access alone is not a source offering.
+YAQMC-Android 沿用 YAQMC 的 `GPL-3.0-or-later` 许可证。公开预览与正式版均须按 [GPLv3 第 6 节](LICENSE)向二进制接收者提供完整对应源码，并在发布页说明取得方式。源码交付与二进制使用同一版本和提交。
 
-Every release source manifest must identify the exact YAQMC commit, the SHA-256 digest of
-`docs/release/provenance-ledger.json`, the accompanying provenance evidence references, and the result of
-`node scripts/validate-provenance-ledger.mjs --enforce`. Do not publish while that enforcement is blocked. Delivering
-complete corresponding source does not cure missing copyright permission, missing relicensing authority, or an
-unresolved proprietary extraction; those remain separate release blockers.
+## 当前原生 Android 版本
 
-Current native Android builds no longer include AMLL or the old plugin examples. Their obligations below apply to historical binaries that shipped them. The old release automation has been retired; any future release must provide the corresponding source for its actual dependencies.
+发布材料应包含：
 
-## Required source set
+- 最终发布提交的 Kotlin / Compose 界面、Android 宿主、Rust workspace、资源、协议样本，以及构建和检查所需的脚本。
+- 该提交的 `Cargo.toml` / `Cargo.lock`、Gradle 配置与 wrapper、版本文件、构建说明、签名配置示例、许可证、版权声明和来源记录。不交付私有签名文件、账号数据或本机路径配置。
+- 实际链接的 `qm-api-rs` 精确版本源码。目前 `qqmusic-api` 固定为 `7d0f6e18b1d1d89a06cc5964e9c057acb0926ea5`，发布时同时核对提供器 manifest 和 `Cargo.lock`。
+- 按实际 Rust / Maven 解析结果整理的依赖清单、适用许可证与声明，以及需要交付的依赖对应源码；保留精确版本、来源与构建所需修改。不能只列直接依赖，也不能以一个上游仓库链接代替应交付的源码。
 
-The source delivery must include:
+当前 APK 不包含 Electron、React、Capacitor、AMLL 或旧 Provider Component 示例，不为当前原生版要求这些已退出组件的源码。
 
-- the exact YAQMC source for the released commit;
-- the exact linked `qm-api-rs` source resolved by revision
-  `7d0f6e18b1d1d89a06cc5964e9c057acb0926ea5` (or the revision recorded in that release's lockfile); and
-- the preferred source form for the shipped `@applemusic-like-lyrics/core` and
-  `@applemusic-like-lyrics/react` packages. Version `0.5.2` maps to upstream commit
-  `fd7ec2d597daa2a66a37ca5f3214d6757ec17cfa` (`core-bundle@0.5.2`) and is licensed
-  `AGPL-3.0-only`.
+从最终干净提交导出项目源码，单独备齐外部依赖。GitHub 自动生成的仓库源码 ZIP 不包含 `qm-api-rs` 等外部依赖；不能单独把它作为完整对应源码交付。复用已有 Core 二进制时，也必须能确定并提供构建它的精确源码。
 
-Include each dependency's license files, manifests, lockfiles, and build scripts, together with YAQMC's manifests,
-lockfiles, and build/packaging/release scripts. The release notes or source manifest must identify the YAQMC commit,
-the `qm-api-rs` revision, the AMLL version and source revision, the provenance-ledger SHA-256 digest, evidence
-references, and hashes of all delivered archives.
+## 发布清单与核对
 
-Do not publish a binary release if the required corresponding source is unavailable.
+每次发布随包提供 `CORRESPONDING-SOURCE-MANIFEST.json`，记录：
 
-The retired YAQMC release workflow enforced provider readiness and provenance before
-desktop and Android packaging. Its assembly job checks out the exact `qm-api-rs` and AMLL revisions with
-`persist-credentials: false`, runs
-`scripts/ci/corresponding-source.mjs`, and refuses to create a draft unless all
-three revision-bound source archives and `CORRESPONDING-SOURCE-MANIFEST.json`
-are present and hash-valid. Source generation rejects dirty YAQMC, `qm-api-rs`, or AMLL checkouts. The manifest
-records and validates both AMLL package manifests and hashes the provider readiness record,
-provenance ledger, and provenance evidence exactly as stored in the YAQMC
-archive; assembly reads those ZIP entries back, verifies their hashes and
-release decisions, and checks every dependency manifest, source entry point, and license entry.
-Assembly also requires downloaded package artifact directories to carry the
-same 40-character YAQMC commit as the source manifest and recomputes every
-file hash declared by their platform-specific build identity. The archive step
-uses `git archive`, so checkout metadata and authentication configuration are
-never included. A lockfile entry or link to an upstream repository is not a replacement for conveying the required
-corresponding source.
+- 应用名称、版本、versionCode、Git 标签与完整提交 SHA。
+- APK 的包名、ABI、签名证书 SHA-256、文件名与 SHA-256。
+- 每个源码 / 依赖归档的文件名、来源、精确版本或提交和 SHA-256；包含使用的许可证与构建说明。
+- `docs/release/provenance-ledger.json` 的 SHA-256、引用的来源证据，以及 `node scripts/validate-provenance-ledger.mjs --enforce` 的实际执行结果。
+
+发布前重新读取归档，核对其中的版本、锁文件、许可证、构建入口与清单哈希。源码应与 APK 相符，缺少应交付的源码时不发布二进制。
+
+来源台账保留历史审计快照；校验通过表示台账规则通过，不自动涵盖后续新增代码或依赖。当前原生 Android 的依赖汇总和源码归档仍需按上述要求完成。源码交付也不替代缺失的版权许可或第三方归属核对。
+
+## 历史二进制
+
+包含 `@applemusic-like-lyrics/core` / `react` `0.5.2` 的历史 Web / 桌面二进制，仍需保留对应的 `AGPL-3.0-only` 声明和首选源码。该版本对应上游提交 `fd7ec2d597daa2a66a37ca5f3214d6757ec17cfa`；历史插件示例按各自锁文件与许可证处理。
+
+旧版发布工作流及 `scripts/ci/corresponding-source.mjs` 已退出，不能作为当前发布已完成源码归档的依据。历史说明可从 [Git 固定提交](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/CORRESPONDING_SOURCE_POLICY.md)回查；当前流程见[开发指南](apps/android/android/docs/development.md#公开预览发布流程)。

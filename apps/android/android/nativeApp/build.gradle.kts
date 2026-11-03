@@ -85,13 +85,13 @@ android {
     debug {
       applicationIdSuffix = ".debug"
       versionNameSuffix = "-native-debug"
-      manifestPlaceholders["appLabel"] = "YAQMC Debug"
+      manifestPlaceholders["appLabel"] = "YAQMC-Android Debug"
     }
     release {
       isMinifyEnabled = true
       isShrinkResources = true
       signingConfig = signingConfigs.getByName("release")
-      manifestPlaceholders["appLabel"] = "YAQMC"
+      manifestPlaceholders["appLabel"] = "@string/app_name"
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
     // Comparison builds are explicit development artifacts, separate from normal upgrades.
@@ -99,7 +99,7 @@ android {
       initWith(getByName("release"))
       signingConfig = signingConfigs.getByName("debug")
       applicationIdSuffix = ".benchmark"
-      manifestPlaceholders["appLabel"] = "YAQMC Benchmark"
+      manifestPlaceholders["appLabel"] = "YAQMC-Android Benchmark"
       matchingFallbacks += "release"
       versionNameSuffix = "-native-benchmark"
     }

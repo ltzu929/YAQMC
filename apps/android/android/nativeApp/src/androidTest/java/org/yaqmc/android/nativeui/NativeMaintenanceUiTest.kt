@@ -204,7 +204,7 @@ class NativeMaintenanceUiTest {
     }
 
     @Test fun issueDraftSurvivesRestorationAndEditingInvalidatesPreview() {
-        respond = { method, _ -> if (method == "issue_reporter_preview") JSONObject("""{"title":"Preview title","body":"Safe technical details","url":"https://github.com/YAQMC/YAQMC/issues/new","tooLongForBrowser":false}""") else JSONObject() }
+        respond = { method, _ -> if (method == "issue_reporter_preview") JSONObject("""{"title":"Preview title","body":"Safe technical details","url":"https://github.com/ltzu929/YAQMC/issues/new","tooLongForBrowser":false}""") else JSONObject() }
         create()
         compose.runOnIdle { model.navigate(NativeRoute("issue-report"), root = true) }
         val restoration = StateRestorationTester(compose)
@@ -264,14 +264,14 @@ class NativeMaintenanceUiTest {
         compose.waitUntil(5000) { model.updateState.value.error }
         compose.onNodeWithText("Could not check for updates. Please retry.").assertIsDisplayed()
         update = AndroidUpdateResult.Available(ReleaseCandidate(YaqmcVersion.parse("1.0.0")!!, "1.0.0", false,
-            "https://github.com/YAQMC/YAQMC/releases/tag/v1.0.0", "Release notes"))
+            "https://github.com/ltzu929/YAQMC/releases/tag/v1.0.0", "Release notes"))
         compose.onNodeWithText("Check for updates").performClick()
         compose.waitUntil(5000) { model.updateState.value.availableVersion == "1.0.0" }
         compose.onNodeWithText("View release on GitHub").performScrollTo().assertIsDisplayed()
         val unavailable = object : ContextWrapper(compose.activity) {
             override fun startActivity(intent: Intent) { throw android.content.ActivityNotFoundException() }
         }
-        compose.runOnIdle { model.openProjectLink(unavailable, "https://github.com/YAQMC/YAQMC") }
+        compose.runOnIdle { model.openProjectLink(unavailable, "https://github.com/ltzu929/YAQMC") }
         capture("pr9-about")
     }
 
