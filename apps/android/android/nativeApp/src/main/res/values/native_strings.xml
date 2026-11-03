@@ -218,7 +218,9 @@
     <string name="native_error_decryption">This audio source could not be decrypted.</string>
     <string name="native_error_seek">This audio source does not support seeking.</string>
     <string name="native_error_cache">The audio cache could not be used.</string>
-    <string name="native_fallback_source">The requested source is unavailable; using an available quality.</string>
+    <string name="native_fallback_source">The requested quality is unavailable; playing in %1$s.</string>
+    <string name="native_fallback_network">A network problem affected the requested quality; playing in %1$s.</string>
+    <string name="native_fallback_link">The playback link expired; playing in %1$s.</string>
     <string name="native_fallback_rights">Account rights limited the selected audio quality.</string>
     <string name="native_fallback_rights_unknown">Account rights could not be confirmed; using an available quality.</string>
     <string name="native_fallback_client">This device cannot play the requested audio format.</string>

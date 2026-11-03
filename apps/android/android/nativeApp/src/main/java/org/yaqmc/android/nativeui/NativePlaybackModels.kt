@@ -83,7 +83,7 @@ internal object NativePlayback {
         "stopped" -> NativeText(R.string.native_playback_stopped)
         "recoverable-error", "fatal-error" -> NativeText(when (state.errorCode) {
             "media-url-unavailable", "track-unavailable" -> R.string.native_error_track
-            "media-url-expired", "network-failure" -> R.string.native_error_network
+            "media-url-expired", "playback-link-expired", "network-failure", "streaming-failure" -> R.string.native_error_network
             "output-device-unavailable", "audio-engine-unavailable" -> R.string.native_error_output
             "media-open-failed", "decoder-unsupported" -> R.string.native_error_decoder
             "entitlement-insufficient" -> R.string.native_error_rights
@@ -100,6 +100,8 @@ internal object NativePlayback {
 
     fun fallback(reason: String): Int? = when (reason) {
         "source-unavailable" -> R.string.native_fallback_source
+        "network-failure" -> R.string.native_fallback_network
+        "link-expired" -> R.string.native_fallback_link
         "account-rights" -> R.string.native_fallback_rights
         "entitlement-unknown" -> R.string.native_fallback_rights_unknown
         "client-unsupported" -> R.string.native_fallback_client

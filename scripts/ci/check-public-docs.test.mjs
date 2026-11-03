@@ -10,9 +10,9 @@ const temporaryParent = path.resolve(
   '../../artifacts/android-native-comparison',
 );
 const primaryLinks = [
-  '[项目规划](docs/zh-CN/project-plan.md)',
-  '[开发指南](docs/zh-CN/development.md)',
-  '[迁移清单](docs/zh-CN/native-parity.md)',
+  '[项目规划](apps/android/android/docs/project-plan.md)',
+  '[开发指南](apps/android/android/docs/development.md)',
+  '[迁移清单](apps/android/android/docs/native-parity.md)',
 ].join('\n');
 
 async function fixture(t, extraFiles = {}) {
@@ -27,9 +27,9 @@ async function fixture(t, extraFiles = {}) {
     'README.md': `# Android 客户端\n\n仓库版本 0.1.1，当前不维护双语文档。\n${primaryLinks}\n`,
     'AGENTS.md': primaryLinks,
     LICENSE: 'Test fixture license',
-    'docs/zh-CN/project-plan.md': '# 项目规划\n',
-    'docs/zh-CN/development.md': '# 开发指南\n',
-    'docs/zh-CN/native-parity.md': '# 迁移清单\n',
+    'apps/android/android/docs/project-plan.md': '# 项目规划\n',
+    'apps/android/android/docs/development.md': '# 开发指南\n',
+    'apps/android/android/docs/native-parity.md': '# 迁移清单\n',
     ...extraFiles,
   };
   for (const [relative, content] of Object.entries(files)) {
@@ -46,28 +46,32 @@ test('accepts Chinese-only Android docs without legacy release pages or English 
 });
 
 test('requires the migration ledger and reports a missing primary document', async (t) => {
-  const root = await fixture(t, { 'docs/zh-CN/native-parity.md': null });
+  const root = await fixture(t, { 'apps/android/android/docs/native-parity.md': null });
   const { errors } = await checkPublicDocumentation(root);
-  assert.ok(errors.includes('Missing required file: docs/zh-CN/native-parity.md'));
+  assert.ok(errors.includes('Missing required file: apps/android/android/docs/native-parity.md'));
 });
 
 test('requires the README and agent entry point to expose the active guides', async (t) => {
   const root = await fixture(t, { 'README.md': '# Android\n', 'AGENTS.md': '# 开发入口\n' });
   const { errors } = await checkPublicDocumentation(root);
   for (const entry of ['README.md', 'AGENTS.md']) {
-    assert.ok(errors.includes(`${entry}: missing primary document link docs/zh-CN/development.md`));
+    assert.ok(
+      errors.includes(
+        `${entry}: missing primary document link apps/android/android/docs/development.md`,
+      ),
+    );
   }
 });
 
 test('checks retained and newly added references without requiring a translated counterpart', async (t) => {
   const root = await fixture(t, {
     'docs/retained.md': '[旧参考](missing.md)\n',
-    'docs/zh-CN/reference/notes.md': '[新参考](unknown.md)\n',
+    'apps/android/android/docs/reference/notes.md': '[新参考](unknown.md)\n',
   });
   const { errors } = await checkPublicDocumentation(root);
   assert.deepEqual(errors.sort(), [
+    'apps/android/android/docs/reference/notes.md: missing local link target unknown.md',
     'docs/retained.md: missing local link target missing.md',
-    'docs/zh-CN/reference/notes.md: missing local link target unknown.md',
   ]);
 });
 

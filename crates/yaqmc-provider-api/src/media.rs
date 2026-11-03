@@ -239,9 +239,9 @@ pub enum PlaybackSourceError {
 pub trait PlaybackSourceResolver: Send + Sync {
     async fn resolve(&self, song: &Song) -> Result<ResolvedPlaybackSource, PlaybackSourceError>;
 
-    /// Retry an automatic selection with a strictly lower quality after its
-    /// refreshed media URL is still unavailable. Account rights remain enforced
-    /// by the provider; providers without this recovery retain the original error.
+    /// Resolve a strictly lower quality after source preparation failed.
+    /// Account rights remain enforced by the provider. Core records the actual
+    /// failure reason and only marks resources unavailable after a missing-file response.
     async fn resolve_unavailable_fallback(
         &self,
         _song: &Song,

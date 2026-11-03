@@ -2,7 +2,100 @@
 
 方向、范围与关键决定看[项目规划](project-plan.md)，能力覆盖和验收看[迁移对齐清单](native-parity.md)。本文维护实际开发所需的结构、命令与工作方式。
 
+## 先认清两个目录入口
+
+**完整仓库根目录叫 `YAQMC`，Android Studio 日常打开的是其中的 `apps/android/android`。** 三份中文主文档放在 Android 工程内的 `docs/`，可以直接从左侧项目树阅读。
+
+在左侧选择“项目”视图，展开 `android [yaqmc-android] → docs`，双击 `project-plan.md` 看规划、`development.md` 看本指南、`native-parity.md` 看功能与验收。Markdown 编辑区右上角可切换预览；本文中的文档和源码链接可继续导航。仓库根目录的 [README.md](../../../../README.md) 仍作为完整项目总入口。
+
+### 完整项目的主要目录
+
+```text
+YAQMC/                         完整仓库根目录
+├── README.md                  项目总入口
+├── docs/                      保留的许可、协议与来源资料
+├── apps/android/android/      Android Studio 打开的 Gradle 工程
+│   ├── docs/                  规划、开发指南、能力与验收清单（左侧直接阅读）
+│   └── nativeApp/             手机应用模块：界面、Android 系统接入及测试
+├── crates/                    Rust 核心、QQ 音乐接入及通信协议
+├── assets/                    品牌资源
+├── scripts/                   构建、检查等辅助脚本
+├── .github/                   PR 模板及自动检查工作流
+├── Cargo.toml / Cargo.lock    Rust 模块、依赖及锁定版本
+└── package.json               应用版本和可选工具命令
+```
+
+当前是一个 Android 应用，Kotlin 负责界面和 Android 系统接入，Rust 核心承担播放及相关业务能力。`package.json` 保留版本和工具命令，Gradle 打包会读取其中的版本号；当前界面使用 Compose。
+
+### Android Studio 左侧这些项目是什么
+
+下表路径都相对于 `apps/android/android`。IDE 显示的 `android [yaqmc-android]` 是 Gradle 工程；`yaqmc-android.nativeApp` 是 IDE 的模块名称，对应实际的 `nativeApp/` 目录。模块可以理解为工程中参与构建的一部分；当前应用模块只有 `:nativeApp`。
+
+| 名称                                                 | 做什么                                                 | 日常如何看待                             |
+| ---------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------- |
+| `docs/`                                              | 三份中文主文档的实际位置                               | 直接展开并双击阅读，文档只维护这一份正文 |
+| `nativeApp/`                                         | 手机应用源码、资源、测试和模块构建配置                 | 查找功能实现时主要展开这里               |
+| `gradle/`、`gradlew`、`gradlew.bat`                  | 固定 Gradle 版本并启动构建；`.bat` 用于 Windows        | 构建工具入口，使用仓库已有版本           |
+| `settings.gradle.kts`                                | 声明包含哪些模块及从哪里获取依赖                       | 当前包含 `:nativeApp`                    |
+| `build.gradle.kts`                                   | 工程级构建插件配置；`nativeApp` 内同名文件负责应用配置 | 版本、依赖和打包问题会涉及这些文件       |
+| `gradle.properties`                                  | Gradle 构建选项                                        | 调整构建环境时查看                       |
+| `.run/`                                              | 共享的运行、检查、模拟器测试和打包配置                 | 对应顶部运行配置下拉框                   |
+| `.idea/`                                             | Android Studio 的工程与本机界面配置                    | 由 IDE 管理，功能代码不放这里            |
+| `.codex/`                                            | 本机 Codex / MCP 工具配置                              | 助手连接工具时使用                       |
+| `.gradle/`、`.kotlin/`                               | 构建和 Kotlin 编译缓存                                 | 由工具生成，阅读功能时可跳过             |
+| `build/`、`nativeApp/build/`                         | 编译中间文件、报告和生成的 APK                         | 查构建结果时使用；修改源码应回到 `src/`  |
+| `local.properties`                                   | 本机 SDK、Cargo 等路径                                 | 配置环境时使用，保持本机私有             |
+| `keystore.properties`、`keystore.properties.example` | 本机签名配置及其填写示例                               | 常规升级沿用已有签名，真实配置保持私有   |
+
+### 展开 nativeApp 后，源码在哪里
+
+```text
+nativeApp/
+├── src/
+│   ├── main/                           实际打进应用的代码和资源
+│   │   ├── AndroidManifest.xml         应用入口、权限、媒体服务等声明
+│   │   ├── java/org/yaqmc/android/
+│   │   │   ├── nativeui/              Compose 页面、界面状态和偏好设置
+│   │   │   ├── core/                  Rust 核心宿主、登录协调和凭据保存
+│   │   │   ├── media/                 通知、系统媒体控制、音频焦点和后台服务
+│   │   │   ├── update/                更新检查
+│   │   │   ├── OAuthActivity.kt       授权登录页面
+│   │   │   └── YaqmcApplication.kt    应用进程初始化
+│   │   └── res/                       文案、图标、主题和其他 Android 资源
+│   ├── test/                          在电脑上运行的 JVM 单元测试
+│   └── androidTest/                   需要模拟器或手机运行的设备测试
+├── build.gradle.kts                   应用依赖、版本、Rust 构建和签名配置
+└── build/                             自动生成的构建结果
+```
+
+这里的 `java/` 也存放 Kotlin 的 `.kt` 文件。Compose 页面主要用 Kotlin 描述布局，界面代码从 `nativeui/` 找；`res/values/` 与 `res/values-zh-rCN/` 分别提供默认与简体中文资源。
+
+### 想改一个功能，先从哪里找
+
+下表给出代码入口；能力范围和验收状态仍在[对齐清单](native-parity.md#按功能查进展)维护。Kotlin 文件均在上图的 `java/org/yaqmc/android/` 下。
+
+| 想查看或改善的功能                                   | 主要代码入口                                                                                                                                                                                                                                                                                                                                                                                   | 对齐编号                                |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 应用启动、导航、顶部入口与返回                       | [NativeActivity](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeActivity.kt)、[NativeApp](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeApp.kt)、[NativeViewModel](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt)                                                                                                                        | N01–N03                                 |
+| 首页、发现、搜索、歌曲 / 专辑 / 歌单详情与音乐库列表 | [NativeCatalog](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalog.kt)、[NativeCatalogRepository](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalogRepository.kt)                                                                                                                                                                                           | H01–H02、D01–D02、S01–S04、C01–C05、A03 |
+| 登录、会员资料、收藏和歌单操作                       | [NativeAccount](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeAccount.kt)、[NativeViewModel](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt)、[OAuthActivity](../nativeApp/src/main/java/org/yaqmc/android/OAuthActivity.kt) 与 [core/](../nativeApp/src/main/java/org/yaqmc/android/core)                                                             | A01–A07                                 |
+| 播放器、队列、分享及后台播放                         | [NativePlayback](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativePlayback.kt)、[NativeSongShare](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeSongShare.kt)、[media/](../nativeApp/src/main/java/org/yaqmc/android/media) 与 [Rust Core](../../../../crates/yaqmc-core)                                                                                             | P01–P06、I01–I02                        |
+| 歌词显示、歌词设置、布局和预设                       | [NativeLyrics](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeLyrics.kt)、[NativeLyricSettings](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeLyricSettings.kt)、[NativeLyricLayout](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeLyricLayout.kt)、[NativeLyricPresets](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeLyricPresets.kt) | L01–L05                                 |
+| 主题、配色、背景、字体和语言                         | [NativeAppearance](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeAppearance.kt)、[NativePreferences](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativePreferences.kt)、[NativeApp](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeApp.kt) 与 [res/](../nativeApp/src/main/res)                                                                           | O01–O05、T05                            |
+| 听歌统计                                             | [NativeStatistics](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeStatistics.kt)、[NativeViewModel](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt) 与 [Rust Core](../../../../crates/yaqmc-core)                                                                                                                                                       | T01                                     |
+| 缓存、诊断、问题反馈、更新与关于                     | [NativeMaintenance](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeMaintenance.kt)、[NativeViewModel](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt)、[update/](../nativeApp/src/main/java/org/yaqmc/android/update)                                                                                                                                   | T02–T04                                 |
+
 ## 工程结构与当前边界
+
+界面操作经过状态协调和通信桥接，再进入 Rust 核心；结果与状态变化返回界面显示。先知道各层负责什么，需要定位问题时再沿调用链查看：
+
+```mermaid
+flowchart TD
+    UI[Compose 页面：显示内容、接收操作] <--> VM[NativeViewModel / repository：协调页面状态与请求]
+    VM <--> Bridge[NativeCore / CoreManager / JNI：Kotlin 与 Rust 通信]
+    Bridge <--> Core[Rust Core：实际播放、队列、推荐、持久化]
+    Core <--> Provider[QQ 音乐提供器：对接在线服务]
+```
 
 | 位置                                                             | 用途                                                         |
 | ---------------------------------------------------------------- | ------------------------------------------------------------ |
@@ -10,13 +103,13 @@
 | `apps/android/android/nativeApp/src/main/java/org/yaqmc/android` | 登录、凭据、JNI 宿主、媒体服务与更新；与原生界面同属一个模块 |
 | `crates/yaqmc-android`                                           | Rust JNI 桥，与宿主 `CoreManager` 通信                       |
 | `crates/yaqmc-core`                                              | 播放、队列、推荐会话、持久化等共享能力                       |
+| `crates/yaqmc-provider-api`                                      | 核心与音乐提供器之间共用的数据结构及接口约定                 |
 | `crates/yaqmc-provider-qqmusic`                                  | QQ 音乐提供器适配及精确固定的 `qqmusic-api` 依赖             |
-| `crates/yaqmc-protocol/fixtures`                                 | Rust 协议生成的契约样本，供原生 JVM 测试使用                 |
+| `crates/yaqmc-protocol`                                          | 核心通信协议；`fixtures/` 存放供原生 JVM 测试使用的契约样本  |
 
-工作目录按以下职责保留：`apps/` 与 `crates/` 是源码，`scripts/` 与 `.github/` 是构建和检查，`docs/` 是当前中文主文档及必要的来源资料，`assets/` 保留品牌资源。`target/`、`node_modules/`、Gradle `build/` 是可重建缓存；`artifacts/` 保存本机验证记录，`release-android/` 只保留当前候选包，均不提交。旧包和对应说明在本机 `artifacts/android-native-comparison/pre-cleanup-packages/` 留档。机器本地 `.codex/`、SDK 路径和签名配置保持私有。
+工作目录按以下职责保留：`apps/` 与 `crates/` 包含源码，`apps/android/android/docs/` 维护三份中文主文档；`scripts/` 与 `.github/` 是构建和检查，仓库根目录的 `docs/` 保留必要的来源资料，`assets/` 保留品牌资源。`target/`、`node_modules/`、Gradle `build/` 是可重建缓存；`artifacts/` 保存本机验证记录，`release-android/` 只保留当前候选包，均不提交。旧包和对应说明在本机 `artifacts/android-native-comparison/pre-cleanup-packages/` 留档。机器本地 `.codex/`、SDK 路径和签名配置保持私有。
 
-当前调用链为 Compose → `NativeViewModel` / repository → `NativeCore` → `CoreManager` → JNI → Rust Core。
-Media3 负责系统媒体投影，Rust 负责实际播放与时钟；界面和宿主不另建播放事实源。主题、语言、歌词与外观设置保存在 `native-ui` SharedPreferences，图片背景使用应用私有副本。
+Media3 负责系统媒体投影，Rust 负责实际播放与时钟；界面和宿主不另建播放事实源。服务创建媒体会话后立即登记，正常播放的通知与前台状态不应依赖外部控制器连接。加载期间的播放意图来自 Core 快照的 `playWhenReady`，最终错误、暂停和停止释放播放保护。主题、语言、歌词与外观设置保存在 `native-ui` SharedPreferences，图片背景使用应用私有副本。
 Gradle 仅包含 `:nativeApp`，不依赖 npm、Capacitor 或旧 Web 界面。Node 用于构建与检查脚本，npm 仅安装文档格式化工具。Rust 核心保留 Android 使用的能力与协议兼容响应，已删除桌面插件运行时、本地 HTTP API、桌面系统媒体实现及独立进程入口。
 
 ## 环境与构建
@@ -70,7 +163,7 @@ Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或�
 
 同一工程避免 IDE 与命令行 Gradle 重叠构建。SDK、NDK、Gradle wrapper 不因 IDE 的升级提示自动调整。
 
-本地 Codex 优先通过 Studio MCP 检查工程、代码问题和构建结果，执行现有运行配置。2026-10-30 核对的 MCP 接口提供工程 / 依赖、语义查找、重构、检查、构建和运行配置；没有单独的断点控制、Logcat、Layout Inspector 或 Profiler 接口。这些功能使用 IDE 本身，需要自动化补充时使用现成 `adb` / SDK 工具，或请用户完成具体操作，不因 MCP 缺口另造工具。网页端继续按分支 / PR 交付，验证按改动保留必要的测试与真机场景。
+本地 Codex 优先通过 Studio MCP 检查工程、代码问题和构建结果，执行现有运行配置。2026-10-30 核对的 MCP 接口提供工程 / 依赖、语义查找、重构、检查、构建和运行配置；没有单独的断点控制、Logcat、Layout Inspector 或 Profiler 接口。这些功能使用 IDE 本身，需要自动化补充时使用现成 `adb` / SDK 工具，或请用户完成具体操作，不因 MCP 缺口另造工具。网页端与本地默认直接在 `main` 协作，验证按改动保留必要的测试与真机场景。
 
 已有 `npm run android:studio -- '<Studio executable>' --prepare-only` 只作为可选的首次路径准备工具，写入被忽略的 SDK、JDK、Cargo 与 TLS Maven 路径；不再要求预先编译 Core，也不传入固定版本或源码提交。配置完成后可直接打开 IDE。
 
@@ -78,23 +171,21 @@ Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或�
 
 ## 跨对话接手与任务交付
 
-2026-10-26 确认采用：**网页端 GPT 修改文件、提交代码及创建 PR，本地 Codex 拉取审查，按改动在本机验证和构建。** Android 验证与安装包交付由本机完成，使用已有本机签名配置。仓库原有通用 CI 的结果可作为补充证据。
+2026-11-02 确认：**当前按个人开发组织工作，日常小改直接在 `main` 进行，不默认创建 PR。** 工作方式按[项目规划 D006](project-plan.md#d006小型项目直接在-main-修改)执行。
 
 CI 收敛为原生 Android JVM、Lint、离线 APK / 模拟器验证，以及 Rust 核心、协议、脚本和文档检查。旧 Electron / WebView 发布与网站工作流已移除；正式发布流程尚未启用。
 
-用户已确认当前使用的网页端具备提交代码和创建 PR 的能力，本项目按此能力通过独立分支 / PR 交付源码及相关测试。网页端无需为这一分工搭建 Android 编译或签名环境。
+网页端可直接修改和提交源码及相关测试；本地 Codex 审查实际差异，并按改动在本机验证、构建。Android 安装包沿用已有本机签名配置，网页端无需搭建签名环境。现有 CI 可以手动触发，结果作为补充证据。
 
-新对话先阅读仓库根目录 `AGENTS.md`，再核对[项目规划](project-plan.md)和[迁移对齐清单](native-parity.md)。以 **当前 `main`、开发分支、未合并 PR 和本地改动** 为准，不能假设上次提到的任务已经合并、构建成功或真机通过。
+新对话先阅读仓库根目录 `AGENTS.md`，再核对[项目规划](project-plan.md)和[迁移对齐清单](native-parity.md)。以 **当前 `main` 的实际文件、提交和本地改动** 为准；接手时保留未提交工作，测试与真机结论按实际执行范围说明。
 
-`main` 保存已审查且经用户确认合入的改动。后续每项任务从最新 `main` 创建独立开发分支；网页端与本地 Codex 围绕同一个任务分支协作，通过 PR 交付。
+网页端开工提示需明确仓库与当前工作基准（默认 `main`），要求先阅读上述入口和主文档；不能假定普通聊天会自动加载 `AGENTS.md`。结合功能编号和现有行为，修改源码及相关测试；交付时说明基准提交、改动目标、实际检查结果和剩余验收操作。
 
-网页端开工提示需明确仓库、分支或提交，并要求先阅读上述入口与主文档；不能假定普通聊天会自动加载 `AGENTS.md`。先确认迁移编号与旧版行为，再在独立分支修改源码及相关测试、提交代码并创建 PR。交付时提供基准提交、分支及 PR 链接、改动目标和未验证项；如未执行编译或测试，应明确说明。
+本地 Codex 先核对工作区和实际差异，接收远端改动时保留本地工作，再按本指南的必要检查选择测试、Lint、构建及真机场景。需要安装包时优先使用 Studio 的 release 构建和既有签名；debug / benchmark 使用本机 Android debug keystore。签名、旧包升级和数据兼容仍按 T06 分别验收。
 
-本地 Codex 先检查工作区并拉取远端分支，审查实际差异，再按本指南的必要检查选择测试、Lint、构建及真机场景。需要安装包时优先使用 Studio 的 release 构建和既有签名；debug / benchmark 使用本机 Android debug keystore。签名、旧包升级和数据兼容仍按 T06 分别验收。
+本轮目标、审查问题、验证结果和剩余手机体验操作直接在当前聊天说明，只更新受影响的主文档。文件修改、提交、本地检查、构建和真机验收分别记录实际结果。未经授权不发布正式包、不卸载应用、不迁移数据或操作真实账号写入。
 
-审查问题、验证结果与剩余真机场景直接在当前任务或 PR 中说明；只更新受影响的主文档。文件修改、本地检查、构建与真机验收分别记录实际结果。未经授权不合并 PR、不发布正式包、不卸载应用、不迁移数据或操作真实账号写入。
-
-任务合并后先同步本地 `main`，确认 PR 已合并且最终文件内容已纳入，再清理对应本地与远端分支；squash 合并按 PR 状态和实际内容核对，不只看提交祖先关系。未合并分支与未跟踪文件先核对归属，补齐到对应任务分支后提交，不能作为过期改动直接删除。
+较大功能、跨 Kotlin / Rust 的改动或实验性重构，由开发者判断是否使用临时分支并说明理由；采用分支时，在检查稳定后纳入 `main`。当前不安排多人协作或他人审查流程。每轮修改保持聚焦，提交按任务组织；未跟踪文件及已有修改先确认归属，保留到对应工作中。
 
 ## 必要检查
 
@@ -141,13 +232,15 @@ adb shell am instrument -w -r -e class org.yaqmc.android.nativeui.NativePlayback
 
 ## 开发与审查约定
 
-本节落实[项目规划](project-plan.md) D003，适用于网页端实现与本地审查。普通任务在聊天或 PR 中简要说明即可，不新增报告或审批步骤。
+本节落实[项目规划](project-plan.md) D003，适用于网页端实现与本地审查。普通任务在当前聊天中简要说明即可，不新增报告或审批步骤。
 
 ### 开发前：明确体验与实现边界
 
 用户可以用日常语言描述问题。本地 Codex 结合旧 Android 行为、当前实现和迁移范围，整理推荐方案与可观察的验收表现；普通小修复直接推进。只有影响功能范围、明显体验差异或长期维护成本的取舍才需要讨论，不要求用户选择技术细节。
 
-交给网页端的任务说明包括仓库与基准分支、要解决的问题、本次范围、应复用的现有能力及验收表现，沿用上文分支 / PR 交付流程。实现中发现需要显著扩大范围或改变既定架构时，先说明原因、替代方案和推荐选择。
+用户把握目标和体验取舍；开发者主动判断工程组织、必要检查和实现复杂度，简要解释关键决定的理由。用户提出简化流程时，开发者应结合改动影响推荐合适做法，保留版本记录、必要验证和可撤回的修改范围。
+
+交给网页端的任务说明包括仓库与当前基准提交、要解决的问题、本次范围、应复用的现有能力及验收表现，沿用上文按改动影响选择工作方式的约定。实现中发现需要显著扩大范围或改变既定架构时，先说明原因、替代方案和推荐选择。
 
 ### 实现与审查：按改动选择检查
 

@@ -218,7 +218,9 @@
     <string name="native_error_decryption">无法解密此音频资源。</string>
     <string name="native_error_seek">此音频资源不支持调整播放进度。</string>
     <string name="native_error_cache">暂时无法使用音频缓存。</string>
-    <string name="native_fallback_source">请求的音源不可用，已使用可用音质。</string>
+    <string name="native_fallback_source">原音质暂无可用资源，现以%1$s播放。</string>
+    <string name="native_fallback_network">原音质加载时网络异常，现以%1$s播放。</string>
+    <string name="native_fallback_link">原播放链接已失效，现以%1$s播放。</string>
     <string name="native_fallback_rights">受账号权益限制，已调整播放音质。</string>
     <string name="native_fallback_rights_unknown">暂时无法确认账号权益，已使用可用音质。</string>
     <string name="native_fallback_client">当前设备不支持请求的音频格式。</string>

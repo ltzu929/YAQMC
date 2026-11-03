@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const primaryDocuments = [
   'README.md',
-  'docs/zh-CN/project-plan.md',
-  'docs/zh-CN/development.md',
-  'docs/zh-CN/native-parity.md',
+  'apps/android/android/docs/project-plan.md',
+  'apps/android/android/docs/development.md',
+  'apps/android/android/docs/native-parity.md',
 ];
 const supplementaryDocuments = ['.github/PULL_REQUEST_TEMPLATE.md'];
 const forbiddenContent = [
@@ -57,6 +57,7 @@ export async function checkPublicDocumentation(root = repositoryRoot) {
   const documents = [
     ...(await collectMarkdown(root)),
     ...(await collectMarkdown(root, 'docs', true)),
+    ...(await collectMarkdown(root, 'apps/android/android/docs', true)),
   ];
   for (const relative of supplementaryDocuments) {
     if (await exists(path.join(root, relative))) documents.push(relative);

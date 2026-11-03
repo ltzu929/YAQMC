@@ -261,6 +261,20 @@ class NativePlaybackTest {
         assertFalse(core.calls.any { it.first.startsWith("player_") })
     }
 
+    @Test fun networkFallbackShowsActualQualityAndAllowsReselectingRequestedQuality() {
+        install("player")
+        // Keep the fake clock paused while checking feedback and choices.
+        publish(core.snapshot().put("snapshotRevision", 2)
+            .put("sourceSelection", JSONObject("""{"requestedQuality":"hi-res","resolvedQuality":"lossless","fallbackReason":"network-failure","qualityCapabilities":[
+                {"quality":"hi-res","entitlement":"allowed","resource":"available","client":"supported","playable":true}]}""")))
+        compose.onNodeWithText("A network problem affected the requested quality; playing in Lossless.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("playback-status", useUnmergedTree = true).assertDoesNotExist()
+        capture("playback-network-quality")
+        compose.onNodeWithTag("quality-picker").performScrollTo().performClick()
+        compose.onNodeWithTag("quality-hi-res").assertIsEnabled()
+        capture("playback-network-quality-picker")
+    }
+
     @Test fun miniPlayerHasPreviousQueueQualityAndShareWithoutNavigatingUnexpectedly() {
         install("home")
         compose.onNodeWithContentDescription("Previous track").performClick()

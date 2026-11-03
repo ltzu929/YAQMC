@@ -1780,21 +1780,8 @@ impl PlaybackSourceResolver for QQMusicService {
         }
         let mut source = source.map_err(map_provider_source_error)?;
         source.selection.requested_quality = failed.requested_quality;
-        if !source.selection.preview {
-            source.selection.fallback_reason = Some(PlaybackFallbackReason::SourceUnavailable);
-        }
-        for capability in &mut source.selection.quality_capabilities {
-            if capability.quality == failed.resolved_quality
-                || failed.quality_capabilities.iter().any(|previous| {
-                    previous.quality == capability.quality
-                        && previous.resource
-                            == yaqmc_provider_api::ResourceCapabilityState::Unavailable
-                })
-            {
-                capability.resource = yaqmc_provider_api::ResourceCapabilityState::Unavailable;
-                capability.playable = false;
-            }
-        }
+        // Core knows whether preparation failed due to networking, expiry or a missing file.
+        // Do not turn a temporary transport failure into a permanent resource restriction here.
         let _ =
             self.storage
                 .record_playback_snapshot(&provider.provider_id, &provider.track_id, song);

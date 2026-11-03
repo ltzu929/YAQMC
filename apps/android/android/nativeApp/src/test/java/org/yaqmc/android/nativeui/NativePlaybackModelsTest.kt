@@ -78,6 +78,16 @@ class NativePlaybackModelsTest {
         }
     }
 
+    @Test fun transientSourceFailuresKeepTheirOwnLocalizedFeedback() {
+        assertEquals(R.string.native_fallback_network, NativePlayback.fallback("network-failure"))
+        assertEquals(R.string.native_fallback_link, NativePlayback.fallback("link-expired"))
+        for (code in listOf("network-failure", "playback-link-expired", "streaming-failure")) {
+            val state = NativePlayback.decode(queue().put("playbackState", "recoverable-error")
+                .put("playbackError", JSONObject().put("code", code)))
+            assertEquals(R.string.native_error_network, NativePlayback.status(state)?.resource)
+        }
+    }
+
     private fun queue(): JSONObject {
         val tracks = JSONArray("""[{"id":"same-song","durationMs":120000},{"id":"same-song"},{"id":"other-song"}]""")
         return JSONObject().put("queue", tracks).put("queueEntries", JSONArray("""[{"id":"a"},{"id":"b"},{"id":"c"}]"""))

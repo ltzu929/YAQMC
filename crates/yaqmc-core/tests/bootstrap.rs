@@ -120,6 +120,7 @@ fn restored_queue_calls_remember_songs_before_player_restore() {
         current_queue_entry_id: None,
         position_ms: 0,
         is_playing: false,
+        play_when_ready: false,
         volume: 0.41,
         is_muted: false,
         repeat: yaqmc_core::player::RepeatMode::Off,

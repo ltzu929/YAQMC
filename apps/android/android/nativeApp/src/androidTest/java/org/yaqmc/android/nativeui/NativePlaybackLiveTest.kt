@@ -1,5 +1,6 @@
 package org.yaqmc.android.nativeui
 
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Intent
@@ -49,6 +50,13 @@ class NativePlaybackLiveTest {
             core.invoke("player_play_tracks", JSONObject().put("request", JSONObject().put("tracks", JSONArray(tracks.map { it.json })).put("shuffle", false)))
             val playing = awaitPlayer(core) { it.playing && it.position > 500 }
             receipt.put("corePlayback", true)
+            // Assert the normal app path before a controller can implicitly register the session.
+            withTimeout(10000) {
+                while (context.getSystemService(NotificationManager::class.java).activeNotifications.none {
+                    it.notification.flags and Notification.FLAG_FOREGROUND_SERVICE != 0
+                }) delay(100)
+            }
+            receipt.put("foregroundNotificationWithoutController", true)
             val future = MediaController.Builder(context, SessionToken(context, ComponentName(context, PlaybackService::class.java)))
                 .setApplicationLooper(Looper.getMainLooper()).buildAsync()
             val controller = future.get(15, TimeUnit.SECONDS)

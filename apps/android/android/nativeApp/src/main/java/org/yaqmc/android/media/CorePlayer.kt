@@ -234,13 +234,14 @@ class CorePlayer(
         val nextRepeat = repeatModeFrom(state.optString("repeat", "off"))
         val nextPlaylist = mediaItems(state.optJSONArray("queue"), state.optJSONArray("queueEntries"), nextIndex, nextDuration)
         val nextPhase = CorePlaybackPhase.fromWire(state.optString("playbackState", "idle"))
-        val nextProjection = projectPlaybackState(nextPhase, projection.playWhenReady)
+        val corePlayWhenReady = if (state.has("playWhenReady")) state.optBoolean("playWhenReady") else null
         val failure = state.optJSONObject("playbackError")
-        val nextError = if (nextProjection.error) playbackException(failure) else null
         val nextVolume = state.optDouble("volume", volume.toDouble()).toFloat().coerceIn(0f, 1f)
         val muted = state.optBoolean("isMuted", false)
 
         handler.post {
+            // Resolve intent on the player thread, after all earlier snapshots and user commands.
+            val nextProjection = projectPlaybackState(nextPhase, projection.playWhenReady, corePlayWhenReady)
             positionMs = nextPosition
             durationMs = nextDuration?.takeIf { it >= 0 } ?: C.TIME_UNSET
             currentIndex = nextIndex
@@ -250,7 +251,7 @@ class CorePlayer(
             volume = if (muted) 0f else nextVolume
             corePhase = nextPhase
             projection = nextProjection
-            playerError = nextError
+            playerError = if (nextProjection.error) playbackException(failure) else null
             notifyResourceState(nextProjection.holdsPlaybackResources)
             invalidateState()
         }

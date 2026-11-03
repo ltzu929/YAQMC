@@ -5,6 +5,20 @@
 本清单集中维护迁移覆盖、验收要求与关键验证结论；各批执行日期与验证范围见文末。
 最新结果：2026-10-31，用户安装 `0.1.2` 后确认本轮反馈问题基本修复并通过审核，范围见文末“用户安装验收”。
 
+## 按功能查进展
+
+先按下表找到功能，再查看对应行的状态与文末相关验收记录。编号用于持续追踪同一能力，例如 P03 是音质显示与降级反馈；它不表示开发优先级。想找对应代码，可转到[开发指南的功能地图](development.md#想改一个功能先从哪里找)。
+
+| 关心的功能                     | 编号与阅读位置                                            |
+| ------------------------------ | --------------------------------------------------------- |
+| 导航、首页、发现、搜索         | [N01–N03、H01–H02、D01–D02、S01–S04](#导航首页发现与搜索) |
+| 详情、账号、会员和音乐库       | [C01–C05、A01–A07](#详情账号与音乐库)                     |
+| 播放器、队列、分享、通知与后台 | [P01–P06、I01–I02](#播放队列与分享)                       |
+| 歌词、布局、外观与语言         | [L01–L05、O01–O05](#歌词外观与语言)                       |
+| 统计、缓存、诊断、更新与升级   | [T01–T06](#统计维护与交付)                                |
+
+“已有代码”回答实现是否存在，“部分验收”与“待验收”说明实际检查到了哪里。看一项功能时同时关注操作是否完整、已经通过哪些检查、还剩哪些使用场景。[分批验收要求](#分批验收要求)列出期望表现，[已有验证摘要](#已有验证摘要)及后续日期记录列出实际结果。
+
 ## 目标与判定方式
 
 先完整迁移旧 Android 已开放的功能、交互、设置及状态反馈。保留 Rust 核心。
@@ -33,9 +47,9 @@
 依据：[Sidebar](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/Sidebar.tsx)、[TopBar](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/TopBar.tsx)、
 [HomePage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/HomePage.tsx)、[ExplorePage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/ExplorePage.tsx)、
 [AreaPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/AreaPage.tsx)、[SearchPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SearchPage.tsx)；
-原生对应为 [NativeApp](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeApp.kt)、
-[NativeModels](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeModels.kt)及
-[NativeViewModel](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt)。
+原生对应为 [NativeApp](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeApp.kt)、
+[NativeModels](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeModels.kt)及
+[NativeViewModel](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeViewModel.kt)。
 
 ## 详情、账号与音乐库
 
@@ -60,9 +74,9 @@
 [账号运行时](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/application/account-runtime.ts)及[设置页](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SettingsPage.tsx)。
 原生浏览实现拆分为 `NativeCatalog` / `NativeCatalogRepository`，账号界面与投影位于 `NativeAccount` / `NativeAccountModels`；协调状态仍在 `NativeViewModel`。
 
-浏览与账号的原生入口见 [NativeCatalog](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalog.kt)、
-[NativeAccount](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeAccount.kt)；
-[NativeCatalogRepository](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalogRepository.kt)复用现有 Core 协议。
+浏览与账号的原生入口见 [NativeCatalog](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalog.kt)、
+[NativeAccount](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeAccount.kt)；
+[NativeCatalogRepository](../nativeApp/src/main/java/org/yaqmc/android/nativeui/NativeCatalogRepository.kt)复用现有 Core 协议。
 
 “新建歌单”在两侧都有底层方法，但本轮未找到旧产品界面的独立创建入口；不能仅凭 API 将其写成旧 UI 已支持。
 
@@ -76,7 +90,7 @@
 | P04  | 队列下一首播放、拖动排序和按条目操作                      | 已有代码：按条目 ID 立即播放 / 下一首播放 / 移除 / 拖动，另有菜单移动；重复歌曲、随机遍历与失败不乐观改队列已用模拟 Core 检查；本地音频检查下一首安排不解除暂停                     |
 | P05  | 队列区分当前与接下来，按 Core 随机遍历顺序显示            | 已有代码：投影 Core 当前条目和 upcomingQueueEntryIds；与原始索引分开处理，重复歌曲保留各自条目 ID                                                                                   |
 | P06  | 加载 / 缓冲 / 错误与不可用歌曲等状态提示                  | 已有代码：播放条与完整播放器区分加载 / 缓冲 / 结束 / 错误，映射不可用原因、试听和降级；仅可重试错误提供重试入口                                                                     |
-| I01  | 系统媒体通知、锁屏、蓝牙 / 耳机、焦点、后台服务与深链     | 复用宿主 / 部分验收：已检查通知、后台、媒体控制和歌曲深链；焦点打断真机未通过，锁屏、蓝牙 / 耳机与长期后台仍待验收；详情见文末                                                      |
+| I01  | 系统媒体通知、锁屏、蓝牙 / 耳机、焦点、后台服务与深链     | 部分验收：0.1.3 用户确认音乐通知、返回桌面后的超级岛及息屏续播正常；会话登记与加载播放意图已修，临时故障停止连续跳歌。焦点、外设、完整系统控制与长期后台专项继续待验收，见文末      |
 | I02  | 公开歌曲链接、YAQMC 深链、纯文本三种系统分享动作          | 已有代码：列表、播放条、完整播放器与队列共用三种选择；公开目标校验身份 / HTTPS，深链和纯文本可离线生成；单元与模拟 Core 真机覆盖失败 / 取消；三种真实内容均已在系统分享面板核对     |
 
 依据：[PlayerBar](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/PlayerBar.tsx)、[TrackList](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/components/TrackList.tsx)、
@@ -113,13 +127,13 @@
 | T02  | 缓存容量、媒体 / 封面数量、元数据 / 歌词条目和清理                            | 第五批源码已接入：精确字节、音频 / 封面数量与容量、元数据 / 歌词条目及限额；重复清理防护和失败保留旧统计。首次读取失败明确提示并可重试，模型与离线回归已通过，真机验收待补。                                                                                                                        |
 | T03  | 日志等级、控制台转发、日志清理、脱敏诊断包系统分享、问题报告                  | 第五批源码已接入：日志详细程度、旧日志清理、Core 脱敏 ZIP 的 FileProvider 系统分享，以及 Core 生成 / 验证 URL 的 GitHub 问题报告预览。Electron 专用的控制台转发不在旧 Android 门禁内；读取与修改互斥，问题草稿支持界面重建恢复；模拟导出失败与附件 URI 读取通过，真实 Core 脱敏和真机分享仍待验收。 |
 | T04  | 更新检查 / 状态、打开 Release、版本和平台 / 音频信息                          | 第五批源码已接入：复用 AndroidUpdateChecker，展示版本、Commit、Android API / ABI 及 Rust Core / Media3 音频架构，区分更新、无更新和检查失败；三种状态及缺少浏览器的失败反馈通过离线回归，真实网络与真机验收待补。                                                                                   |
-| T05  | 应用偏好保存与升级兼容                                                        | 部分：主题 / 语言 / 歌词 / 外观分别保存，保留原生旧主题键与无关偏好；其余模块设置、预设及旧客户端跨包升级兼容仍待后续批次                                                                                                                                                                           |
-| T06  | 正式签名包、原包名升级、数据延续、发布工作流                                  | 未完成：当前 nativeui 为独立包，默认构建为 benchmark，工作流仍产出旧 app；兼容方案待决定                                                                                                                                                                                                            |
+| T05  | 应用偏好保存与升级兼容                                                        | 部分验收：主题 / 语言 / 歌词 / 外观分别保存，保留原生旧主题键与无关偏好；API 35 隔离调试包以合成数据验证覆盖升级后偏好、加密凭据和私有文件保持，0.1.2 用户安装验收通过；其余设置组合、旧版界面偏好与完整设备回归继续补充                                                                            |
+| T06  | 正式签名包、原包名升级、数据延续、发布工作流                                  | 部分验收：常规构建为沿用 `org.yaqmc.android` 与旧签名的 release 包，Gradle 检查签名与 ARM64 Core；Studio 打包、隔离包覆盖升级和 0.1.2 用户安装验收已通过，详见文末；正式发布工作流尚未启用                                                                                                          |
 
 依据：[StatisticsPage](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/StatisticsPage.tsx)、[设置页](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/src/pages/SettingsPage.tsx)、
 [Android 桥](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/packages/yaqmc-client/src/bridges/android.ts)、
-[原生 Gradle](../../apps/android/android/nativeApp/build.gradle.kts)、
-[原生构建脚本](../../scripts/build-android-native.mjs)、[发布流程](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/.github/workflows/electron-release.yml)。
+[原生 Gradle](../nativeApp/build.gradle.kts)、
+[原生构建脚本](../../../../scripts/build-android-native.mjs)、[发布流程](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/.github/workflows/electron-release.yml)。
 
 ## 旧 Android 已关闭或未开放的能力
 
@@ -314,3 +328,36 @@ B4-02 / B4-04 低版本模糊增量（同 PR #8）：Android 8–11 歌词远处
 这是用户实际使用后的总体结论；没有另外记录每个账号、音质、分享接收目标或设备组合的逐项结果。迁移清单中焦点、外设、长期后台、布局编排等其他专项仍按对应编号推进。验收后的源码、Studio 工作流配置及中文主文档已随 [PR #13](https://github.com/ltzu929/YAQMC/pull/13) 合入 `main`。
 
 交付收尾：PR 最终源码 `3f85d3c` 的 [Core 与仓库检查](https://github.com/ltzu929/YAQMC/actions/runs/41181446343)、[Android 构建与 API 30 / 35 界面回归](https://github.com/ltzu929/YAQMC/actions/runs/41181446279) 全部通过；本地 Studio 复核 103 项 JVM 测试通过，Lint 为 0 错误 / 43 警告。用户合并提交为 `d388cad`，其文件内容与最终 PR 版本一致。本地 `main` 已同步，`fix/android-feedback-recovery` 的本地和远端分支已清理。
+
+## 2026-11-02 系统媒体根因排查
+
+I01：Redmi K70 / Android 16 / HyperOS 3.0.307 上的现有 `0.1.2` 正常播放时，平台媒体会话为 PLAYING，但没有媒体通知，服务的 `startForegroundCount=0`。[PlaybackService](../nativeApp/src/main/java/org/yaqmc/android/media/PlaybackService.kt) 只构造会话，未调用 `addSession`；原生界面直接调用 Core，不会通过服务控制器触发 `onGetSession` 的自动登记。独立诊断客户端建立标准 MediaBrowser 连接后，媒体通知出现，服务变为前台并立即上岛，应用 APK 未替换。
+
+短时息屏对照：未登记会话时，下一首进入 `the progressive media request failed`，系统 UID 网络策略为 `effective=APP_BACKGROUND`；登记后，网络策略为 `effective=NONE`，服务状态为 FGS，息屏跨歌后下一首正常播放约 18 秒。这是无线调试中的短时对照，移动流量长期连播、外设和完整焦点矩阵仍需补验。已有本机模拟另外确认：加载候选未区分临时错误，且可重试错误会清除系统播放意图并释放唤醒保护。
+
+原 [NativePlaybackLiveTest](../nativeApp/src/androidTest/java/org/yaqmc/android/nativeui/NativePlaybackLiveTest.kt) 在通知断言前创建 MediaController，自动补上了登记，因此原通过结果不能覆盖正常冷启动路径。修复后须先检查直接启动与播放的通知 / 前台状态，再验证系统控制，避免由测试额外建立连接来满足被测前提。
+
+P03：真机复现成功播放时持续显示音源降级提示；源码与本机模拟确认网络失败也会进入 `source-unavailable` 路径，并把原音质标为资源不可用，可能禁用重选。本次首个音源请求的具体返回原因仍待补查。T03：真实诊断导出被 `refresh_key` / `refresh_token` 检查拒绝，且界面直接显示内部错误文本；随后定位为凭据恢复日志的 `has_refresh_key` / `has_refresh_token` 布尔字段被子串扫描误判，没有绕过检查或分享诊断包。
+
+上述排查阶段未修改应用 APK。测试结束恢复了原歌曲、80 ms 位置和暂停状态，队列顺序与设置保持不变；诊断客户端已停止。本机证据位于被忽略的 `artifacts/playback-root-cause/k70/`。
+
+## 2026-11-02 播放与诊断修复
+
+- **I01：** 创建 MediaSession 后立即 `addSession`，由 Media3 生成通知并管理前台服务。Core 快照新增兼容旧存档的 `playWhenReady`，加载时以当前操作的自动播放意图为准，避免跳过不可用曲目后沿用上一条错误的停止状态。最终失败时仍释放播放保护，等待用户重试。
+- **P01 / P06：** 自动选取下一首只跳过确定的曲目 / 文件不可用；网络、登录、链接失效、设备和缓存故障停止本次连续尝试，保留当前失败歌曲。自然播完后的同一路径也受此规则约束。
+- **P03：** 降级原因由 Core 按实际准备失败分类为资源缺失、网络异常或链接失效，界面说明实际播放音质；临时网络与链接故障不再把原音质标为资源缺失，已确认缺失的标记仍保留。
+- **T03：** 仅放行格式精确的凭据存在性布尔字段，继续检查同一行后续的敏感值；默认拒绝未解决的真实敏感模式。导出失败使用本地化提示，不将内部异常直接展示给用户。
+
+本地检查：受影响的 Core、提供器接口与 QQ 音乐提供器共 528 项测试通过（8 项真实服务测试保持忽略）；fmt、Clippy、协议契约、106 项 JVM 测试和 37 项 Node 检查通过，Lint 为 0 错误 / 43 警告。受限环境中的缓存测试改用项目内临时目录后全部通过。
+
+2026-11-03 补齐 API 35 离线界面回归：播放器、个性化及维护三套件共 36 项通过，1 项仅适用于旧系统的歌词模糊检查按条件跳过。前一轮已完成的 27 项与补跑的 10 项分别保留回执；音质降级提示显示实际音质、原音质可重选及诊断附件读取 / 导出失败提示均通过，音质界面截图已查看。Gradle 设备执行器依赖下载失败后，使用官方 `am instrument` 运行已编译的同一批测试；早先被系统界面无响应打断的结果不计入通过数。
+
+已通过统一 Gradle 入口重编当前 ARM64 Core 并生成 `0.1.3`（1039000）release 包，包名 `org.yaqmc.android`、ARM64 Core 与原签名校验通过。候选文件为本机 `release-android/YAQMC-0.1.3-android-arm64-v8a.apk`，未发布。
+
+## 2026-11-03 0.1.3 用户验收与收尾
+
+用户安装后确认息屏续播正常、音质提醒改善，下拉通知栏可见音乐播放通知；进一步返回桌面测试后，确认前置摄像头附近的音乐超级岛正常出现。用户随后要求本版本先收尾，据此提交当前修复，不继续追加功能或修复范围。
+
+已知遗留：选择自动音质时，仍可能提示原音质不可用。提供器在自动选取可用档位时保留了更高档位的缺失原因，界面未区分自动选择与手动降级，导致正常播放时仍出现不恰当的提示。下一轮调整提示语义，保留实际音质、试听及真正播放失败的反馈。
+
+本次未重新连接手机；上述设备结论来自用户实际体验反馈。移动流量长期息屏连播、焦点 / 外设完整矩阵、系统控制专项与真实诊断分享继续保留待验收，不影响用户已确认的本轮收尾范围。此前标准媒体会话的调试对照中曾出现超级岛；此次用户反馈补充确认了日常返回桌面的显示场景。

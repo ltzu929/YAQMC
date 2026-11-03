@@ -13,6 +13,9 @@ apps/android/android/local.properties
 apps/android/android/keystore.properties
 release-android/
 
+# Local owner overview
+/apps/android/android/docs/项目方向（本机）.md
+
 # Local validation evidence and scratch files
 artifacts/
 coverage/

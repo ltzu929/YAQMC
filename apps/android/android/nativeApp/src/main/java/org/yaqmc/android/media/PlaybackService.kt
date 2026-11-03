@@ -79,7 +79,8 @@ class PlaybackService : MediaSessionService() {
         packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
             sessionBuilder.setSessionActivity(PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         }
-        session = sessionBuilder.build()
+        // The UI invokes Core directly, so no service controller binds to register this session.
+        session = sessionBuilder.build().also(::addSession)
         ContextCompat.registerReceiver(
             this,
             noisyReceiver,

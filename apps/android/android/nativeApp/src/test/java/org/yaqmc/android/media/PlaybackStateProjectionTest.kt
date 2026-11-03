@@ -28,6 +28,22 @@ class PlaybackStateProjectionTest {
     }
 
     @Test
+    fun `core autoplay survives a skipped unavailable track`() {
+        val failed = projectPlaybackState(CorePlaybackPhase.FATAL_ERROR, true)
+        assertFalse(failed.holdsPlaybackResources)
+        val loading = projectPlaybackState(CorePlaybackPhase.LOADING, failed.playWhenReady, true)
+        assertTrue(loading.playWhenReady)
+        assertTrue(loading.holdsPlaybackResources)
+    }
+
+    @Test
+    fun `core paused load overrides a stale playing projection`() {
+        val loading = projectPlaybackState(CorePlaybackPhase.LOADING, true, false)
+        assertFalse(loading.playWhenReady)
+        assertFalse(loading.holdsPlaybackResources)
+    }
+
+    @Test
     fun `ended and failures stop playback`() {
         val ended = projectPlaybackState(CorePlaybackPhase.ENDED, true)
         assertEquals(MediaPlaybackPhase.ENDED, ended.phase)

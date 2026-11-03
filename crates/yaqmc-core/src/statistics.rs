@@ -866,6 +866,7 @@ mod tests {
             current_queue_entry_id: Some(format!("entry-{session_id}")),
             position_ms,
             is_playing: state == PlaybackState::Playing,
+            play_when_ready: state == PlaybackState::Playing,
             volume: 0.7,
             is_muted: false,
             repeat: RepeatMode::Off,

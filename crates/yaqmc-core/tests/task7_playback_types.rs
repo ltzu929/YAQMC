@@ -50,6 +50,8 @@ fn playback_values_preserve_wire_shapes_and_preference_settings() {
     assert_eq!(
         serde_json::to_value([
             PlaybackFallbackReason::SourceUnavailable,
+            PlaybackFallbackReason::NetworkFailure,
+            PlaybackFallbackReason::LinkExpired,
             PlaybackFallbackReason::AccountRights,
             PlaybackFallbackReason::EntitlementUnknown,
             PlaybackFallbackReason::ClientUnsupported,
@@ -58,6 +60,8 @@ fn playback_values_preserve_wire_shapes_and_preference_settings() {
         .unwrap(),
         serde_json::json!([
             "source-unavailable",
+            "network-failure",
+            "link-expired",
             "account-rights",
             "entitlement-unknown",
             "client-unsupported",

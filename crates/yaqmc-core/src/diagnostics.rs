@@ -824,9 +824,24 @@ fn detect_unresolved_patterns(text: &str) -> Vec<String> {
     // missed an edge case we surface the category name only).
     for key in HIGH_RISK_KEYS {
         let needle = format!("{key}=");
-        if let Some(idx) = text.to_ascii_lowercase().find(needle.as_str()) {
+        for (idx, _) in lowered.match_indices(needle.as_str()) {
             let end = idx + needle.len();
             let after = &text[end..];
+            // Credential restore logs contain boolean presence flags, not credential values.
+            // Only accept an exact has_<key>=true/false field; arbitrary prefixed values
+            // and later unredacted occurrences must still fail closed.
+            let presence_flag = lowered[..idx].strip_suffix("has_").is_some_and(|prefix| {
+                prefix.is_empty() || prefix.ends_with([' ', '\t', '\n', '"', '\'', '{', ','])
+            });
+            let value = after
+                .split(|c: char| {
+                    c.is_ascii_whitespace() || matches!(c, ',' | ';' | '"' | '\'' | '}' | ']')
+                })
+                .next()
+                .unwrap_or("");
+            if presence_flag && matches!(value, "true" | "false") {
+                continue;
+            }
             if !after.starts_with("[REDACTED]") && !after.starts_with('\n') && !after.is_empty() {
                 findings.push((*key).to_owned());
             }
@@ -1158,6 +1173,42 @@ mod tests {
         assert!(!log.contains("TOKENVALUE"));
         assert!(log.contains("[REDACTED]"));
         assert!(result.redaction.values_redacted >= 2);
+    }
+
+    #[test]
+    fn credential_presence_flags_do_not_block_bundle_export() {
+        let temp = tempdir().unwrap();
+        let logs = temp.path().join("logs");
+        fs::create_dir_all(&logs).unwrap();
+        fs::write(
+            logs.join("yaqmc.log"),
+            "credential-v2 restore has_refresh_token=true has_refresh_key=false\n",
+        )
+        .unwrap();
+        let result = export_bundle(
+            &temp.path().join("out"),
+            &stub_diagnostics("presence"),
+            &logs,
+            BundleOptions::default(),
+        )
+        .unwrap();
+        assert!(result.redaction.unresolved_patterns.is_empty());
+        assert!(result.path.is_file());
+    }
+
+    #[test]
+    fn safe_presence_flags_or_redacted_values_do_not_hide_later_secrets() {
+        for text in [
+            "has_refresh_token=true refresh_token=UNSAFE",
+            "refresh_key=[REDACTED] refresh_key=UNSAFE",
+            "has_refresh_token=UNSAFE",
+            "otherhas_refresh_key=true",
+        ] {
+            assert!(!detect_unresolved_patterns(text).is_empty(), "{text}");
+        }
+        assert!(
+            detect_unresolved_patterns("has_refresh_token=false has_refresh_key=true").is_empty()
+        );
     }
 
     #[test]

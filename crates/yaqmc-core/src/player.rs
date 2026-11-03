@@ -4,7 +4,10 @@ use crate::{
     logging,
     media::{MediaPreparer, PlaybackEpochGuard, PlaybackSourceError, PlaybackSourceResolver},
     playback_session::SeekMailbox,
-    playback_types::{AudioQualityPreference, PlaybackSourceSelection},
+    playback_types::{
+        AudioQualityPreference, PlaybackFallbackReason, PlaybackSourceSelection,
+        ResourceCapabilityState,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -111,6 +114,8 @@ pub struct PlayerSnapshot {
     pub current_queue_entry_id: Option<String>,
     pub position_ms: u64,
     pub is_playing: bool,
+    #[serde(default)]
+    pub play_when_ready: bool,
     pub volume: f64,
     pub is_muted: bool,
     pub repeat: RepeatMode,
@@ -279,6 +284,8 @@ struct PlayerCore {
     current_index: Option<usize>,
     position_ms: u64,
     playback_state: PlaybackState,
+    /// Intent of the in-flight load; stable states derive their intent directly.
+    loading_autoplay: bool,
     playback_duration_ms: Option<u64>,
     playback_error: Option<PlaybackFailure>,
     timeline_offset_ms: u64,
@@ -422,6 +429,11 @@ impl PlayerCore {
             current_queue_entry_id: self.current_entry_id().map(str::to_owned),
             position_ms: self.position_ms,
             is_playing: self.playback_state == PlaybackState::Playing,
+            play_when_ready: self.playback_state == PlaybackState::Playing
+                || (matches!(
+                    self.playback_state,
+                    PlaybackState::Loading | PlaybackState::Buffering
+                ) && self.loading_autoplay),
             volume: self.volume,
             is_muted: self.is_muted,
             repeat: self.repeat,
@@ -820,6 +832,7 @@ impl PlayerService {
             return self
                 .mutate("player.playback", |core| {
                     core.playback_state = PlaybackState::Playing;
+                    core.loading_autoplay = true;
                     core.playback_error = None;
                     Ok(())
                 })
@@ -838,6 +851,7 @@ impl PlayerService {
             } else {
                 let result = guard.validate_and_run(|| {
                     core.playback_state = PlaybackState::Playing;
+                    core.loading_autoplay = true;
                     core.playback_error = None;
                     core.snapshot()
                 });
@@ -1465,6 +1479,7 @@ impl PlayerService {
             core.record_loaded_entry(&entry_id);
             core.position_ms = resume_position_ms.min(core.queue[index].duration_ms);
             core.playback_state = PlaybackState::Loading;
+            core.loading_autoplay = autoplay;
             core.playback_error = None;
             core.playback_duration_ms = Some(core.queue[index].duration_ms);
             core.timeline_offset_ms = 0;
@@ -1551,7 +1566,10 @@ impl PlayerService {
                 failure = ?preparation.as_ref().err(),
                 "selected source is unavailable; trying a lower quality"
             );
-            let fallback = match self
+            let failure = preparation
+                .as_ref()
+                .expect_err("fallback requires a preparation failure");
+            let mut fallback = match self
                 .resolver
                 .resolve_unavailable_fallback(&song, &failed_selection)
                 .await
@@ -1573,6 +1591,7 @@ impl PlayerService {
                     .fail_load(generation, &PlaybackSourceError::UrlExpired)
                     .await;
             }
+            classify_quality_fallback(&mut fallback.selection, &failed_selection, failure);
             failed_selection = fallback.selection.clone();
             tracing::info!(target: "player.source", resolved = ?failed_selection.resolved_quality,
                 "trying lower quality fallback");
@@ -1966,7 +1985,25 @@ impl PlayerService {
         for index in candidates {
             match self.load_index(index, true, 0).await {
                 Ok(snapshot) => return Ok(snapshot),
-                Err(error) => last_error = Some(error),
+                Err(error) => {
+                    let failed = self.snapshot().await;
+                    let unavailable = failed.current_index == Some(index)
+                        && matches!(
+                            failed.playback_state,
+                            PlaybackState::RecoverableError | PlaybackState::FatalError
+                        )
+                        && failed.playback_error.as_ref().is_some_and(|failure| {
+                            matches!(
+                                failure.code.as_str(),
+                                "track-unavailable" | "media-url-unavailable"
+                            )
+                        });
+                    // A transport/account/device failure is not evidence against the rest of the queue.
+                    if !unavailable {
+                        return Err(error);
+                    }
+                    last_error = Some(error);
+                }
             }
         }
         Err(last_error.unwrap_or(PlayerError::NoPlayableTracks))
@@ -2096,6 +2133,9 @@ impl PlayerService {
                 ) = {
                     let mut core = service.core.write().await;
                     let previous_state = core.playback_state;
+                    if previous_state == PlaybackState::Playing {
+                        core.loading_autoplay = true;
+                    }
                     let recovery = if engine.source_url_expired
                         && !service.recovery_running.swap(true, Ordering::AcqRel)
                     {
@@ -2371,6 +2411,32 @@ impl PlayerService {
 
     pub(crate) fn publish_api_event<T: Serialize>(&self, event_type: &str, value: &T) {
         self.publish(event_type, value);
+    }
+}
+
+fn classify_quality_fallback(
+    selection: &mut PlaybackSourceSelection,
+    failed: &PlaybackSourceSelection,
+    error: &PlaybackSourceError,
+) {
+    if !selection.preview {
+        selection.fallback_reason = Some(match error {
+            PlaybackSourceError::Network => PlaybackFallbackReason::NetworkFailure,
+            PlaybackSourceError::UrlExpired => PlaybackFallbackReason::LinkExpired,
+            _ => PlaybackFallbackReason::SourceUnavailable,
+        });
+    }
+    for capability in &mut selection.quality_capabilities {
+        let confirmed_missing = matches!(error, PlaybackSourceError::UrlUnavailable)
+            && capability.quality == failed.resolved_quality;
+        let previously_missing = failed.quality_capabilities.iter().any(|previous| {
+            previous.quality == capability.quality
+                && previous.resource == ResourceCapabilityState::Unavailable
+        });
+        if confirmed_missing || previously_missing {
+            capability.resource = ResourceCapabilityState::Unavailable;
+            capability.playable = false;
+        }
     }
 }
 
@@ -3018,6 +3084,22 @@ mod tests {
             self.calls.lock().unwrap().push(song.quality);
             let mut source = resolved(song);
             source.selection.requested_quality = self.requested;
+            source.selection.quality_capabilities = [
+                AudioQuality::Master,
+                AudioQuality::HiRes,
+                AudioQuality::Lossless,
+                AudioQuality::High,
+                AudioQuality::Standard,
+            ]
+            .into_iter()
+            .map(|quality| crate::playback_types::QualityCapabilityState {
+                quality,
+                entitlement: crate::playback_types::EntitlementCapabilityState::Allowed,
+                resource: ResourceCapabilityState::Available,
+                client: crate::playback_types::ClientCapabilityState::Supported,
+                playable: true,
+            })
+            .collect();
             Ok(source)
         }
 
@@ -3044,6 +3126,7 @@ mod tests {
             let mut source = resolved(song);
             source.selection.requested_quality = failed.requested_quality;
             source.selection.resolved_quality = quality;
+            source.selection.quality_capabilities = failed.quality_capabilities.clone();
             source.selection.fallback_reason = Some(PlaybackFallbackReason::SourceUnavailable);
             Ok(source)
         }
@@ -3362,6 +3445,153 @@ mod tests {
             Err(PlayerError::NoPlayableTracks)
         ));
         assert_eq!(resolver_calls.load(Ordering::Acquire), 0);
+    }
+
+    struct CandidateFailureResolver {
+        failure: PlaybackSourceError,
+        calls: Arc<Mutex<Vec<String>>>,
+    }
+
+    #[async_trait]
+    impl PlaybackSourceResolver for CandidateFailureResolver {
+        async fn resolve(
+            &self,
+            song: &Song,
+        ) -> Result<crate::media::ResolvedPlaybackSource, PlaybackSourceError> {
+            self.calls.lock().unwrap().push(song.id.clone());
+            if song.id == "two" {
+                return Err(self.failure.clone());
+            }
+            Ok(resolved(song))
+        }
+    }
+
+    #[tokio::test]
+    async fn next_does_not_consume_the_queue_on_transport_account_or_device_failure() {
+        for failure in [
+            PlaybackSourceError::Network,
+            PlaybackSourceError::AuthenticationExpired,
+            PlaybackSourceError::CacheFailure,
+            PlaybackSourceError::DecoderUnsupported,
+            PlaybackSourceError::UrlExpired,
+        ] {
+            let calls = Arc::new(Mutex::new(Vec::new()));
+            let player = PlayerService::with_runtime(
+                Arc::new(crate::audio::TestAudioEngine::default()),
+                Arc::new(CandidateFailureResolver {
+                    failure,
+                    calls: calls.clone(),
+                }),
+                Arc::new(crate::media::PassthroughMediaPreparer),
+            );
+            player
+                .play_tracks(PlayTracksRequest {
+                    tracks: vec![
+                        song("one", 10_000),
+                        song("two", 10_000),
+                        song("three", 10_000),
+                    ],
+                    start_at_id: None,
+                    shuffle: None,
+                })
+                .await
+                .unwrap();
+            assert!(player.next().await.is_err());
+            assert_eq!(*calls.lock().unwrap(), vec!["one", "two"]);
+            assert_eq!(player.snapshot().await.current_index, Some(1));
+        }
+    }
+
+    #[tokio::test]
+    async fn natural_end_stops_on_the_next_network_failure() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let audio = Arc::new(crate::audio::TestAudioEngine::default());
+        let player = Arc::new(PlayerService::with_runtime(
+            audio.clone(),
+            Arc::new(CandidateFailureResolver {
+                failure: PlaybackSourceError::Network,
+                calls: calls.clone(),
+            }),
+            Arc::new(crate::media::PassthroughMediaPreparer),
+        ));
+        player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![
+                    song("one", 10_000),
+                    song("two", 10_000),
+                    song("three", 10_000),
+                ],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .unwrap();
+        player.start_clock();
+        audio.finish();
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                let snapshot = player.snapshot().await;
+                if snapshot.playback_state == PlaybackState::RecoverableError {
+                    break snapshot;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        player.stop_clock();
+        let failed = result.expect("the failing next track must remain selected");
+        assert_eq!(failed.current_index, Some(1));
+        assert!(!failed.play_when_ready);
+        assert_eq!(*calls.lock().unwrap(), vec!["one", "two"]);
+    }
+
+    #[tokio::test]
+    async fn a_missing_file_is_skipped_without_losing_the_next_load_intent() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let player = PlayerService::with_runtime(
+            Arc::new(crate::audio::TestAudioEngine::default()),
+            Arc::new(CandidateFailureResolver {
+                failure: PlaybackSourceError::UrlUnavailable,
+                calls: calls.clone(),
+            }),
+            Arc::new(crate::media::PassthroughMediaPreparer),
+        );
+        player
+            .play_tracks(PlayTracksRequest {
+                tracks: vec![
+                    song("one", 10_000),
+                    song("two", 10_000),
+                    song("three", 10_000),
+                ],
+                start_at_id: None,
+                shuffle: None,
+            })
+            .await
+            .unwrap();
+        let mut events = player.subscribe();
+        assert_eq!(player.next().await.unwrap().current_index, Some(2));
+        let loading = std::iter::from_fn(|| events.try_recv().ok())
+            .find(|event| event.event_type == "player.track" && event.data["currentIndex"] == 2)
+            .unwrap();
+        assert_eq!(loading.data["playWhenReady"], true);
+        assert_eq!(*calls.lock().unwrap(), vec!["one", "two", "three"]);
+    }
+
+    #[tokio::test]
+    async fn a_paused_load_does_not_claim_autoplay() {
+        let player = PlayerService::with_runtime(
+            Arc::new(crate::audio::TestAudioEngine::default()),
+            Arc::new(crate::media::TestPlaybackSourceResolver),
+            Arc::new(crate::media::PassthroughMediaPreparer),
+        );
+        player.hydrate_queue(vec![song("one", 10_000)]).await;
+        let mut events = player.subscribe();
+        player.load_index(0, false, 0).await.unwrap();
+        let loading = std::iter::from_fn(|| events.try_recv().ok())
+            .find(|event| event.event_type == "player.track")
+            .unwrap();
+        assert_eq!(loading.data["playWhenReady"], false);
+        assert!(!player.snapshot().await.play_when_ready);
     }
 
     #[tokio::test]
@@ -4737,6 +4967,13 @@ mod tests {
             selection.fallback_reason,
             Some(PlaybackFallbackReason::SourceUnavailable)
         );
+        let hires = selection
+            .quality_capabilities
+            .iter()
+            .find(|state| state.quality == AudioQuality::HiRes)
+            .unwrap();
+        assert_eq!(hires.resource, ResourceCapabilityState::Unavailable);
+        assert!(!hires.playable);
         let expected = vec![AudioQuality::HiRes, AudioQuality::Lossless];
         assert_eq!(*resolver_calls.lock().unwrap(), expected);
         assert_eq!(*preparer_calls.lock().unwrap(), expected);
@@ -4771,7 +5008,7 @@ mod tests {
         assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
         assert_eq!(
             selection.fallback_reason,
-            Some(PlaybackFallbackReason::SourceUnavailable)
+            Some(PlaybackFallbackReason::LinkExpired)
         );
         let expected = vec![
             AudioQuality::HiRes,
@@ -4847,7 +5084,7 @@ mod tests {
         assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
         assert_eq!(
             selection.fallback_reason,
-            Some(PlaybackFallbackReason::SourceUnavailable)
+            Some(PlaybackFallbackReason::LinkExpired)
         );
         let expected = vec![
             AudioQuality::HiRes,
@@ -4885,6 +5122,17 @@ mod tests {
                 .unwrap();
             assert_eq!(selection.requested_quality, requested);
             assert_eq!(selection.resolved_quality, AudioQuality::Lossless);
+            assert_eq!(
+                selection.fallback_reason,
+                Some(PlaybackFallbackReason::NetworkFailure)
+            );
+            let hires = selection
+                .quality_capabilities
+                .iter()
+                .find(|state| state.quality == AudioQuality::HiRes)
+                .unwrap();
+            assert_eq!(hires.resource, ResourceCapabilityState::Available);
+            assert!(hires.playable);
             assert_eq!(calls.lock().unwrap().len(), 2);
         }
     }

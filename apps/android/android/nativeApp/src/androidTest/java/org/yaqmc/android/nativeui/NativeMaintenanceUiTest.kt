@@ -23,6 +23,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
+import org.yaqmc.android.R
 import org.yaqmc.android.update.AndroidUpdateResult
 import org.yaqmc.android.update.ReleaseCandidate
 import org.yaqmc.android.update.YaqmcVersion
@@ -230,7 +231,7 @@ class NativeMaintenanceUiTest {
         var fail = false
         respond = { method, params -> if (method == "diagnostics_export_bundle_to") {
             assertFalse(params.getJSONObject("request").getBoolean("overrideUnresolved"))
-            if (fail) throw CoreFailure("diagnostics.redaction", "")
+            if (fail) throw CoreFailure("diagnostics.redaction", "UnresolvedRedactionPatterns([refresh_token])")
             File(params.getString("path")).also { exported = it; it.writeText("fake safe bundle") }
             JSONObject().put("path", exported!!.absolutePath)
         } else JSONObject() }
@@ -250,6 +251,7 @@ class NativeMaintenanceUiTest {
             compose.runOnIdle { model.shareDiagnosticBundle(context) }
             compose.waitUntil(5000) { calls.count { it == "diagnostics_export_bundle_to" } == 2 && !model.diagnostics.value.busy }
             assertNull(sent)
+            assertEquals(R.string.native_diag_export_failed, model.message.value?.resource)
         } finally { exported?.delete() }
     }
 

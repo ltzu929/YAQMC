@@ -86,6 +86,8 @@ impl AudioQualityPreference {
 #[serde(rename_all = "kebab-case")]
 pub enum PlaybackFallbackReason {
     SourceUnavailable,
+    NetworkFailure,
+    LinkExpired,
     AccountRights,
     EntitlementUnknown,
     ClientUnsupported,

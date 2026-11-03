@@ -737,7 +737,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
                 context.startActivity(Intent.createChooser(send, localizedString(R.string.native_diag_export))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (error: CancellationException) { throw error }
-            catch (error: Exception) { _message.value = errorText(error, R.string.native_diag_export_failed) }
+            catch (_: Exception) { _message.value = NativeText(R.string.native_diag_export_failed) }
             finally { _diagnostics.value = _diagnostics.value.copy(busy = false) }
         }
     }

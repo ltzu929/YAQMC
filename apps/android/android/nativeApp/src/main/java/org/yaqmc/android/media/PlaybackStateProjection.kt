@@ -45,6 +45,7 @@ internal data class PlaybackProjection(
 internal fun projectPlaybackState(
     phase: CorePlaybackPhase,
     previousPlayWhenReady: Boolean,
+    corePlayWhenReady: Boolean? = null,
 ): PlaybackProjection = when (phase) {
     CorePlaybackPhase.IDLE -> PlaybackProjection(
         MediaPlaybackPhase.IDLE,
@@ -57,9 +58,9 @@ internal fun projectPlaybackState(
     CorePlaybackPhase.BUFFERING,
     -> PlaybackProjection(
         MediaPlaybackPhase.BUFFERING,
-        playWhenReady = previousPlayWhenReady,
+        playWhenReady = corePlayWhenReady ?: previousPlayWhenReady,
         loading = true,
-        holdsPlaybackResources = previousPlayWhenReady,
+        holdsPlaybackResources = corePlayWhenReady ?: previousPlayWhenReady,
         error = false,
     )
     CorePlaybackPhase.PLAYING -> PlaybackProjection(
