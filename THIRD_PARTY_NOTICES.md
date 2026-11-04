@@ -1,5 +1,15 @@
 # Third-party notices
 
+## 当前原生 Android 版本
+
+当前应用使用 Kotlin / Compose 原生界面与 Rust Core。每个公开版本随对应源码附件交付实际依赖清单、精确版本、来源、适用许可证和保留的声明；取得方式见[对应源码交付政策](CORRESPONDING_SOURCE_POLICY.md)。历史 Web / 桌面组件的声明在下文保留，不表示它们仍包含在当前 APK 中。
+
+- Rust 依赖以发布提交的 `Cargo.lock` 为准，随源码保留各包的许可证和版权声明；`qqmusic-api` 精确固定到下文记录的 `qm-api-rs` 提交。
+- Android 运行时的 AndroidX、Kotlin、协程、Guava 及 JetBrains 注解依赖采用 Apache-2.0；精确坐标、POM（含父 POM）、源码和适用声明随依赖清单交付。
+- `androidx.graphics:graphics-path:1.0.1` 包含 C++ / JNI 实现，除 sources JAR 外，源码附件另保留[官方发布记录](https://developer.android.com/jetpack/androidx/releases/graphics#graphics-path-1.0.1)所指提交 `8a05a22af450d589ef911d772a001a49dcb05b71` 的完整模块源码，适用 Apache-2.0。
+- `rustls:rustls-platform-verifier:0.1.1` 的 AAR 随 `rustls-platform-verifier-android` crate 提供，适用 MIT 或 Apache-2.0。源码附件另包含[上游 0.1.1 版本提交](https://github.com/rustls/rustls-platform-verifier/commit/da3d9c36f48fb9f8f97e94f132fdab67ab0fc75b)中的 Android 工程及两份许可证正文。
+- Guava 的 `listenablefuture:9999.0-empty-to-avoid-conflict-with-guava` 是不含类文件的冲突占位 JAR；保留其空归档、POM 与父 POM 许可说明。
+
 YAQMC's production QMC/mflac decryptor delegates to the pinned `qm-api-rs`
 revision `7d0f6e18b1d1d89a06cc5964e9c057acb0926ea5`, which independently
 adapts cipher behavior from the MIT-licensed project below. Upstream files were

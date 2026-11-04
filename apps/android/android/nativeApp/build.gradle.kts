@@ -33,10 +33,14 @@ require(major <= 20 && minor <= 99 && patch <= 99 && serial <= 999)
 val appVersionCode =
   major * 100_000_000 + minor * 1_000_000 + patch * 10_000 + stage * 1_000 + serial
 require(appVersionCode <= 2_100_000_000)
-val buildCommit = providers.exec {
-  workingDir(repositoryRoot)
-  commandLine("git", "rev-parse", "HEAD")
-}.standardOutput.asText.get().trim()
+val buildCommit = (
+  providers.gradleProperty("yaqmc.buildCommit").orNull
+    ?: providers.environmentVariable("YAQMC_BUILD_COMMIT").orNull
+    ?: providers.exec {
+      workingDir(repositoryRoot)
+      commandLine("git", "rev-parse", "HEAD")
+    }.standardOutput.asText.get()
+).trim()
 require(buildCommit.matches(Regex("[0-9a-f]{40}"))) { "Cannot determine source commit" }
 
 // The standard Android signing properties stay private on this machine.

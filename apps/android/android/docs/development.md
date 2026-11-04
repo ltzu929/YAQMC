@@ -118,6 +118,8 @@ Gradle 仅包含 `:nativeApp`，不依赖 npm、Capacitor 或旧 Web 界面。No
 
 Gradle 是统一构建入口：从仓库 `package.json` 读取版本并计算 versionCode，从 Git 读取源码提交；`:nativeApp:buildRustCore` 调用已有 cargo-ndk 编译当前 ABI 的 Rust Core，并作为 Android `preBuild` 依赖。Gradle 跟踪 Rust 输入和输出，只改 Kotlin 时复用未变化的 Core，Clean Project 后自动补建；不再由启动脚本注入版本或复制 Core。
 
+从不含 `.git` 的源码归档构建时，使用 `-Pyaqmc.buildCommit=<发布清单中的完整提交 SHA>` 或环境变量 `YAQMC_BUILD_COMMIT`。显式项目参数优先于环境变量，均未提供时继续读取 Git；提交号必须是 40 位小写十六进制。日常 Studio 构建无需设置，正式导出时核对它与实际提交一致。
+
 本机配置位于 Gradle 工程 `apps/android/android`，均保持私有：
 
 - `local.properties` 保存 SDK 的 `sdk.dir`、Rust TLS 的 `yaqmc.rustlsVerifierMavenDir`，以及需要时的 `yaqmc.cargoHome`、`yaqmc.rustupHome`；Windows 路径使用正斜杠，冒号写成 `\:`。这些路径配置一次后，直接从桌面打开 Studio 也能读取。
@@ -179,7 +181,8 @@ Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或�
 4. 在 Studio 执行“打包 Release APK”。使用 SDK `aapt` / `apksigner` 和已有 `verifyNativeApk` 核对版本、`org.yaqmc.android`、ARM64 Core 和既有签名；把最终 APK 复制为 `release-android/YAQMC-Android-<version>-arm64-v8a.apk`。不交付离线 CI APK。
 5. 按[对应源码交付政策](../../../../CORRESPONDING_SOURCE_POLICY.md)收集项目及实际依赖源码、适用许可证和来源证据，填写并验证 `CORRESPONDING-SOURCE-MANIFEST.json`。来源台账检查使用 `npm run provenance:enforce`，其通过结果与源码归档完成分别记录。
 6. 对 APK、源码归档和清单生成 SHA-256，例如 PowerShell `Get-FileHash -Algorithm SHA256 '<文件路径>'`，保存为 `SHA256SUMS`。重新核对归档与发布提交一致。
-7. 在[本仓库 Releases](https://github.com/ltzu929/YAQMC/releases)准备草稿，包含上述附件和中文说明：本次变化、Android / ABI 要求、安装与升级关系、已知问题、源码入口和反馈方式。名称使用 `YAQMC-Android <version> 公开预览版`，标记 Pre-release；材料与设备检查完成后再由用户决定发布。
+7. 在[本仓库 Releases](https://github.com/ltzu929/YAQMC/releases)组织上述附件和中文说明：本次变化、Android / ABI 要求、安装与升级关系、已知问题、源码入口和反馈方式。名称使用 `YAQMC-Android <version> 公开预览版`，标记 Pre-release；按[项目规划 D007](project-plan.md#d007yaqmc-android-先公开预览再正式发布)的已确认安排，在材料与必要检查完成后发布。README 尚在讨论时先完成其他准备。
+8. 收集一轮用户反馈，修复高优先级问题并完成最终验收，再以 `v0.1.4` 发布正式版。正式版 `versionCode` 为 `1049000`，高于首个预览版的 `1042001`；重新从正式版最终提交构建和整理附件，不复用预览版 APK。
 
 应用内项目主页、版本检查和问题反馈均指向 `ltzu929/YAQMC`；上游与依赖来源链接按真实归属保留。稳定版默认不订阅预览；预览版接收同通道更新，并允许升级到后续正式版。版本判定与仓库链接检查由 `AndroidUpdateCheckerTest` 覆盖。
 

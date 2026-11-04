@@ -15,6 +15,10 @@ YAQMC-Android 沿用 YAQMC 的 `GPL-3.0-or-later` 许可证。公开预览与正
 
 从最终干净提交导出项目源码，单独备齐外部依赖。GitHub 自动生成的仓库源码 ZIP 不包含 `qm-api-rs` 等外部依赖；不能单独把它作为完整对应源码交付。复用已有 Core 二进制时，也必须能确定并提供构建它的精确源码。
 
+Rust 可使用 Cargo 自带的 `vendor --locked --versioned-dirs` 收集精确依赖，保留生成的来源替换配置与各包校验文件。Android 依赖按实际 `releaseRuntimeClasspath` 收集 sources JAR、POM（必要时含父 POM）与适用声明；预编译 AAR / JAR 或 JNI `.so` 的首选源码不在 sources JAR 中时另行补齐，空占位归档则核对并记录其不含类文件。归档中的依赖清单不得包含本机缓存绝对路径。
+
+源码构建说明须说明 SDK / NDK / JDK / Cargo 版本、依赖使用方式、签名配置示例与构建命令。不含 `.git` 时，通过 `yaqmc.buildCommit` 或 `YAQMC_BUILD_COMMIT` 提供清单中的完整提交 SHA；构建无需取得发行者私有签名密钥，默认 debug 包使用独立身份。
+
 ## 发布清单与核对
 
 每次发布随包提供 `CORRESPONDING-SOURCE-MANIFEST.json`，记录：

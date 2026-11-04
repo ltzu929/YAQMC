@@ -313,6 +313,24 @@ class NativePlaybackTest {
         assertFalse(core.calls.any { it.first.startsWith("player_") })
     }
 
+    @Test fun automaticQualityOmitsUnavailableWarningInFullAndMiniPlayer() {
+        install("player")
+        val selection = JSONObject("""{"requestedQuality":"automatic","resolvedQuality":"lossless","fallbackReason":"source-unavailable"}""")
+        publish(core.snapshot().put("snapshotRevision", 2).put("sourceSelection", selection))
+        val warning = "The requested quality is unavailable; playing in Lossless."
+        compose.onNodeWithText(warning).assertDoesNotExist()
+        compose.onNodeWithTag("quality-picker").performScrollTo().performClick()
+        compose.onNodeWithText("Automatic selected: Lossless").assertIsDisplayed()
+        compose.onNodeWithTag("quality-automatic").performClick()
+        capture("playback-automatic-quality")
+        compose.runOnIdle { model.navigate(NativeRoute("home"), root = true) }
+        compose.onNodeWithText(warning).assertDoesNotExist()
+        publish(core.snapshot().put("snapshotRevision", 3).put("sourceSelection", selection.put("preview", true)))
+        compose.onNodeWithText("Only a preview is available.").assertIsDisplayed()
+        publish(core.snapshot().put("snapshotRevision", 4).put("sourceSelection", selection.put("requestedQuality", "hi-res").put("preview", false)))
+        compose.onNodeWithText(warning).assertIsDisplayed()
+    }
+
     @Test fun networkFallbackShowsActualQualityAndAllowsReselectingRequestedQuality() {
         install("player")
         // Keep the fake clock paused while checking feedback and choices.

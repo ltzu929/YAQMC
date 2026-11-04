@@ -71,7 +71,7 @@ private fun PlaybackStatus(player: PlayerState, compact: Boolean = false) {
     val status = NativePlayback.status(player)
     status?.let { Text(it.resolve(), Modifier.testTag("playback-status"), color = if (player.phase.endsWith("error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodySmall, maxLines = if (compact) 2 else 4, overflow = TextOverflow.Ellipsis) }
-    NativePlayback.fallback(player.selection.fallback)?.let { resource ->
+    NativePlayback.fallback(player.selection)?.let { resource ->
         val message = if (player.selection.fallback in setOf("source-unavailable", "network-failure", "link-expired")) {
             stringResource(resource, stringResource(NativePlayback.qualityLabel(player.selection.resolved)))
         } else stringResource(resource)
