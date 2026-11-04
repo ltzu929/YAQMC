@@ -2,7 +2,7 @@
 
 ## 当前原生 Android 版本
 
-当前应用使用 Kotlin / Compose 原生界面与 Rust Core。每个公开版本随对应源码附件交付实际依赖清单、精确版本、来源、适用许可证和保留的声明；取得方式见[对应源码交付政策](CORRESPONDING_SOURCE_POLICY.md)。历史 Web / 桌面组件的声明在下文保留，不表示它们仍包含在当前 APK 中。
+当前应用使用 Kotlin / Compose 原生界面与 Rust Core。各版本的对应源码资料维护实际依赖清单、精确版本、来源、适用许可证和保留的声明，见[对应源码交付政策](CORRESPONDING_SOURCE_POLICY.md)。历史 Web / 桌面组件的声明在下文保留，不表示它们仍包含在当前 APK 中。
 
 - Rust 依赖以发布提交的 `Cargo.lock` 为准，随源码保留各包的许可证和版权声明；`qqmusic-api` 精确固定到下文记录的 `qm-api-rs` 提交。
 - Android 运行时的 AndroidX、Kotlin、协程、Guava 及 JetBrains 注解依赖采用 Apache-2.0；精确坐标、POM（含父 POM）、源码和适用声明随依赖清单交付。

@@ -181,7 +181,7 @@ Gradle 在 release 构建时检查 ARM64 Core 和旧版签名指纹，缺失或�
 4. 在 Studio 执行“打包 Release APK”。使用 SDK `aapt` / `apksigner` 和已有 `verifyNativeApk` 核对版本、`org.yaqmc.android`、ARM64 Core 和既有签名；把最终 APK 复制为 `release-android/YAQMC-Android-<version>-arm64-v8a.apk`。不交付离线 CI APK。
 5. 按[对应源码交付政策](../../../../CORRESPONDING_SOURCE_POLICY.md)收集项目及实际依赖源码、适用许可证和来源证据，填写并验证 `CORRESPONDING-SOURCE-MANIFEST.json`。来源台账检查使用 `npm run provenance:enforce`，其通过结果与源码归档完成分别记录。
 6. 对 APK、源码归档和清单生成 SHA-256，例如 PowerShell `Get-FileHash -Algorithm SHA256 '<文件路径>'`，保存为 `SHA256SUMS`。重新核对归档与发布提交一致。
-7. 在[本仓库 Releases](https://github.com/ltzu929/YAQMC/releases)组织上述附件和中文说明：本次变化、Android / ABI 要求、安装与升级关系、已知问题、源码入口和反馈方式。名称使用 `YAQMC-Android <version> 公开预览版`，标记 Pre-release；按[项目规划 D007](project-plan.md#d007yaqmc-android-先公开预览再正式发布)的已确认安排，在材料与必要检查完成后发布。README 尚在讨论时先完成其他准备。
+7. 在[本仓库 Releases](https://github.com/ltzu929/YAQMC/releases)仅上传供用户安装的 APK。中文发布说明围绕本版可用功能、下载入口、必要的系统要求和反馈方式；首次公开版不罗列内部版本的修复过程、包名 / versionCode、测试矩阵、发布排期或工程交付清单。源码、许可、构建说明与校验资料在仓库及本机工程归档中维护，不逐项作为用户附件。名称使用 `YAQMC-Android <version> 公开预览版`，标记 Pre-release；按[项目规划 D007](project-plan.md#d007yaqmc-android-先公开预览再正式发布)的已确认安排发布。
 8. 收集一轮用户反馈，修复高优先级问题并完成最终验收，再以 `v0.1.4` 发布正式版。正式版 `versionCode` 为 `1049000`，高于首个预览版的 `1042001`；重新从正式版最终提交构建和整理附件，不复用预览版 APK。
 
 应用内项目主页、版本检查和问题反馈均指向 `ltzu929/YAQMC`；上游与依赖来源链接按真实归属保留。稳定版默认不订阅预览；预览版接收同通道更新，并允许升级到后续正式版。版本判定与仓库链接检查由 `AndroidUpdateCheckerTest` 覆盖。

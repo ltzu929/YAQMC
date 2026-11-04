@@ -4,7 +4,9 @@ YAQMC-Android 沿用 YAQMC 的 `GPL-3.0-or-later` 许可证。公开预览与正
 
 ## 当前原生 Android 版本
 
-发布材料应包含：
+用户下载页仅保留 APK，发布说明聚焦功能、安装要求与反馈入口。下列源码、许可与校验资料在仓库及工程归档中维护，不逐项作为用户下载附件或铺入发布说明。
+
+源码工程归档应包含：
 
 - 最终发布提交的 Kotlin / Compose 界面、Android 宿主、Rust workspace、资源、协议样本，以及构建和检查所需的脚本。
 - 该提交的 `Cargo.toml` / `Cargo.lock`、Gradle 配置与 wrapper、版本文件、构建说明、签名配置示例、许可证、版权声明和来源记录。不交付私有签名文件、账号数据或本机路径配置。
@@ -21,7 +23,7 @@ Rust 可使用 Cargo 自带的 `vendor --locked --versioned-dirs` 收集精确�
 
 ## 发布清单与核对
 
-每次发布随包提供 `CORRESPONDING-SOURCE-MANIFEST.json`，记录：
+每次发布在工程归档中保留 `CORRESPONDING-SOURCE-MANIFEST.json`，记录：
 
 - 应用名称、版本、versionCode、Git 标签与完整提交 SHA。
 - APK 的包名、ABI、签名证书 SHA-256、文件名与 SHA-256。
