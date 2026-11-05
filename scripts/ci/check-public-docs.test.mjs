@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
@@ -9,13 +10,9 @@ const temporaryParent = path.resolve(
   import.meta.dirname,
   '../../artifacts/android-native-comparison',
 );
-const primaryLinks = [
-  '[项目规划](apps/android/android/docs/project-plan.md)',
-  '[开发指南](apps/android/android/docs/development.md)',
-  '[迁移清单](apps/android/android/docs/native-parity.md)',
-].join('\n');
+const primaryLinks = '[开发指南](apps/android/android/docs/development.md)';
 
-async function fixture(t, extraFiles = {}) {
+async function fixture(t, extraFiles = {}, useGit = true) {
   await mkdir(temporaryParent, { recursive: true });
   const root = await mkdtemp(path.join(temporaryParent, 'docs-check-'));
   t.after(async () => {
@@ -25,11 +22,10 @@ async function fixture(t, extraFiles = {}) {
   });
   const files = {
     'README.md': `# Android 客户端\n\n仓库版本 0.1.1，当前不维护双语文档。\n${primaryLinks}\n`,
-    'AGENTS.md': primaryLinks,
+    '.gitignore':
+      '/AGENTS.md\n/apps/android/android/docs/project-plan.md\n/apps/android/android/docs/native-parity.md\n',
     LICENSE: 'Test fixture license',
-    'apps/android/android/docs/project-plan.md': '# 项目规划\n',
     'apps/android/android/docs/development.md': '# 开发指南\n',
-    'apps/android/android/docs/native-parity.md': '# 迁移清单\n',
     ...extraFiles,
   };
   for (const [relative, content] of Object.entries(files)) {
@@ -37,30 +33,65 @@ async function fixture(t, extraFiles = {}) {
     await mkdir(path.dirname(path.join(root, relative)), { recursive: true });
     await writeFile(path.join(root, relative), content);
   }
+  if (useGit) {
+    execFileSync('git', ['init', '--quiet'], { cwd: root });
+    execFileSync('git', ['-c', 'core.autocrlf=false', 'add', '.'], { cwd: root });
+  }
   return root;
 }
 
 test('accepts Chinese-only Android docs without legacy release pages or English copies', async (t) => {
   const root = await fixture(t);
-  assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 5 });
+  assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 2 });
 });
 
-test('requires the migration ledger and reports a missing primary document', async (t) => {
-  const root = await fixture(t, { 'apps/android/android/docs/native-parity.md': null });
+test('requires the build guide in a checkout without local planning documents', async (t) => {
+  const root = await fixture(t, { 'apps/android/android/docs/development.md': null });
   const { errors } = await checkPublicDocumentation(root);
-  assert.ok(errors.includes('Missing required file: apps/android/android/docs/native-parity.md'));
+  assert.ok(errors.includes('Missing required file: apps/android/android/docs/development.md'));
 });
 
-test('requires the README and agent entry point to expose the active guides', async (t) => {
-  const root = await fixture(t, { 'README.md': '# Android\n', 'AGENTS.md': '# 开发入口\n' });
+test('requires the README to expose the build guide', async (t) => {
+  const root = await fixture(t, { 'README.md': '# Android\n' });
   const { errors } = await checkPublicDocumentation(root);
-  for (const entry of ['README.md', 'AGENTS.md']) {
-    assert.ok(
-      errors.includes(
-        `${entry}: missing primary document link apps/android/android/docs/development.md`,
-      ),
-    );
-  }
+  assert.ok(
+    errors.includes(
+      'README.md: missing primary document link apps/android/android/docs/development.md',
+    ),
+  );
+});
+
+test('ignores local planning and agent files even when they exist', async (t) => {
+  const root = await fixture(t, {
+    'AGENTS.md': '[PROJECT_NAME]\n[本机入口](missing.md)\n',
+    'apps/android/android/docs/project-plan.md': 'C:\\Users\\example\\notes.md\n',
+    'apps/android/android/docs/native-parity.md': '[截图](missing.png)\n',
+  });
+  assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 2 });
+});
+
+test('rejects public links to files that only exist in the ignored local workspace', async (t) => {
+  const root = await fixture(t, {
+    'README.md': `${primaryLinks}\n[计划](apps/android/android/docs/project-plan.md)\n`,
+    'apps/android/android/docs/project-plan.md': '# 本机计划\n',
+  });
+  const { errors } = await checkPublicDocumentation(root);
+  assert.deepEqual(errors, [
+    'README.md: local link target is not published apps/android/android/docs/project-plan.md',
+  ]);
+});
+
+test('accepts directory links when their source files are published', async (t) => {
+  const root = await fixture(t, {
+    'docs/reference.md': '[源码](../crates/example)\n',
+    'crates/example/lib.rs': '// Fixture\n',
+  });
+  assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 3 });
+});
+
+test('also checks exported source without Git metadata', async (t) => {
+  const root = await fixture(t, {}, false);
+  assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 2 });
 });
 
 test('checks retained and newly added references without requiring a translated counterpart', async (t) => {

@@ -9,3 +9,7 @@ crates/yaqmc-protocol/fixtures
 /apps/android/android/.kotlin/**
 **/.idea/**
 **/.codex/**
+/AGENTS.md
+/apps/android/android/docs/project-plan.md
+/apps/android/android/docs/native-parity.md
+/apps/android/android/docs/项目方向（本机）.md

@@ -5,22 +5,44 @@ node_modules/
 /target/
 
 # Android local configuration and generated outputs
-apps/android/android/.gradle/
-apps/android/android/.kotlin/
-apps/android/android/build/
-apps/android/android/nativeApp/build/
-apps/android/android/local.properties
-apps/android/android/keystore.properties
+.gradle/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+**/build/
+local.properties
+keystore.properties
+captures/
+*.apk
+*.aab
+*.apks
 release-android/
 
-# Local owner overview
+# Local development notes
+/AGENTS.md
+/apps/android/android/docs/project-plan.md
+/apps/android/android/docs/native-parity.md
 /apps/android/android/docs/项目方向（本机）.md
 
 # Local validation evidence and scratch files
 artifacts/
 coverage/
 output/
+/scratch/
+/tmp/
+/temp/
+/.tmp/
 *.log
+*.hprof
+*.heapdump
+*.perfetto-trace
+*.tmp
+*.bak
+*.orig
+*.rej
+*~
+*.swp
+*.swo
 
 # Local secrets and signing configuration
 .env
@@ -29,10 +51,17 @@ output/
 *.jks
 *.keystore
 *.p12
+*.pfx
 
 # Editors and machine-local agent configuration
 .idea/
+*.iml
 .vscode/*
 !.vscode/extensions.json
 .codex/
+.agents/
+.claude/
+.cursor/
 .DS_Store
+Thumbs.db
+Desktop.ini

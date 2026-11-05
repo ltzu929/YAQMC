@@ -1,15 +1,11 @@
+import { execFileSync } from 'node:child_process';
 import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const primaryDocuments = [
-  'README.md',
-  'apps/android/android/docs/project-plan.md',
-  'apps/android/android/docs/development.md',
-  'apps/android/android/docs/native-parity.md',
-];
+const primaryDocuments = ['README.md', 'apps/android/android/docs/development.md'];
 const supplementaryDocuments = ['.github/PULL_REQUEST_TEMPLATE.md'];
 const forbiddenContent = [
   {
@@ -49,18 +45,32 @@ async function collectMarkdown(root, directory = '', recursive = false) {
 
 export async function checkPublicDocumentation(root = repositoryRoot) {
   const errors = [];
-  for (const required of [...primaryDocuments, 'AGENTS.md', 'LICENSE']) {
-    if (!(await exists(path.join(root, required))))
+  const publicFiles = (await exists(path.join(root, '.git')))
+    ? new Set(
+        execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+          cwd: root,
+          encoding: 'utf8',
+        })
+          .split('\0')
+          .filter(Boolean),
+      )
+    : null;
+  for (const required of [...primaryDocuments, 'LICENSE']) {
+    if (!(await exists(path.join(root, required))) || (publicFiles && !publicFiles.has(required)))
       errors.push(`Missing required file: ${required}`);
   }
 
-  const documents = [
-    ...(await collectMarkdown(root)),
-    ...(await collectMarkdown(root, 'docs', true)),
-    ...(await collectMarkdown(root, 'apps/android/android/docs', true)),
-  ];
-  for (const relative of supplementaryDocuments) {
-    if (await exists(path.join(root, relative))) documents.push(relative);
+  const documents = publicFiles
+    ? [...publicFiles].filter((relative) => relative.endsWith('.md'))
+    : [
+        ...(await collectMarkdown(root)),
+        ...(await collectMarkdown(root, 'docs', true)),
+        ...(await collectMarkdown(root, 'apps/android/android/docs', true)),
+      ];
+  if (!publicFiles) {
+    for (const relative of supplementaryDocuments) {
+      if (await exists(path.join(root, relative))) documents.push(relative);
+    }
   }
 
   for (const relative of documents) {
@@ -84,12 +94,19 @@ export async function checkPublicDocumentation(root = repositoryRoot) {
         errors.push(`${relative}: malformed local link ${target}`);
         continue;
       }
-      if (!(await exists(path.resolve(path.dirname(absolute), decoded)))) {
+      const resolved = path.resolve(path.dirname(absolute), decoded);
+      if (!(await exists(resolved))) {
         errors.push(`${relative}: missing local link target ${target}`);
+      } else if (publicFiles) {
+        const linkedPath = path.relative(root, resolved).split(path.sep).join('/');
+        const published =
+          publicFiles.has(linkedPath) ||
+          [...publicFiles].some((file) => linkedPath === '' || file.startsWith(`${linkedPath}/`));
+        if (!published) errors.push(`${relative}: local link target is not published ${target}`);
       }
     }
 
-    if (relative === 'README.md' || relative === 'AGENTS.md') {
+    if (relative === 'README.md') {
       for (const primary of primaryDocuments.slice(1)) {
         if (!markdown.includes(`](${primary})`)) {
           errors.push(`${relative}: missing primary document link ${primary}`);
@@ -109,7 +126,7 @@ if (Boolean(process.argv[1]) && path.resolve(process.argv[1]) === fileURLToPath(
     process.exitCode = 1;
   } else {
     process.stdout.write(
-      `Documentation validation passed: 4 primary documents; ${checkedDocuments} existing Markdown files checked.\n`,
+      `Documentation validation passed: ${primaryDocuments.length} primary documents; ${checkedDocuments} public Markdown files checked.\n`,
     );
   }
 }
