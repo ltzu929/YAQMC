@@ -1,27 +1,47 @@
 # YAQMC-Android
 
+<img src="assets/yaqmc-logo.png" alt="YAQMC-Android 图标" width="96" align="right">
+
 **轻量版 QQ 音乐，专注日常听歌。**
 
-基于 [YAQMC](https://github.com/YAQMC/YAQMC) 的非官方 Android 客户端，使用 Kotlin / Jetpack Compose 原生界面和 Rust Core。以 QQ 音乐账号、会员曲库和歌单为核心，计划通过 B 站收藏夹补充翻唱、现场等版本。
+基于 [YAQMC](https://github.com/YAQMC/YAQMC) 的非官方 Android 客户端，面向希望继续使用 QQ 音乐会员、又想要更简洁听歌体验的用户。
+
+[下载公开预览版](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.4-beta.4) · [版本记录](https://github.com/ltzu929/YAQMC/releases) · [问题反馈](https://github.com/ltzu929/YAQMC/issues)
+
+## 界面预览
+
+|                                                    首页与推荐                                                     |                                                    播放器与歌词                                                     |                                                       我喜欢的音乐                                                        |
+| :---------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------: |
+| [<img src="assets/screenshots/home-zh.png" alt="中文首页与音乐推荐" width="280">](assets/screenshots/home-zh.png) | [<img src="assets/screenshots/player-zh.png" alt="中文播放器与歌词" width="280">](assets/screenshots/player-zh.png) | [<img src="assets/screenshots/favorites-zh.png" alt="中文收藏歌曲列表" width="280">](assets/screenshots/favorites-zh.png) |
 
 ## 功能
 
 - QQ 音乐账号登录、会员信息、收藏和歌单管理。
 - 搜索歌曲，浏览推荐、专辑、歌手和音乐库。
-- 播放队列、会员权益范围内的音质选择、歌词与外观设置。
+- 独立播放页，封面与歌词左右滑动切换，支持逐字歌词与外观设置。
+- 播放队列、会员权益范围内的音质选择。
 - 后台播放、系统媒体控制、缓存管理和听歌统计。
 
-**B 站收藏音频尚未接入。** 后续将支持读取用户选定的收藏夹，播放其中翻唱、现场等视频的音频，与 QQ 音乐曲库互补。
+## 后续方向
+
+以 QQ 音乐作为日常主曲库，通过 B 站收藏夹补充 QQ 音乐没有的翻唱、现场等版本。计划读取用户选定的收藏夹，只播放视频中的音频。
+
+**B 站收藏音频尚未接入，当前安装包不包含此功能。**
 
 ## 下载与安装
 
-前往 [Releases](https://github.com/ltzu929/YAQMC/releases) 下载 APK。目前发布为 `0.1.4-beta.1` 公开预览版，支持 Android 8.0 及以上的 ARM64 设备。
+当前提供 **`0.1.4-beta.4` 公开预览版**，下载入口见[发布页面](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.4-beta.4)。
 
-
+- 系统：Android 8.0 及以上。
+- 架构：ARM64（`arm64-v8a`）。
+- 下载并安装发布页中的 `.apk` 文件；版本名称与日期可在该页面查看。
+- 支持覆盖安装，保留登录和本地数据。
 
 ## 从源码构建
 
-克隆完整仓库，在 Android Studio 中打开 `apps/android/android`。按[开发指南](apps/android/android/docs/development.md)配置 JDK、Android SDK / NDK 和 Rust 后，运行 `:nativeApp:assembleDebug` 即可生成可安装、包含完整 Rust Core 的开发版。
+界面使用 Kotlin / Jetpack Compose，底层复用 Rust Core。
+
+克隆完整仓库，在 Android Studio 中打开 `apps/android/android`。按[开发指南](apps/android/android/docs/development.md)配置 JDK、Android SDK / NDK 和 Rust 后，运行 `:nativeApp:assembleDebug` 即可生成包含完整 Rust Core 的开发版 APK。
 
 开发版使用独立包名和本机调试签名，无需维护者的私有密钥。构建命令、依赖版本和测试方法见开发指南。
 

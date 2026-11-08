@@ -53,6 +53,8 @@ Windows 的 properties 路径使用正斜杠，盘符冒号写作 `\:`。Cargo /
 
 ## 构建与运行
 
+源码可在熟悉的编辑器中修改，构建与测试可直接执行官方命令；需要工程索引、引用分析、依赖源码、语义重构、交互调试或界面检查时，再按需使用 Android Studio 及其可用的 MCP 接口。IDE、命令行和可选脚本复用同一套 Gradle、Cargo 与 SDK 配置及构建任务。
+
 在 `apps/android/android` 目录执行：
 
 ```bash
@@ -125,7 +127,7 @@ npm run format:check
 npm run provenance:enforce
 ```
 
-Linux 的 Rust 音频测试需要 ALSA 开发库和可用音频输出，CI 的依赖与虚拟输出配置见 [core-verify.yml](../../../../.github/workflows/core-verify.yml)。按改动选择相关检查；文档修改运行文档与格式检查即可。
+Linux 的 Rust 音频测试需要 ALSA 开发库和可用音频输出，CI 的依赖与虚拟输出配置见 [core-verify.yml](../../../../.github/workflows/core-verify.yml)。按改动选择相关检查；文档修改运行文档与格式检查即可。同一源码和配置下已有的有效检查结果可复用，新增改动、失败或未解决疑点需要时再补查。异步任务以最终日志、状态或产物确认结果，超时或不完整输出不计为通过。
 
 ### 模拟器与真实服务
 
@@ -141,7 +143,7 @@ Linux 的 Rust 音频测试需要 ALSA 开发库和可用音频输出，CI 的�
 
 `NativeProviderSmokeTest` 访问真实在线服务；`NativePlaybackLiveTest` 需显式传入 `livePlayback=true`，会播放音频并暂时调整本地队列与设置。真实账号、蓝牙、焦点打断、长期后台和覆盖升级分别在对应设备上检查，隔离界面回归不覆盖这些行为。
 
-日志、布局和性能问题优先使用 Studio 的 Logcat、Layout Inspector、Profiler 及 Android SDK 工具。`artifacts/`、构建报告、诊断包和本机测试记录不提交。
+日志、布局和性能问题按所需信息选择 Android SDK / ADB 命令或 Studio 的 Logcat、Layout Inspector、Profiler。`artifacts/`、构建报告、诊断包和本机测试记录不提交。
 
 ## 公开预览发布流程
 
