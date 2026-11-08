@@ -74,6 +74,10 @@ pub(crate) struct SessionRecord {
     pub(crate) cookie_header: String,
     pub(crate) expires_at_ms: u64,
     pub(crate) account_cache_scope: OpaqueAccountScope,
+    // Carry the complete login result to credential-v2 without duplicating its
+    // refresh secrets in the legacy session or public account snapshots.
+    #[serde(skip)]
+    pub(crate) login_credential: Option<Value>,
 }
 
 pub(crate) struct AuthenticatedAccountContext {
@@ -301,6 +305,14 @@ pub(crate) trait QQMusicAuthProtocol: Send + Sync {
         session: &SessionRecord,
         cancellation: CancellationToken,
     ) -> Result<ValidatedAccount, QQMusicError>;
+
+    async fn refresh_credential(
+        &self,
+        credential: qqmusic_api::Credential,
+        cancellation: CancellationToken,
+    ) -> Result<qqmusic_api::Credential, QQMusicError> {
+        crate::qmapi::credential::refresh_credential(credential, cancellation).await
+    }
 }
 
 pub(crate) struct TransportQQMusicAuthProtocol {
@@ -564,14 +576,36 @@ impl TransportQQMusicAuthProtocol {
                     .find_map(|name| cookies.get(name).map(str::to_owned))
             })
             .filter(|value| !value.trim().is_empty());
-        Ok(SessionRecord {
+        let mut session = SessionRecord {
             version: SESSION_VERSION,
             uin,
             encrypted_uin,
             cookie_header: cookies.header_value(),
             expires_at_ms,
             account_cache_scope: OpaqueAccountScope::generate(),
-        })
+            login_credential: None,
+        };
+        let mut credential = crate::qmapi::credential::credential_from_session(&session)?;
+        credential.openid = first_string(data, &["/openid", "/openId"]).unwrap_or_default();
+        credential.access_token =
+            first_string(data, &["/access_token", "/accessToken"]).unwrap_or_default();
+        credential.refresh_token =
+            first_string(data, &["/refresh_token", "/refreshToken"]).unwrap_or_default();
+        credential.refresh_key =
+            first_string(data, &["/refresh_key", "/refreshKey"]).unwrap_or_default();
+        credential.unionid = first_string(data, &["/unionid", "/unionId"]).unwrap_or_default();
+        credential.musickey_create_time = created
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or_default();
+        credential.key_expires_in = lifetime
+            .and_then(|value| value.try_into().ok())
+            .unwrap_or_default();
+        if let Some(expiry) = numeric_u64(data, &["/expired_at", "/expired_in"]) {
+            credential.expired_at = i64::try_from(expiry).unwrap_or(i64::MAX);
+        }
+        session.login_credential =
+            Some(serde_json::to_value(credential).map_err(|_| QQMusicError::Protocol)?);
+        Ok(session)
     }
 
     async fn complete_qq_exchange(
@@ -1190,11 +1224,26 @@ impl QQMusicAuthService {
             }
         };
         let now_ms = self.clock.now_ms();
+        let mut renewed = false;
         if session.expires_at_ms <= now_ms {
-            // `expires_at_ms` is a bounded local revalidation lease, not proof that QQ
-            // rejected the credential. Validate an in-memory renewal first; the cold-start
-            // restore path persists the renewed lease with rollback protection.
-            session.expires_at_ms = now_ms.saturating_add(FALLBACK_SESSION_LIFETIME_MS);
+            match self
+                .load_primary_session(Some(&session), false, cancellation.clone())
+                .await
+            {
+                Ok(Some(candidate)) => {
+                    session = candidate;
+                    renewed = true;
+                }
+                Ok(None)
+                | Err(QQMusicError::AuthenticationExpired | QQMusicError::AuthorizationRejected) => {
+                }
+                Err(error) => return Err(error),
+            }
+            // Cookie-only logins still need an online check, not a local logout.
+            if session.expires_at_ms <= now_ms {
+                session.expires_at_ms = now_ms.saturating_add(FALLBACK_SESSION_LIFETIME_MS);
+                renewed = true;
+            }
         }
         let snapshot = self.snapshot.read().await.clone();
         if !matches!(snapshot.account, AccountState::Authenticated { .. }) {
@@ -1211,6 +1260,22 @@ impl QQMusicAuthService {
         {
             Ok(validated) => validated,
             Err(QQMusicError::AuthenticationExpired | QQMusicError::AuthorizationRejected) => {
+                // Renew an upstream-rejected key before asking for another login,
+                // including revocations that precede the recorded local expiry.
+                match self
+                    .load_primary_session(Some(&session), true, cancellation.clone())
+                    .await
+                {
+                    Ok(Some(candidate)) => {
+                        session = candidate;
+                        renewed = true;
+                    }
+                    Ok(None)
+                    | Err(
+                        QQMusicError::AuthenticationExpired | QQMusicError::AuthorizationRejected,
+                    ) => {}
+                    Err(error) => return Err(error),
+                }
                 // A single edge/CDN response must not evict a durable login. Confirm an
                 // explicit authentication rejection once through the independent safe-read
                 // request before changing the account state.
@@ -1230,6 +1295,10 @@ impl QQMusicAuthService {
             Err(error) => return Err(error),
         };
         self.ensure_current(&epoch).await?;
+        if renewed {
+            self.persist_revalidated_session(&mut session).await?;
+            self.ensure_current(&epoch).await?;
+        }
         *self.active_session.write().await = Some(session);
         self.storage
             .delete_provider_cache_kind(ACCOUNT_CACHE_KIND)
@@ -1245,6 +1314,62 @@ impl QQMusicAuthService {
 
     pub(crate) fn playback_epoch_clock(&self) -> Arc<PlaybackEpochClock> {
         Arc::clone(&self.playback_epoch)
+    }
+
+    async fn load_primary_session(
+        &self,
+        legacy: Option<&SessionRecord>,
+        force_refresh: bool,
+        cancellation: CancellationToken,
+    ) -> Result<Option<SessionRecord>, QQMusicError> {
+        crate::qmapi::credential::load_primary_session_v2_with_policy(
+            &self.credentials,
+            legacy,
+            self.clock.now_ms(),
+            force_refresh,
+            |credential| self.protocol.refresh_credential(credential, cancellation),
+        )
+        .await
+    }
+
+    async fn persist_revalidated_session(
+        &self,
+        session: &mut SessionRecord,
+    ) -> Result<(), QQMusicError> {
+        let prior = CredentialRollbackSnapshot {
+            legacy: self
+                .credentials
+                .load(ACTIVE_SESSION)
+                .await
+                .map_err(|_| QQMusicError::Storage)?,
+            v2: self
+                .credentials
+                .load(crate::qmapi::credential::CREDENTIAL_V2)
+                .await
+                .map_err(|_| QQMusicError::Storage)?,
+        };
+        let result = async {
+            session.account_cache_scope = crate::qmapi::credential::persist_validated_v2(
+                &self.credentials,
+                session,
+                self.clock.now_ms(),
+            )
+            .await?;
+            let serialized = serde_json::to_string(session).map_err(|_| QQMusicError::Protocol)?;
+            self.credentials
+                .save(ACTIVE_SESSION, &serialized)
+                .await
+                .map_err(|_| QQMusicError::Storage)?;
+            match self.credentials.load(ACTIVE_SESSION).await {
+                Ok(Some(actual)) if constant_time_equivalent(&actual, &serialized) => Ok(()),
+                _ => Err(QQMusicError::Storage),
+            }
+        }
+        .await;
+        if result.is_err() && !self.restore_credential_slots(&prior).await {
+            return Err(QQMusicError::Storage);
+        }
+        result
     }
 
     async fn persist_credential_v2(&self, session: &SessionRecord) -> Result<(), QQMusicError> {
@@ -1922,12 +2047,9 @@ impl QQMusicAuthService {
             legacy_present = legacy_session.is_some(),
             "restore: loaded the legacy session slot"
         );
-        let primary = crate::qmapi::credential::load_primary_session_v2(
-            &self.credentials,
-            legacy_session.as_ref(),
-            self.clock.now_ms(),
-        )
-        .await;
+        let primary = self
+            .load_primary_session(legacy_session.as_ref(), false, cancellation.clone())
+            .await;
         tracing::debug!(
             target: "qqmusic.auth",
             v2_load_ok = matches!(primary, Ok(Some(_))),
@@ -2114,19 +2236,7 @@ impl QQMusicAuthService {
         prior: &CredentialRollbackSnapshot,
         error: QQMusicError,
     ) -> Result<T, QQMusicError> {
-        let legacy_restore = if let Some(prior) = prior.legacy.as_deref() {
-            self.credentials.save(ACTIVE_SESSION, prior).await
-        } else {
-            self.credentials.delete(ACTIVE_SESSION).await
-        };
-        let v2_restored = self.restore_credential_v2_raw(prior.v2.as_deref()).await;
-        let legacy = self.credentials.load(ACTIVE_SESSION).await;
-        let legacy_restored = match (prior.legacy.as_deref(), legacy) {
-            (Some(expected), Ok(Some(actual))) => constant_time_equivalent(expected, &actual),
-            (None, Ok(None)) => true,
-            _ => false,
-        };
-        if legacy_restore.is_err() || !legacy_restored || !v2_restored {
+        if !self.restore_credential_slots(prior).await {
             self.publish_secure_store_unavailable_if_current(generation)
                 .await;
             return Err(QQMusicError::Storage);
@@ -2145,6 +2255,22 @@ impl QQMusicAuthService {
             }
         }
         Err(error)
+    }
+
+    async fn restore_credential_slots(&self, prior: &CredentialRollbackSnapshot) -> bool {
+        let legacy_restore = if let Some(prior) = prior.legacy.as_deref() {
+            self.credentials.save(ACTIVE_SESSION, prior).await
+        } else {
+            self.credentials.delete(ACTIVE_SESSION).await
+        };
+        let v2_restored = self.restore_credential_v2_raw(prior.v2.as_deref()).await;
+        let legacy = self.credentials.load(ACTIVE_SESSION).await;
+        let legacy_restored = match (prior.legacy.as_deref(), legacy) {
+            (Some(expected), Ok(Some(actual))) => constant_time_equivalent(expected, &actual),
+            (None, Ok(None)) => true,
+            _ => false,
+        };
+        legacy_restore.is_ok() && legacy_restored && v2_restored
     }
 
     async fn validate_restored_session(
@@ -3483,6 +3609,7 @@ mod tests {
             expires_at_ms: 1_800_000_000_000,
             account_cache_scope: OpaqueAccountScope::parse(format!("{scope_seed:032x}"))
                 .expect("valid synthetic scope"),
+            login_credential: None,
         }
     }
 
@@ -3591,6 +3718,8 @@ mod tests {
         poll_errors: StdMutex<VecDeque<QQMusicError>>,
         validation_errors: StdMutex<VecDeque<QQMusicError>>,
         oauth_exchange: StdMutex<Option<(OAuthLoginProvider, String)>>,
+        refresh_count: AtomicUsize,
+        refresh_result: StdMutex<Option<Result<qqmusic_api::Credential, QQMusicError>>>,
     }
 
     impl FakeProtocol {
@@ -3609,6 +3738,8 @@ mod tests {
                 poll_errors: StdMutex::new(VecDeque::new()),
                 validation_errors: StdMutex::new(VecDeque::new()),
                 oauth_exchange: StdMutex::new(None),
+                refresh_count: AtomicUsize::new(0),
+                refresh_result: StdMutex::new(None),
             }
         }
 
@@ -3732,6 +3863,21 @@ mod tests {
                 return Err(error);
             }
             Ok(validated_account())
+        }
+
+        async fn refresh_credential(
+            &self,
+            credential: qqmusic_api::Credential,
+            _cancellation: CancellationToken,
+        ) -> Result<qqmusic_api::Credential, QQMusicError> {
+            self.refresh_count.fetch_add(1, Ordering::AcqRel);
+            assert_eq!(credential.refresh_token, "SYNTHETIC_REFRESH_TOKEN");
+            assert_eq!(credential.refresh_key, "SYNTHETIC_REFRESH_KEY");
+            self.refresh_result
+                .lock()
+                .expect("refresh result lock")
+                .take()
+                .unwrap_or(Err(QQMusicError::AuthenticationExpired))
         }
     }
 
@@ -4091,6 +4237,201 @@ mod tests {
             } else {
                 assert!(matches!(result, Err(QQMusicError::Timeout)));
             }
+        }
+    }
+
+    fn refreshable_login_credential() -> qqmusic_api::Credential {
+        qqmusic_api::Credential {
+            musicid: 1_000_000_001,
+            str_musicid: "1000000001".to_owned(),
+            musickey: "SYNTHETIC_LOGIN_KEY".to_owned(),
+            openid: "SYNTHETIC_OPENID".to_owned(),
+            access_token: "SYNTHETIC_ACCESS_TOKEN".to_owned(),
+            refresh_token: "SYNTHETIC_REFRESH_TOKEN".to_owned(),
+            refresh_key: "SYNTHETIC_REFRESH_KEY".to_owned(),
+            unionid: "SYNTHETIC_UNIONID".to_owned(),
+            musickey_create_time: 1_700_000_000,
+            key_expires_in: 3_600,
+            expired_at: 7_200,
+            login_type: 2,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn oauth_exchange_keeps_refresh_fields_and_server_expiry_metadata() {
+        let protocol = TransportQQMusicAuthProtocol::new(
+            Arc::new(ScriptedTransport {
+                responses: Mutex::new(VecDeque::new()),
+                requests: Mutex::new(Vec::new()),
+            }),
+            Arc::new(ManualClock::new(1_700_000_000_000)),
+            Arc::new(StorageService::temporary()),
+        );
+        let expected =
+            serde_json::to_value(refreshable_login_credential()).expect("credential JSON");
+        let candidate = protocol
+            .session_from_login_payload(
+                &json!({"code": 0, "req": {"code": 0, "data": expected}}),
+                SecretCookieJar::default(),
+            )
+            .expect("OAuth exchange session");
+        let actual =
+            crate::qmapi::credential::credential_from_session(&candidate).expect("credential");
+        assert_eq!(
+            serde_json::to_value(actual).expect("credential JSON"),
+            expected
+        );
+    }
+
+    #[tokio::test]
+    async fn mobile_login_retains_refresh_material_through_promotion_and_cold_restore() {
+        use qqmusic_api::models::login::{QRCodeLoginEvents, QRLoginResult};
+        let credential = refreshable_login_credential();
+        let AuthPollResult::Confirmed(candidate) = mobile_terminal_result(
+            vec![QRLoginResult {
+                event: QRCodeLoginEvents::Done,
+                credential: Some(credential.clone()),
+            }],
+            1_700_000_000_000,
+        )
+        .expect("mobile login result") else {
+            panic!("expected confirmed login")
+        };
+        let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+        let credentials = Arc::new(RecordingCredentialStore::default());
+        let service = auth_service(Arc::clone(&protocol), Arc::clone(&credentials));
+        service
+            .promote_session(service.generation(), CancellationToken::new(), candidate)
+            .await
+            .expect("promote login");
+        let legacy = credentials.value(ACTIVE_SESSION).expect("legacy session");
+        assert!(!legacy.contains("SYNTHETIC_REFRESH"));
+        assert!(!legacy.contains("SYNTHETIC_ACCESS"));
+        let restarted = auth_service(protocol, Arc::clone(&credentials));
+        restarted.restore().await.expect("cold restore");
+        let raw: Value = serde_json::from_str(
+            &credentials
+                .value(crate::qmapi::credential::CREDENTIAL_V2)
+                .expect("v2"),
+        )
+        .expect("v2 JSON");
+        let saved = raw
+            .pointer("/libraryStore/accounts/1000000001")
+            .expect("saved credential");
+        for field in [
+            "openid",
+            "access_token",
+            "refresh_token",
+            "refresh_key",
+            "unionid",
+            "musickey_create_time",
+            "key_expires_in",
+            "expired_at",
+        ] {
+            assert_eq!(
+                saved.get(field),
+                serde_json::to_value(&credential)
+                    .expect("credential JSON")
+                    .get(field),
+                "field {field}"
+            );
+        }
+        assert_eq!(restarted.snapshot().await.state_name(), "authenticated");
+    }
+
+    #[tokio::test]
+    async fn revalidation_refreshes_expired_and_early_rejected_keys_without_logging_out() {
+        for locally_expired in [true, false] {
+            let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+            let credentials = Arc::new(RecordingCredentialStore::default());
+            let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+            let clock_dyn: Arc<dyn Clock> = clock.clone();
+            let (service, _) =
+                auth_service_with_clock(Arc::clone(&protocol), Arc::clone(&credentials), clock_dyn);
+            let credential = refreshable_login_credential();
+            let candidate = crate::qmapi::credential::session_from_login_credential(
+                &credential,
+                clock.now_ms(),
+            )
+            .expect("login");
+            let scope = candidate.account_cache_scope.clone();
+            service
+                .promote_session(service.generation(), CancellationToken::new(), candidate)
+                .await
+                .expect("promote");
+            let generation = service.generation();
+            if locally_expired {
+                clock.advance(3_600_001);
+            } else {
+                protocol.fail_validation(QQMusicError::AuthenticationExpired);
+            }
+            let mut refreshed = credential;
+            refreshed.musickey = "SYNTHETIC_RENEWED_KEY".to_owned();
+            refreshed.musickey_create_time = (clock.now_ms() / 1_000) as i64;
+            *protocol.refresh_result.lock().expect("refresh result") = Some(Ok(refreshed));
+
+            service.revalidate().await.expect("silent renewal");
+
+            let current = service.current_session().await.expect("renewed session");
+            assert!(current.cookie_header.contains("SYNTHETIC_RENEWED_KEY"));
+            assert!(current.account_cache_scope == scope);
+            assert_eq!(
+                current.expires_at_ms,
+                (clock.now_ms() / 1_000 + 3_600) * 1_000
+            );
+            assert_eq!(service.generation(), generation);
+            assert_eq!(service.snapshot().await.state_name(), "authenticated");
+            assert_eq!(protocol.refresh_count.load(Ordering::Acquire), 1);
+            let persisted: SessionRecord =
+                serde_json::from_str(&credentials.value(ACTIVE_SESSION).expect("legacy"))
+                    .expect("session JSON");
+            assert_eq!(persisted.cookie_header, current.cookie_header);
+            assert_eq!(persisted.expires_at_ms, current.expires_at_ms);
+        }
+    }
+
+    #[tokio::test]
+    async fn transient_renewal_failures_keep_login_and_stored_refresh_material() {
+        for error in [
+            QQMusicError::Offline,
+            QQMusicError::Timeout,
+            QQMusicError::RateLimited,
+        ] {
+            let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+            let credentials = Arc::new(RecordingCredentialStore::default());
+            let service = auth_service(Arc::clone(&protocol), Arc::clone(&credentials));
+            let candidate = crate::qmapi::credential::session_from_login_credential(
+                &refreshable_login_credential(),
+                1_700_000_000_000,
+            )
+            .expect("login");
+            service
+                .promote_session(service.generation(), CancellationToken::new(), candidate)
+                .await
+                .expect("promote");
+            let before = service.snapshot().await;
+            let legacy = credentials.value(ACTIVE_SESSION);
+            let primary = credentials.value(crate::qmapi::credential::CREDENTIAL_V2);
+            let expected_code = error.code();
+            protocol.fail_validation(QQMusicError::AuthenticationExpired);
+            *protocol.refresh_result.lock().expect("refresh result") = Some(Err(error));
+            assert_eq!(
+                service
+                    .revalidate()
+                    .await
+                    .err()
+                    .expect("transient error")
+                    .code(),
+                expected_code
+            );
+            assert!(service.snapshot().await == before);
+            assert!(service.current_session().await.is_some());
+            assert_eq!(credentials.value(ACTIVE_SESSION), legacy);
+            assert_eq!(
+                credentials.value(crate::qmapi::credential::CREDENTIAL_V2),
+                primary
+            );
         }
     }
 
@@ -6205,6 +6546,7 @@ mod tests {
             expires_at_ms: 1_800_000_000_000,
             account_cache_scope: OpaqueAccountScope::parse("0123456789abcdef0123456789abcdef")
                 .expect("scope"),
+            login_credential: None,
         };
         let clock: Arc<dyn Clock> = Arc::new(ManualClock::new(1_700_000_000_000));
         let degraded_transport = Arc::new(ScriptedTransport {

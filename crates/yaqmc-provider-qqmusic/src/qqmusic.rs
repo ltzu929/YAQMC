@@ -5376,6 +5376,7 @@ mod tests {
             cookie_header: "qm_keyst=synthetic".to_owned(),
             expires_at_ms: 9_999,
             account_cache_scope: OpaqueAccountScope::parse(scope).expect("opaque scope"),
+            login_credential: None,
         };
         let first = session("10001", "11111111111111111111111111111111");
         let second = session("20002", "22222222222222222222222222222222");

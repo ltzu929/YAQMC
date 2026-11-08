@@ -4663,6 +4663,7 @@ mod tests {
             expires_at_ms: 1_800_000_000_000,
             account_cache_scope: OpaqueAccountScope::parse(scope_character.to_string().repeat(32))
                 .expect("valid scope"),
+            login_credential: None,
         }
     }
 

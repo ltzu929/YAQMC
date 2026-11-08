@@ -82,12 +82,27 @@ pub(crate) fn credential_from_uin_and_cookie(
 }
 
 pub(crate) fn credential_from_session(session: &SessionRecord) -> Result<Credential, QQMusicError> {
-    credential_from_uin_and_cookie(
+    let canonical = credential_from_uin_and_cookie(
         &session.uin,
         &session.cookie_header,
         session.encrypted_uin.as_deref(),
         session.expires_at_ms,
-    )
+    )?;
+    let Some(value) = &session.login_credential else {
+        return Ok(canonical);
+    };
+    let mut credential: Credential =
+        serde_json::from_value(value.clone()).map_err(|_| QQMusicError::MalformedResponse)?;
+    if credential.musicid != canonical.musicid
+        || credential.str_musicid() != canonical.str_musicid()
+        || credential.musickey != canonical.musickey
+    {
+        return Err(QQMusicError::AuthenticationExpired);
+    }
+    if !canonical.encrypt_uin.is_empty() {
+        credential.encrypt_uin = canonical.encrypt_uin;
+    }
+    Ok(credential)
 }
 
 pub(crate) fn cookie_header_from_credential(credential: &Credential) -> String {
@@ -172,6 +187,7 @@ fn session_from_credential(
         cookie_header: cookie_header_from_credential(credential),
         expires_at_ms,
         account_cache_scope,
+        login_credential: None,
     })
 }
 
@@ -183,12 +199,15 @@ pub(crate) fn session_from_login_credential(
     now_ms: u64,
 ) -> Result<SessionRecord, QQMusicError> {
     let expires_at_ms = credential_expires_at_ms(credential, now_ms);
-    session_from_credential(
+    let mut session = session_from_credential(
         credential,
         OpaqueAccountScope::generate(),
         now_ms,
         expires_at_ms,
-    )
+    )?;
+    session.login_credential =
+        Some(serde_json::to_value(credential).map_err(|_| QQMusicError::Protocol)?);
+    Ok(session)
 }
 
 fn unwrap_library_store(raw: &str) -> Result<(Value, Option<OpaqueAccountScope>), QQMusicError> {
@@ -305,36 +324,29 @@ async fn persist_refreshed_credential_v2(
     }
 }
 
+pub(crate) async fn refresh_credential(
+    credential: Credential,
+    cancellation: tokio_util::sync::CancellationToken,
+) -> Result<Credential, QQMusicError> {
+    let client = qmapi_client_with(Some(credential.clone()), Some(Platform::Android))
+        .map_err(map_qmapi_error)?;
+    tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => Err(QQMusicError::Cancelled),
+        result = client.login.refresh_credential(Some(&credential)) => {
+            result.map_err(map_qmapi_error)
+        }
+    }
+}
+
+#[cfg(test)]
 pub(crate) async fn load_primary_session_v2(
     credentials: &SpawnBlockingCredentialStore,
     legacy: Option<&SessionRecord>,
     now_ms: u64,
 ) -> Result<Option<SessionRecord>, QQMusicError> {
     load_primary_session_v2_with_refresh(credentials, legacy, now_ms, |credential| async move {
-        let client = qmapi_client_with(Some(credential.clone()), Some(Platform::Android)).map_err(
-            |error| {
-                let classification = map_qmapi_error(error);
-                tracing::warn!(
-                    target: "qqmusic.credential",
-                    classification = classification.code(),
-                    "library client construction failed during credential refresh"
-                );
-                classification
-            },
-        )?;
-        client
-            .login
-            .refresh_credential(Some(&credential))
-            .await
-            .map_err(|error| {
-                let classification = map_qmapi_error(error);
-                tracing::warn!(
-                    target: "qqmusic.credential",
-                    classification = classification.code(),
-                    "library refresh_credential failed"
-                );
-                classification
-            })
+        refresh_credential(credential, tokio_util::sync::CancellationToken::new()).await
     })
     .await
 }
@@ -374,11 +386,12 @@ pub(crate) async fn persist_validated_v2(
     credential.musickey = session_credential.musickey.clone();
     credential.login_type = session_credential.login_type;
     credential.encrypt_uin = session_credential.encrypt_uin.clone();
-    credential.expired_at = session_credential.expired_at;
-    if credential_key_is_expired_at(&credential, now_ms)
-        && credential.refresh_token.trim().is_empty()
-        && credential.refresh_key.trim().is_empty()
-    {
+    let refreshable =
+        !credential.refresh_token.trim().is_empty() || !credential.refresh_key.trim().is_empty();
+    if !refreshable {
+        credential.expired_at = i64::try_from(session.expires_at_ms / 1_000).unwrap_or(i64::MAX);
+    }
+    if credential_key_is_expired_at(&credential, now_ms) && !refreshable {
         // The upstream accepted this non-refreshable music key after its
         // previous local/server timestamp elapsed. Retain all other library
         // fields, but make the newly validated lease authoritative locally.
@@ -389,10 +402,25 @@ pub(crate) async fn persist_validated_v2(
     Ok(account_cache_scope)
 }
 
+#[cfg(test)]
 async fn load_primary_session_v2_with_refresh<F, Fut>(
     credentials: &SpawnBlockingCredentialStore,
     legacy: Option<&SessionRecord>,
     now_ms: u64,
+    refresh: F,
+) -> Result<Option<SessionRecord>, QQMusicError>
+where
+    F: FnOnce(Credential) -> Fut,
+    Fut: std::future::Future<Output = Result<Credential, QQMusicError>>,
+{
+    load_primary_session_v2_with_policy(credentials, legacy, now_ms, false, refresh).await
+}
+
+pub(crate) async fn load_primary_session_v2_with_policy<F, Fut>(
+    credentials: &SpawnBlockingCredentialStore,
+    legacy: Option<&SessionRecord>,
+    now_ms: u64,
+    force_refresh: bool,
     refresh: F,
 ) -> Result<Option<SessionRecord>, QQMusicError>
 where
@@ -429,7 +457,7 @@ where
         key_is_expired,
         "credential-v2 expiry evaluation"
     );
-    if key_is_expired || expires_at_ms <= now_ms {
+    if force_refresh || key_is_expired || expires_at_ms <= now_ms {
         let refreshable = !loaded.credential.refresh_token.trim().is_empty()
             || !loaded.credential.refresh_key.trim().is_empty();
         if refreshable {
