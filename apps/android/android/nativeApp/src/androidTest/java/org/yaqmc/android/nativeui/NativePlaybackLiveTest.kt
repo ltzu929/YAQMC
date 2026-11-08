@@ -7,6 +7,9 @@ import android.content.Intent
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -230,6 +233,8 @@ class NativePlaybackLiveTest {
             }
             compose.waitForIdle()
             receipt.put("stage", "wait-for-model-document")
+            compose.onAllNodes(hasContentDescription("More actions for ", substring = true)).onFirst().performClick()
+            compose.onNodeWithTag("player-preset-layout").performClick()
             withTimeout(15000) { while (model.lyrics.value.songId != track.id || model.lyrics.value.lines.isEmpty()) delay(100) }
             // Verify the document actually shown, rather than a second provider request that may differ.
             val document = model.lyrics.value

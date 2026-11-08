@@ -42,6 +42,25 @@
   },
   "sources": [
     {
+      "id": "google-material-player-icons",
+      "kind": "vendored-assets",
+      "origin": "https://github.com/google/material-design-icons",
+      "revision": "10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7",
+      "license": "Apache-2.0",
+      "status": "verified",
+      "mappings": [
+        {
+          "target": "apps/android/android/nativeApp/src/main/res/drawable/ic_player_*.xml",
+          "relation": "Official filled 24px SVG paths converted to Android VectorDrawable without changing geometry; eight playback icons."
+        }
+      ],
+      "evidence": [
+        "git-revision-url:https://github.com/google/material-design-icons/tree/10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7/src/av"
+      ],
+      "noticeStatus": "complete",
+      "authorization": { "status": "not-required" }
+    },
+    {
       "id": "yaqmc-root-import",
       "kind": "original-work",
       "origin": "https://github.com/YAQMC/YAQMC.git",

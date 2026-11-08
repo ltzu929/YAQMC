@@ -87,6 +87,8 @@ class NativeShellTest {
                     compose.onNodeWithTag("lyric-preset-preview").assertIsDisplayed()
                     if (preset.layout == "classic") capture("pr2-device-preview-${if (wide) "wide" else "phone"}")
                     compose.runOnIdle { model().navigate(NativeRoute("player")) }
+                    compose.onAllNodes(hasContentDescription("More actions for ", substring = true)).onFirst().performClick()
+                    compose.onNodeWithTag("player-preset-layout").performClick()
                     compose.onNodeWithTag("player-layout-${preset.layout}").assertIsDisplayed()
                     val controls = compose.onNodeWithTag("player-controls").fetchSemanticsNode().boundsInRoot
                     val lyrics = compose.onNodeWithTag("lyrics-viewport").fetchSemanticsNode().boundsInRoot

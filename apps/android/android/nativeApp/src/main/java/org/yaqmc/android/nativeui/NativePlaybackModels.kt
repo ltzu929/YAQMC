@@ -98,21 +98,6 @@ internal object NativePlayback {
         else -> NativeText(R.string.native_playback_unavailable)
     }
 
-    fun fallback(selection: SourceSelection): Int? {
-        // Automatic quality selects an available source; a missing higher tier is not a failed request.
-        if (selection.requested == "automatic" && selection.fallback == "source-unavailable") return null
-        return when (selection.fallback) {
-            "source-unavailable" -> R.string.native_fallback_source
-            "network-failure" -> R.string.native_fallback_network
-            "link-expired" -> R.string.native_fallback_link
-            "account-rights" -> R.string.native_fallback_rights
-            "entitlement-unknown" -> R.string.native_fallback_rights_unknown
-            "client-unsupported" -> R.string.native_fallback_client
-            "preview-only" -> R.string.native_fallback_preview
-            else -> null
-        }
-    }
-
     fun qualityLabel(quality: String): Int = when (quality) {
         "" -> R.string.native_select_quality
         "automatic" -> R.string.native_quality_automatic; "standard" -> R.string.native_quality_standard

@@ -17,6 +17,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -78,6 +79,8 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
     val message by model.message.collectAsStateWithLifecycle()
     val artwork by remember(model) { model.player.map { it.current?.artwork }.distinctUntilChanged() }.collectAsStateWithLifecycle(initialValue = null)
     var shareTrack by remember { mutableStateOf<Track?>(null) }
+    val playerPager = rememberPagerState { 2 }
+    var playerPresetLayout by rememberSaveable { mutableStateOf(false) }
     val openShare: (Track) -> Unit = { shareTrack = it }
     val systemDark = isSystemInDarkTheme()
     val dark = preferences.isDark(systemDark)
@@ -101,12 +104,25 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
         LaunchedEffect(messageText) { messageText?.let { snack.showSnackbar(it); model.dismissMessage() } }
         Box(Modifier.fillMaxSize()) {
         NativeBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
+        AnimatedContent(targetState = route, modifier = Modifier.fillMaxSize(),
+            contentKey = { it.kind == "player" }, label = "player-transition",
+            transitionSpec = {
+                (when {
+                    targetState.kind == "player" -> slideInVertically(tween(320)) { it } togetherWith ExitTransition.KeepUntilTransitionsFinished
+                    initialState.kind == "player" -> EnterTransition.None togetherWith slideOutVertically(tween(280)) { it }
+                    else -> EnterTransition.None togetherWith ExitTransition.None
+                }).apply { targetContentZIndex = if (targetState.kind == "player") 1f else 0f }
+            }) { destination ->
+        val playingPage = destination.kind == "player"
+        Box(Modifier.fillMaxSize().then(if (playingPage) Modifier.testTag("player-surface") else Modifier)) {
+        if (playingPage) PlayerBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
         Scaffold(
             containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snack) },
             topBar = {
+                if (!playingPage) {
                 TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface, scrolledContainerColor = colors.surface), title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = {
-                    if (route.kind !in roots.map { it.first }) IconButton(onClick = { if (!model.back()) model.navigate(NativeRoute(), true) }) {
+                    if (destination.kind !in roots.map { it.first }) IconButton(onClick = { if (!model.back()) model.navigate(NativeRoute(), true) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_back))
                     }
                 }, actions = {
@@ -122,31 +138,26 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                         else Icon(Icons.Default.AccountCircle, null)
                     }
                 })
+                }
             },
             bottomBar = {
+                if (!playingPage) {
                 Column {
-                    if (route.kind != "player") MiniPlayer(model, openShare)
+                    MiniPlayer(model, openShare)
                     if (!wide) NavigationBar(containerColor = colors.surface) { roots.forEach { (kind, label) ->
-                        NavigationBarItem(selected = selectedRoot(route.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
+                        NavigationBarItem(selected = selectedRoot(destination.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
                             icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.testTag("nav-$kind"))
                     } }
+                }
                 }
             },
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
-                if (wide) NavigationRail(Modifier.fillMaxHeight(), containerColor = colors.surface) { roots.forEach { (kind, label) ->
-                    NavigationRailItem(selected = selectedRoot(route.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
+                if (wide && !playingPage) NavigationRail(Modifier.fillMaxHeight(), containerColor = colors.surface) { roots.forEach { (kind, label) ->
+                    NavigationRailItem(selected = selectedRoot(destination.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
                         icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.weight(1f, fill = false).testTag("nav-$kind"))
                 } }
-                AnimatedContent(targetState = route, modifier = Modifier.weight(1f).fillMaxHeight(),
-                    contentKey = { it.kind == "player" }, label = "player-transition",
-                    transitionSpec = {
-                        (when {
-                            targetState.kind == "player" -> slideInVertically(tween(320)) { it } togetherWith ExitTransition.KeepUntilTransitionsFinished
-                            initialState.kind == "player" -> EnterTransition.None togetherWith slideOutVertically(tween(280)) { it }
-                            else -> EnterTransition.None togetherWith ExitTransition.None
-                        }).apply { targetContentZIndex = if (targetState.kind == "player") 1f else 0f }
-                    }) { destination ->
+                Box(Modifier.weight(1f).fillMaxHeight()) {
                     when (destination.kind) {
                         "library" -> Library(model)
                         "settings" -> Settings(model, login)
@@ -158,15 +169,14 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                         "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
                         "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
                             { model.setAppearance(NativeAppearancePreferences()); model.setTheme("system") }, model::notify)
-                        "player" -> Box(Modifier.fillMaxSize().testTag("player-surface")) {
-                            NativeBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
-                            NowPlaying(model, openShare)
-                        }
+                        "player" -> NowPlaying(model, openShare, playerPager, playerPresetLayout, { playerPresetLayout = it })
                         "queue" -> Queue(model, openShare)
                         else -> Catalog(model, destination, openShare, reportDrawn)
                     }
                 }
             }
+        }
+        }
         }
         }
         AddToPlaylistDialog(model)

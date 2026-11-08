@@ -319,8 +319,8 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                     Text(stringResource(R.string.native_preset_redo))
                 }
             }
-            Text(stringResource(R.string.native_preset_drag_hint), style = MaterialTheme.typography.bodySmall)
-            Text(stringResource(R.string.native_preset_resize_hint), style = MaterialTheme.typography.bodySmall)
+            if (previewWide || draft.layout == "immersive") Text(stringResource(R.string.native_preset_drag_hint), style = MaterialTheme.typography.bodySmall)
+            if (draft.showArtwork) Text(stringResource(R.string.native_preset_resize_hint), style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.native_preset_move_hint), style = MaterialTheme.typography.bodySmall)
         }
         item {
@@ -394,7 +394,6 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
                     Text(stringResource(R.string.native_preset_delete))
                 }
             }
-            Text(stringResource(R.string.native_preset_scope), style = MaterialTheme.typography.bodySmall)
         }
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false },

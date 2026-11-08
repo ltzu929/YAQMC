@@ -121,7 +121,8 @@ internal fun NativeAppearanceSettings(
             item {
                 OutlinedButton(enabled = !importing, onClick = { picker.launch("image/*") }) { Text(stringResource(if (settings.image.isBlank()) R.string.native_choose_image else R.string.native_replace_image)) }
                 if (importing) LinearProgressIndicator(Modifier.fillMaxWidth())
-                else Text(stringResource(if (assets.resolve(settings.image) == null) R.string.native_background_missing else R.string.native_background_ready), style = MaterialTheme.typography.bodySmall)
+                else if (settings.image.isNotBlank() && assets.resolve(settings.image) == null)
+                    Text(stringResource(R.string.native_background_missing), style = MaterialTheme.typography.bodySmall)
             }
             item { PreferenceChoices(stringResource(R.string.native_background_fit), settings.fit, listOf("cover" to stringResource(R.string.native_fit_cover), "contain" to stringResource(R.string.native_fit_contain))) { change(settings.copy(fit = it)) } }
         }

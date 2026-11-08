@@ -411,8 +411,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
                 }
                 _favorites.value = _favorites.value + (track.key to result.optBoolean("favorite"))
                 pageCache.clear()
-                _message.value = NativeText(if (result.text("status") == "reconciled") R.string.native_mutation_reconciled
-                    else if (result.optBoolean("favorite")) R.string.native_favorited else R.string.native_unfavorited)
+                _message.value = NativeText(if (result.optBoolean("favorite")) R.string.native_favorited else R.string.native_unfavorited)
                 if (route.value.kind == "favorites") load(refresh = true)
             } finally { _pendingFavorites.value -= track.key }
         }
@@ -491,7 +490,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
                     updated.put("ownership", if (collected == true) "collected" else "")
                     _playlistSummaries.value = _playlistSummaries.value + (id to updated)
                 }
-                _message.value = NativeText(if (result.text("status") == "reconciled") R.string.native_mutation_reconciled else R.string.native_mutation_applied)
+                _message.value = NativeText(R.string.native_mutation_applied)
                 if (operation == "add" && _picker.value?.track?.key == track?.key) closePicker()
                 if (operation == "delete") {
                     _playlistSummaries.value -= id
@@ -855,7 +854,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
             "native.share.public" -> R.string.native_share_public_unavailable
             else -> null
         }
-        return if (resource != null) NativeText(resource) else error.message?.takeIf(String::isNotBlank)?.let(::NativeText) ?: NativeText(fallback)
+        return NativeText(resource ?: fallback)
     }
 
     companion object {

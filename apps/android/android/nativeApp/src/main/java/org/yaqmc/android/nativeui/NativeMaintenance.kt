@@ -66,7 +66,6 @@ internal fun NativeDiagnostics(model: NativeViewModel) {
         item { OutlinedButton(onClick = { model.shareDiagnosticBundle(context) }, enabled = idle) {
             Text(stringResource(R.string.native_diag_export))
         } }
-        item { Text(stringResource(R.string.native_diag_privacy), style = MaterialTheme.typography.bodySmall) }
         item { OutlinedButton(onClick = { confirmClear = true }, enabled = idle) {
             Text(stringResource(R.string.native_diag_clear_logs))
         } }
@@ -97,7 +96,6 @@ internal fun NativeAbout(model: NativeViewModel) {
         item { Text(stringResource(R.string.native_about_build, BuildConfig.YAQMC_BUILD_COMMIT.take(12))) }
         item { Text(stringResource(R.string.native_about_platform, Build.VERSION.RELEASE,
             Build.VERSION.SDK_INT, Build.SUPPORTED_ABIS.firstOrNull() ?: "-")) }
-        item { Text(stringResource(R.string.native_about_audio_engine)) }
         if (update.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (update.checked) item {
             val result = when {
@@ -149,7 +147,6 @@ internal fun NativeIssueReport(model: NativeViewModel) {
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item { Text(stringResource(R.string.native_diag_report_issue),
             style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
-        item { Text(stringResource(R.string.native_issue_intro)) }
         item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             categoryLabels.forEach { (value, label) ->
                 FilterChip(selected = category == value, onClick = { category = value },

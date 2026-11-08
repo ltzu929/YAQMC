@@ -6,6 +6,7 @@
 
 - Rust 依赖以发布提交的 `Cargo.lock` 为准，随源码保留各包的许可证和版权声明；`qqmusic-api` 精确固定到下文记录的 `qm-api-rs` 提交。
 - Android 运行时的 AndroidX、Kotlin、协程、Guava 及 JetBrains 注解依赖采用 Apache-2.0；精确坐标、POM（含父 POM）、源码和适用声明随依赖清单交付。
+- 播放页的八个 `ic_player_*.xml` 矢量图标来自 [Google Material Icons](https://github.com/google/material-design-icons)，Copyright Google Inc.，采用 Apache-2.0；仅将官方 SVG 路径转换为 Android VectorDrawable，各文件内保留原始来源链接，[许可证正文](apps/android/android/nativeApp/src/main/assets/licenses/material-icons-Apache-2.0.txt)随 APK 保留。
 - `androidx.graphics:graphics-path:1.0.1` 包含 C++ / JNI 实现，除 sources JAR 外，源码附件另保留[官方发布记录](https://developer.android.com/jetpack/androidx/releases/graphics#graphics-path-1.0.1)所指提交 `8a05a22af450d589ef911d772a001a49dcb05b71` 的完整模块源码，适用 Apache-2.0。
 - `rustls:rustls-platform-verifier:0.1.1` 的 AAR 随 `rustls-platform-verifier-android` crate 提供，适用 MIT 或 Apache-2.0。源码附件另包含[上游 0.1.1 版本提交](https://github.com/rustls/rustls-platform-verifier/commit/da3d9c36f48fb9f8f97e94f132fdab67ab0fc75b)中的 Android 工程及两份许可证正文。
 - Guava 的 `listenablefuture:9999.0-empty-to-avoid-conflict-with-guava` 是不含类文件的冲突占位 JAR；保留其空归档、POM 与父 POM 许可说明。

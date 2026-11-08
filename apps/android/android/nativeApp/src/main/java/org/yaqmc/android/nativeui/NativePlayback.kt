@@ -67,25 +67,11 @@ internal fun Transport(text: String, label: String, action: () -> Unit) {
 }
 
 @Composable
-private fun PlaybackStatus(player: PlayerState, compact: Boolean = false) {
+internal fun PlaybackStatus(player: PlayerState, compact: Boolean = false) {
     val status = NativePlayback.status(player)
     status?.let { Text(it.resolve(), Modifier.testTag("playback-status"), color = if (player.phase.endsWith("error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         style = MaterialTheme.typography.bodySmall, maxLines = if (compact) 2 else 4, overflow = TextOverflow.Ellipsis) }
-    NativePlayback.fallback(player.selection)?.let { resource ->
-        val message = if (player.selection.fallback in setOf("source-unavailable", "network-failure", "link-expired")) {
-            stringResource(resource, stringResource(NativePlayback.qualityLabel(player.selection.resolved)))
-        } else stringResource(resource)
-        Text(message, style = MaterialTheme.typography.bodySmall, maxLines = if (compact) 2 else 4, overflow = TextOverflow.Ellipsis)
-    }
-    if (player.selection.preview && player.selection.fallback != "preview-only") Text(stringResource(R.string.native_fallback_preview), style = MaterialTheme.typography.bodySmall)
-    if (!compact && player.error != null) Text(player.error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
 }
-
-@Composable
-private fun capabilityText(capability: QualityCapability): String = stringResource(R.string.native_quality_capabilities,
-    stringResource(when (capability.entitlement) { "allowed" -> R.string.native_rights_allowed; "denied" -> R.string.native_rights_denied; else -> R.string.native_unknown }),
-    stringResource(when (capability.resource) { "available" -> R.string.native_resource_available; "unavailable" -> R.string.native_resource_unavailable; else -> R.string.native_unknown }),
-    stringResource(when (capability.client) { "supported" -> R.string.native_client_supported; "unsupported" -> R.string.native_client_unsupported; else -> R.string.native_unknown }))
 
 @Composable
 private fun QualityChoices(current: String, selection: SourceSelection?, select: (String) -> Unit) {
@@ -95,24 +81,37 @@ private fun QualityChoices(current: String, selection: SourceSelection?, select:
             Column {
                 Text((if (current == value) "✓ " else "") + stringResource(NativePlayback.qualityLabel(value)))
                 if (value == "automatic" && selection?.resolved?.isNotBlank() == true) Text(stringResource(R.string.native_quality_resolved, stringResource(NativePlayback.qualityLabel(selection.resolved))), style = MaterialTheme.typography.bodySmall)
-                capability?.let { Text(capabilityText(it), style = MaterialTheme.typography.bodySmall) }
+                val restriction = when {
+                    capability?.entitlement == "denied" -> R.string.native_quality_membership
+                    capability?.resource == "unavailable" -> R.string.native_quality_no_source
+                    capability?.client == "unsupported" -> R.string.native_quality_unsupported
+                    else -> null
+                }
+                restriction?.let { Text(stringResource(it), style = MaterialTheme.typography.bodySmall) }
             }
         }, enabled = capability?.unavailable != true, onClick = { select(value) }, modifier = Modifier.testTag("quality-$value"))
     }
 }
 
 @Composable
-internal fun QualityPicker(current: String, selection: SourceSelection? = null, enabled: Boolean = true, select: (String) -> Unit) {
+internal fun QualityPicker(current: String, selection: SourceSelection? = null, enabled: Boolean = true, compact: Boolean = false, select: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(enabled = enabled, onClick = { open = true }, modifier = Modifier.testTag("quality-picker")) { Text(stringResource(NativePlayback.qualityLabel(current))) }
+        val quality = stringResource(NativePlayback.qualityLabel(
+            if (compact && !selection?.resolved.isNullOrBlank()) selection!!.resolved else current))
+        val label = if (selection?.preview == true) "$quality · ${stringResource(R.string.native_quality_preview)}" else quality
+        if (compact) TextButton(enabled = enabled, onClick = { open = true }, modifier = Modifier.testTag("quality-picker"),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Icon(Icons.Default.KeyboardArrowDown, null, Modifier.size(16.dp))
+        } else OutlinedButton(enabled = enabled, onClick = { open = true }, modifier = Modifier.testTag("quality-picker")) { Text(label) }
         NativeDropdownMenu(open && enabled, { open = false }) { QualityChoices(current, selection) { open = false; select(it) } }
     }
 }
 
 @UnstableApi
 @Composable
-internal fun TrackMenu(track: Track, model: NativeViewModel, share: (Track) -> Unit, queueEntry: QueueItem? = null, playbackOptions: Boolean = false) {
+internal fun TrackMenu(track: Track, model: NativeViewModel, share: (Track) -> Unit, queueEntry: QueueItem? = null, playbackOptions: Boolean = false, presetLayout: (() -> Unit)? = null) {
     var menu by remember(track.key, queueEntry?.id) { mutableStateOf(false) }
     var qualityDialog by remember(track.key) { mutableStateOf(false) }
     val account by model.account.collectAsStateWithLifecycle()
@@ -129,6 +128,10 @@ internal fun TrackMenu(track: Track, model: NativeViewModel, share: (Track) -> U
             Icon(Icons.Default.MoreVert, stringResource(R.string.native_more_track, track.title.ifBlank { stringResource(R.string.native_unknown_song) }))
         }
         NativeDropdownMenu(menu, { menu = false }) {
+            if (presetLayout != null) {
+                DropdownMenuItem(text = { Text(stringResource(R.string.native_lyric_settings)) }, onClick = { menu = false; model.navigate(NativeRoute("lyric-settings")) })
+                DropdownMenuItem(text = { Text(stringResource(R.string.native_player_preset_layout)) }, onClick = { menu = false; presetLayout() }, modifier = Modifier.testTag("player-preset-layout"))
+            }
             if (playbackOptions) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.native_queue)) }, onClick = { menu = false; model.navigate(NativeRoute("queue")) })
                 DropdownMenuItem(text = { Text(stringResource(R.string.native_select_quality)) }, enabled = available && !qualityBusy, onClick = { menu = false; qualityDialog = true })
@@ -142,7 +145,7 @@ internal fun TrackMenu(track: Track, model: NativeViewModel, share: (Track) -> U
                         onClick = { menu = false; target?.let { model.moveQueueEntry(queueEntry.id, it.id) } })
                 }
             }
-            if (queueEntry == null && !playbackOptions) DropdownMenuItem(text = { Text(stringResource(R.string.native_add_queue)) }, enabled = available, onClick = { menu = false; model.command("player_add_to_queue", JSONObject().put("track", track.json)) })
+            if (queueEntry == null && (!playbackOptions || presetLayout != null)) DropdownMenuItem(text = { Text(stringResource(R.string.native_add_queue)) }, enabled = available, onClick = { menu = false; model.command("player_add_to_queue", JSONObject().put("track", track.json)) })
             DropdownMenuItem(text = { Text(stringResource(if (track.key in pending) R.string.native_working else if (favorite) R.string.native_unfavorite else R.string.native_favorite)) },
                 enabled = track.key !in pending && (!account.authenticated || (account.canFavorite && track.writable)), onClick = { menu = false; model.favorite(track) })
             DropdownMenuItem(text = { Text(stringResource(R.string.native_add_playlist)) }, enabled = !account.authenticated || account.canWrite(track), onClick = { menu = false; model.openPicker(track) })
@@ -209,8 +212,6 @@ internal fun Queue(model: NativeViewModel, share: (Track) -> Unit) {
         }
         item("next-heading") {
             Text(stringResource(R.string.native_up_next, player.upcoming.size), style = MaterialTheme.typography.titleLarge)
-            if (player.order == "shuffle") Text(stringResource(R.string.native_shuffle_traversal), style = MaterialTheme.typography.bodySmall)
-            if (player.repeat == "one") Text(stringResource(R.string.native_repeat_one_active), style = MaterialTheme.typography.bodySmall)
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (player.upcoming.isEmpty()) Text(stringResource(R.string.native_queue_empty), Modifier.padding(vertical = 16.dp))
         }
@@ -259,7 +260,7 @@ private fun QueueRow(entry: QueueItem, model: NativeViewModel, share: (Track) ->
 
 @UnstableApi
 @Composable
-internal fun NowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
+internal fun PresetNowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
     val player by model.player.collectAsStateWithLifecycle()
     val lyrics by model.lyrics.collectAsStateWithLifecycle()
     val qualityBusy by model.qualityBusy.collectAsStateWithLifecycle()

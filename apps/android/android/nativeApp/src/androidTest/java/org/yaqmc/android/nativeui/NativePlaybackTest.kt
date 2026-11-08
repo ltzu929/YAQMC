@@ -10,6 +10,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -42,6 +44,173 @@ class NativePlaybackTest {
     private lateinit var model: NativeViewModel
     private val shares = CopyOnWriteArrayList<Pair<Track, SongShareKind>>()
     @After fun clear() { compose.runOnIdle { if (::model.isInitialized) model.viewModelScope.cancel() } }
+
+    @Test fun independentPlayerSwitchesViewsAndReturnsWithoutChangingPlayback() {
+        core.lyricDocument = JSONObject("""{"songId":"same-song","syncMode":"line","lines":[
+            {"startMs":0,"endMs":1000,"text":"Previous lyric"},
+            {"startMs":1000,"endMs":5000,"text":"Current lyric"},
+            {"startMs":5000,"endMs":10000,"text":"Next lyric"}]}""")
+        install("library")
+        compose.runOnIdle { model.navigate(NativeRoute("player")) }
+        compose.onNodeWithTag("player-cover").assertIsDisplayed()
+        compose.onNodeWithTag("nav-home").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search").assertDoesNotExist()
+        compose.onNodeWithTag("player-toggle").assertIsDisplayed()
+        compose.onNodeWithTag("player-cover").performClick()
+        compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+        compose.onNodeWithTag("lyric-line-1").assertIsSelected().assertIsDisplayed()
+        compose.onNodeWithTag("player-cover").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Play queue").performClick()
+        compose.runOnIdle { assertEquals("queue", model.route.value.kind); assertTrue(model.back()) }
+        compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+        compose.onNodeWithTag("lyrics-viewport").assertIsDisplayed()
+        compose.onNodeWithTag("player-tab-cover").performClick()
+        compose.onNodeWithTag("player-cover").assertIsDisplayed()
+        compose.onNodeWithTag("player-collapse").performClick()
+        compose.onNodeWithTag("nav-library").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals("library", model.route.value.kind)
+            assertEquals("e0", model.player.value.currentEntry?.id)
+            assertEquals(1500L, model.player.value.position)
+            assertFalse(core.calls.any { it.first.startsWith("player_") })
+        }
+    }
+
+    @Test fun playerButtonsAndSeekSendTheExistingPlaybackCommands() {
+        install("player")
+        val queuePixels = compose.onNodeWithContentDescription("Play queue").captureToImage().toPixelMap()
+        val backdrop = queuePixels[0, 0].luminance()
+        assertTrue("Queue icon must contain visible ink", (0 until queuePixels.height).any { y ->
+            (0 until queuePixels.width).any { x -> kotlin.math.abs(queuePixels[x, y].luminance() - backdrop) > 0.1f }
+        })
+        compose.onNodeWithTag("player-toggle").performClick()
+        awaitCall("player_toggle")
+        compose.onNodeWithContentDescription("Previous track").performClick()
+        awaitCall("player_previous")
+        compose.onNodeWithContentDescription("Next track").performClick()
+        awaitCall("player_next")
+        compose.onNodeWithTag("playback-mode").performClick()
+        awaitCall("player_set_primary_playback_mode")
+        assertEquals("repeat-one", core.calls.last { it.first == "player_set_primary_playback_mode" }.second.text("mode"))
+        compose.onNodeWithTag("player-progress").performTouchInput {
+            swipe(start = Offset(width * 0.05f, centerY), end = center, durationMillis = 500)
+        }
+        try { awaitCall("player_seek") } catch (error: Throwable) { capture("player-seek-failure"); throw error }
+        val seeks = core.calls.filter { it.first == "player_seek" }
+        assertEquals(1, seeks.size)
+        assertTrue(seeks.single().second.getLong("positionMs") in 50_000..70_000)
+        compose.onNodeWithTag("player-tab-cover").assertIsSelected()
+        compose.onNodeWithTag("player-cover").assertIsDisplayed()
+        openPlayerMenu()
+        compose.onNodeWithText("Add to queue").performScrollTo().performClick()
+        awaitCall("player_add_to_queue")
+        assertEquals("same-song", core.calls.last { it.first == "player_add_to_queue" }.second.getJSONObject("track").text("id"))
+    }
+
+    @Test fun swipingPlayerChangesViewsWithoutChangingPlaybackAndRetainsThePageOnReturn() {
+        core.lyricDocument = JSONObject().put("songId", "same-song").put("syncMode", "line")
+            .put("lines", JSONArray((0..30).map { index -> JSONObject().put("startMs", index * 1000)
+                .put("endMs", (index + 1) * 1000).put("text", "Lyric $index") }))
+        install("player")
+        compose.onNodeWithTag("player-pages").performTouchInput { swipeRight() }
+        compose.onNodeWithTag("player-tab-cover").assertIsSelected()
+        compose.onNodeWithTag("player-pages").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+        compose.onNodeWithTag("lyric-line-1").assertIsDisplayed()
+        compose.onNodeWithTag("lyrics-viewport").performTouchInput { swipeUp() }
+        compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+        compose.onNodeWithTag("lyric-line-0").assertIsNotDisplayed()
+        compose.onNodeWithTag("lyrics-viewport").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+        compose.onNodeWithContentDescription("Play queue").performClick()
+        compose.runOnIdle { assertEquals("queue", model.route.value.kind); assertTrue(model.back()) }
+        compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+        compose.onNodeWithTag("lyrics-viewport").performTouchInput { swipeRight() }
+        compose.onNodeWithTag("player-tab-cover").assertIsSelected()
+        compose.onNodeWithTag("player-cover").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals("e0", model.player.value.currentEntry?.id)
+            assertEquals(1500L, model.player.value.position)
+            assertFalse(core.calls.any { it.first.startsWith("player_") })
+        }
+    }
+
+    @Test fun playerPagesFollowTheFingerAndTabChangesAnimate() {
+        core.lyricDocument = JSONObject("""{"songId":"same-song","syncMode":"line","lines":[
+            {"startMs":0,"endMs":5000,"text":"Current lyric"}]}""")
+        install("player")
+        val cover = compose.onNodeWithTag("player-cover").getUnclippedBoundsInRoot()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("player-pages").performTouchInput {
+                down(Offset(width * 0.8f, height * 0.3f))
+                moveTo(Offset(width * 0.6f, height * 0.3f), delayMillis = 100)
+                moveTo(Offset(width * 0.4f, height * 0.3f), delayMillis = 100)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            val dragged = compose.onNodeWithTag("player-cover").getUnclippedBoundsInRoot()
+            assertTrue("The cover follows the horizontal drag", dragged.left < cover.left - 20.dp)
+            assertTrue("The cover remains partially visible during the drag", dragged.right > 0.dp)
+            compose.onNodeWithTag("player-pages").performTouchInput {
+                moveTo(Offset(width * 0.1f, height * 0.3f), delayMillis = 100)
+                up()
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeBy(1500)
+            compose.onNodeWithTag("player-tab-lyrics").assertIsSelected()
+            compose.onNodeWithTag("player-tab-cover").performClick()
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeBy(96)
+            val returning = compose.onNodeWithTag("player-cover").getUnclippedBoundsInRoot()
+            assertTrue("Tab selection animates through an intermediate position", returning.left < cover.left - 1.dp)
+            assertTrue("The cover enters the viewport during the animation", returning.right > 0.dp)
+            capture("player-page-transition")
+            compose.mainClock.advanceTimeBy(1500)
+            compose.onNodeWithTag("player-tab-cover").assertIsSelected()
+            compose.onNodeWithTag("player-cover").assertIsDisplayed()
+        } finally { compose.mainClock.autoAdvance = true }
+        assertFalse(core.calls.any { it.first.startsWith("player_") })
+    }
+
+    @Test fun playerScreensKeepControlsReachableAcrossThemesAndLargeText() {
+        core.preview = true
+        core.artwork = InstrumentationRegistry.getArguments().getString("uiArtwork").orEmpty()
+        core.lyricDocument = JSONObject().put("songId", "same-song").put("syncMode", "line")
+            .put("lines", JSONArray((0..8).map { index -> JSONObject().put("startMs", index * 1000).put("endMs", (index + 1) * 1000)
+                .put("text", "有你别无所求了") }))
+        install("player")
+        for (theme in listOf("dark", "light")) {
+            compose.runOnIdle { model.setLanguage("zh-CN"); model.setTheme(theme) }
+            compose.waitUntil(5000) { model.preferences.value.theme == theme && model.preferences.value.language == "zh-CN" }
+            compose.waitUntil(5000) {
+                val pixels = compose.onRoot().captureToImage().toPixelMap()
+                val light = pixels[4, pixels.height / 2].luminance() > 0.5f
+                light == (theme == "light") && runCatching { compose.onNodeWithText("封面").assertIsDisplayed(); true }.getOrDefault(false)
+            }
+            compose.onNodeWithTag("player-cover").assertIsDisplayed()
+            compose.onNodeWithTag("player-toggle").assertIsDisplayed()
+            capture("player-cover-$theme")
+            compose.onNodeWithTag("player-tab-lyrics").performClick()
+            compose.onNodeWithTag("lyric-line-1").assertIsDisplayed().assertIsSelected()
+            compose.waitUntil(5000) {
+                val line = compose.onNodeWithTag("lyric-line-1").getUnclippedBoundsInRoot()
+                val viewport = compose.onNodeWithTag("lyrics-viewport").getUnclippedBoundsInRoot()
+                line.top >= viewport.top && line.bottom <= viewport.bottom
+            }
+            compose.onNodeWithTag("player-toggle").assertIsDisplayed()
+            capture("player-lyrics-$theme")
+            compose.onNodeWithTag("player-tab-cover").performClick()
+        }
+        val playbackBottom = compose.onNodeWithTag("player-toggle").getUnclippedBoundsInRoot().bottom
+        compose.runOnIdle { model.setAppearance(model.preferences.value.appearance.copy(fontScale = 130)) }
+        compose.waitUntil(5000) { model.preferences.value.appearance.fontScale == 130 }
+        compose.onNodeWithTag("player-toggle").assertIsDisplayed()
+        assertEquals(playbackBottom.value, compose.onNodeWithTag("player-toggle").getUnclippedBoundsInRoot().bottom.value, 1f)
+        compose.onNodeWithContentDescription("下一首").assertIsDisplayed()
+        compose.onNodeWithTag("quality-picker").performScrollTo().assertIsDisplayed()
+        capture("player-large-text")
+        assertFalse(core.calls.any { it.first.startsWith("player_") })
+    }
 
     @Test fun systemShuffleNextDoesNotPublishAnUnselectedAdjacentSong() {
         assertAuthoritativeSystemSkip(startIndex = 0, targetIndex = 3, next = true)
@@ -122,6 +291,7 @@ class NativePlaybackTest {
 
     @Test fun movedAndScaledTransportKeepsAllControlsInsideTheViewport() {
         install("player")
+        openPresetPlayer()
         for (offset in listOf(-0.2f, 0.2f)) {
             compose.runOnIdle {
                 val preset = nativeBuiltinLyricPresets.first().copy(
@@ -167,7 +337,7 @@ class NativePlaybackTest {
             CompositionLocalProvider(LocalConfiguration provides configuration) {
                 MaterialTheme {
                     Box(Modifier.fillMaxWidth().height(280.dp)) {
-                        if (preview.value) NativeLyricPresetPreview(preset.value, wide.value, {}, {}) else NowPlaying(model, {})
+                        if (preview.value) NativeLyricPresetPreview(preset.value, wide.value, {}, {}) else PresetNowPlaying(model, {})
                     }
                 }
             }
@@ -232,6 +402,7 @@ class NativePlaybackTest {
 
     @Test fun headerOrderKeepsSongLinksAndTransportReachableInTheFullPlayer() {
         install("player")
+        openPresetPlayer()
         for (builtin in nativeBuiltinLyricPresets) for (metadataFirst in listOf(false, true)) {
             compose.runOnIdle {
                 val selected = builtin.copy(metadataFirst = metadataFirst)
@@ -313,22 +484,38 @@ class NativePlaybackTest {
         assertFalse(core.calls.any { it.first.startsWith("player_") })
     }
 
-    @Test fun automaticQualityOmitsUnavailableWarningInFullAndMiniPlayer() {
+    @Test fun normalPlaybackDoesNotAddQualityExplanationsToAnyPlayerView() {
         install("player")
         val selection = JSONObject("""{"requestedQuality":"automatic","resolvedQuality":"lossless","fallbackReason":"source-unavailable"}""")
-        publish(core.snapshot().put("snapshotRevision", 2).put("sourceSelection", selection))
         val warning = "The requested quality is unavailable; playing in Lossless."
-        compose.onNodeWithText(warning).assertDoesNotExist()
+        var revision = 2L
+        for (reason in listOf("source-unavailable", "network-failure", "link-expired", "account-rights", "entitlement-unknown", "client-unsupported")) {
+            publish(core.snapshot().put("snapshotRevision", revision++).put("sourceSelection", selection.put("fallbackReason", reason)))
+            compose.onNodeWithTag("quality-picker").assertTextContains("Lossless")
+            compose.onNodeWithTag("playback-status").assertDoesNotExist()
+            compose.onNodeWithText(warning).assertDoesNotExist()
+            compose.onNodeWithText("Account rights limited the selected audio quality.").assertDoesNotExist()
+            compose.onNodeWithText("A network problem affected the requested quality; playing in Lossless.").assertDoesNotExist()
+        }
         compose.onNodeWithTag("quality-picker").performScrollTo().performClick()
         compose.onNodeWithText("Automatic selected: Lossless").assertIsDisplayed()
         compose.onNodeWithTag("quality-automatic").performClick()
+        compose.onNodeWithTag("player-tab-lyrics").performClick()
+        compose.onNodeWithTag("playback-status").assertDoesNotExist()
+        compose.onNodeWithText(warning).assertDoesNotExist()
+        compose.onNodeWithTag("player-tab-cover").performClick()
+        openPresetPlayer()
+        compose.onNodeWithText(warning).assertDoesNotExist()
+        compose.onNodeWithTag("player-tab-cover").performClick()
+        publish(core.snapshot().put("snapshotRevision", revision++).put("sourceSelection", selection.put("preview", true)))
+        compose.onNodeWithTag("quality-picker").assertTextContains("Lossless · Preview")
+        compose.onNodeWithText("Only a preview is available.").assertDoesNotExist()
         capture("playback-automatic-quality")
         compose.runOnIdle { model.navigate(NativeRoute("home"), root = true) }
         compose.onNodeWithText(warning).assertDoesNotExist()
-        publish(core.snapshot().put("snapshotRevision", 3).put("sourceSelection", selection.put("preview", true)))
-        compose.onNodeWithText("Only a preview is available.").assertIsDisplayed()
-        publish(core.snapshot().put("snapshotRevision", 4).put("sourceSelection", selection.put("requestedQuality", "hi-res").put("preview", false)))
-        compose.onNodeWithText(warning).assertIsDisplayed()
+        compose.onNodeWithText("Only a preview is available.").assertDoesNotExist()
+        publish(core.snapshot().put("snapshotRevision", revision).put("sourceSelection", selection.put("requestedQuality", "hi-res").put("preview", false)))
+        compose.onNodeWithText(warning).assertDoesNotExist()
     }
 
     @Test fun networkFallbackShowsActualQualityAndAllowsReselectingRequestedQuality() {
@@ -337,7 +524,8 @@ class NativePlaybackTest {
         publish(core.snapshot().put("snapshotRevision", 2)
             .put("sourceSelection", JSONObject("""{"requestedQuality":"hi-res","resolvedQuality":"lossless","fallbackReason":"network-failure","qualityCapabilities":[
                 {"quality":"hi-res","entitlement":"allowed","resource":"available","client":"supported","playable":true}]}""")))
-        compose.onNodeWithText("A network problem affected the requested quality; playing in Lossless.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("A network problem affected the requested quality; playing in Lossless.").assertDoesNotExist()
+        compose.onNodeWithTag("quality-picker").assertTextContains("Lossless")
         compose.onNodeWithTag("playback-status", useUnmergedTree = true).assertDoesNotExist()
         capture("playback-network-quality")
         compose.onNodeWithTag("quality-picker").performScrollTo().performClick()
@@ -435,7 +623,11 @@ class NativePlaybackTest {
         compose.runOnIdle { model.onCoreEvent(2, "player://snapshot", value.toString()) }
         compose.waitUntil(5000) { model.player.value.revision == value.optLong("snapshotRevision") || value.optLong("snapshotRevision") < model.player.value.revision }
     }
-    private fun openPlayerMenu() = compose.onNodeWithContentDescription("More actions for Current song").performScrollTo().performClick()
+    private fun openPlayerMenu() = compose.onNodeWithContentDescription("More actions for Current song").performClick()
+    private fun openPresetPlayer() {
+        openPlayerMenu()
+        compose.onNodeWithTag("player-preset-layout").performClick()
+    }
     private fun awaitCall(method: String) = compose.waitUntil(5000) { core.calls.any { it.first == method } }
     private fun capture(name: String) {
         compose.waitForIdle()
@@ -446,12 +638,16 @@ class NativePlaybackTest {
 
     private class PlaybackCore : NativeCoreApi {
         val calls = CopyOnWriteArrayList<Pair<String, JSONObject>>()
+        var lyricDocument = JSONObject()
+        var preview = false
+        var artwork = ""
         var override: (suspend (String, JSONObject) -> JSONObject?)? = null
         override suspend fun invoke(method: String, params: JSONObject, host: Boolean): Any? {
             calls += method to JSONObject(params.toString())
             override?.invoke(method, params)?.let { return it }
             return when (method) {
-                "provider_home", "provider_lyrics" -> JSONObject()
+                "provider_home" -> JSONObject()
+                "provider_lyrics" -> lyricDocument
                 "provider_account_snapshot" -> JSONObject("""{"state":"guest","capabilities":{}}""")
                 "continuation_start" -> JSONObject("""{"active":true}""")
                 else -> snapshot()
@@ -468,6 +664,13 @@ class NativePlaybackTest {
                     {"quality":"hi-res","entitlement":"allowed","resource":"unavailable","client":"supported"},
                     {"quality":"high","entitlement":"unknown","resource":"unknown","client":"supported"}]}"""))
         }
-        private fun song(id: String, title: String) = JSONObject("""{"artists":[{"id":"artist","name":"Fixture artist"}],"album":{"id":"album","title":"Fixture album"},"durationMs":120000,"provider":{"providerId":"qqmusic","trackId":"$id"}}""").put("id", id).put("title", title)
+        private fun song(id: String, title: String) = JSONObject("""{"artists":[{"id":"artist","name":"Fixture artist"}],"album":{"id":"album","title":"Fixture album"},"durationMs":120000,"provider":{"providerId":"qqmusic","trackId":"$id"}}""").put("id", id).put("title", title).apply {
+            if (preview) {
+                put("title", "倒数")
+                getJSONArray("artists").getJSONObject(0).put("name", "G.E.M.邓紫棋")
+                getJSONObject("album").put("title", "另一个童话")
+                put("artwork", JSONObject().put("src", artwork))
+            }
+        }
     }
 }

@@ -100,7 +100,7 @@ class NativeBrowseTest {
         compose.onNodeWithText("Read-only playlist").assertDoesNotExist()
         compose.onNodeWithText("Writable playlist").performClick()
         compose.waitUntil(5000) { model.playlistErrors.value["write"] != null }
-        compose.onNode(hasText("The server rejected the change.") and hasAnyAncestor(isDialog())).assertIsDisplayed()
+        compose.onNode(hasText("Could not complete the action. Please retry.") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithContentDescription("Open account settings:", substring = true).performClick()
         compose.onNodeWithText("Super VIP · Active").assertIsDisplayed()
@@ -113,9 +113,9 @@ class NativeBrowseTest {
     @Test fun loginDeviceLimitShowsActionableFeedbackWithoutAutomaticRetry() {
         val model = installFake(JSONObject("""{"state":"protocol-error","upstreamCode":20279,"capabilities":{}}"""))
         compose.runOnIdle { model.navigate(NativeRoute("settings")) }
-        val message = "QQ Music has reached its login device limit (20279). Remove unused login devices in the official QQ Music app, then authorize again."
-        compose.onAllNodesWithText(message).assertCountEquals(2)
-        compose.onNodeWithText("Unexpected authorization response. Please retry.").assertDoesNotExist()
+        val message = "QQ Music has reached its device limit. Sign out of another device in QQ Music, then try again."
+        compose.onAllNodesWithText(message).assertCountEquals(1)
+        compose.onNodeWithText("Sign-in failed. Please retry.").assertDoesNotExist()
         capture("login-device-limit")
         assertFalse(calls.any { it.first in setOf("provider_auth_start", "provider_auth_oauth_prepare", "provider_account_refresh") })
     }

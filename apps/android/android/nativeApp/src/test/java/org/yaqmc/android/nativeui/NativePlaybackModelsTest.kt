@@ -55,7 +55,7 @@ class NativePlaybackModelsTest {
         assertEquals("high", state.quality)
         assertTrue(state.selection.preview)
         assertEquals(listOf(true, true, true, false), state.selection.capabilities.map { it.unavailable })
-        assertEquals(R.string.native_fallback_rights, NativePlayback.fallback(state.selection))
+        assertEquals("account-rights", state.selection.fallback)
     }
 
     @Test fun failureCodesAndBusyPhasesHaveLocalizedFeedback() {
@@ -78,9 +78,7 @@ class NativePlaybackModelsTest {
         }
     }
 
-    @Test fun transientSourceFailuresKeepTheirOwnLocalizedFeedback() {
-        assertEquals(R.string.native_fallback_network, NativePlayback.fallback(SourceSelection(fallback = "network-failure")))
-        assertEquals(R.string.native_fallback_link, NativePlayback.fallback(SourceSelection(fallback = "link-expired")))
+    @Test fun streamFailuresHaveLocalizedPlaybackErrors() {
         for (code in listOf("network-failure", "playback-link-expired", "streaming-failure")) {
             val state = NativePlayback.decode(queue().put("playbackState", "recoverable-error")
                 .put("playbackError", JSONObject().put("code", code)))
@@ -88,23 +86,22 @@ class NativePlaybackModelsTest {
         }
     }
 
-    @Test fun automaticQualityDoesNotWarnAboutUnselectedHigherTiers() {
+    @Test fun automaticQualityKeepsTheResolvedTierAndAvailability() {
         val state = NativePlayback.decode(queue().put("sourceSelection", JSONObject("""{
             "requestedQuality":"automatic","resolvedQuality":"lossless","fallbackReason":"source-unavailable",
             "qualityCapabilities":[{"quality":"hi-res","entitlement":"allowed","resource":"unavailable","client":"supported"}]
         }""")))
-        assertNull(NativePlayback.fallback(state.selection))
+        assertEquals("source-unavailable", state.selection.fallback)
         assertEquals("lossless", state.quality)
         assertTrue(state.selection.capabilities.single().unavailable)
-        assertEquals(R.string.native_fallback_source, NativePlayback.fallback(state.selection.copy(requested = "hi-res")))
     }
 
-    @Test fun automaticQualityKeepsPreviewAndActualFailureFeedback() {
-        val selection = SourceSelection(requested = "automatic", resolved = "high", fallback = "preview-only", preview = true)
-        assertEquals(R.string.native_fallback_preview, NativePlayback.fallback(selection))
-        assertEquals(R.string.native_fallback_network, NativePlayback.fallback(selection.copy(fallback = "network-failure")))
+    @Test fun previewStateDoesNotMaskAnActualPlaybackFailure() {
         val failed = NativePlayback.decode(queue().put("playbackState", "fatal-error")
+            .put("sourceSelection", JSONObject("""{"requestedQuality":"automatic","resolvedQuality":"high","fallbackReason":"preview-only","preview":true}"""))
             .put("playbackError", JSONObject().put("code", "track-unavailable")))
+        assertTrue(failed.selection.preview)
+        assertEquals("high", failed.quality)
         assertEquals(R.string.native_error_track, NativePlayback.status(failed)?.resource)
     }
 

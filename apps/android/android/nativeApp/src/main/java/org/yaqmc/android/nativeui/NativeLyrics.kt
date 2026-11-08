@@ -17,9 +17,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -73,7 +76,7 @@ internal fun rememberLyricClock(player: PlayerState): State<Long> {
 @Composable
 internal fun LyricList(
     lyrics: Lyrics, clock: State<Long>, settings: NativeLyricPreferences,
-    seek: (Long) -> Unit, modifier: Modifier = Modifier,
+    seek: (Long) -> Unit, modifier: Modifier = Modifier, baseSize: Float? = null, fadeEdges: Boolean = false,
 ) = key(lyrics.songId) {
     val list = rememberLazyListState()
     val dragged by list.interactionSource.collectIsDraggedAsState()
@@ -93,8 +96,14 @@ internal fun LyricList(
                 else list.scrollToItem(active, -anchor)
             }
         }
-        val size = (maxHeight.value * 0.085f).coerceIn(22f, 48f) * settings.fontScale
-        LazyColumn(Modifier.fillMaxSize(), state = list,
+        val size = (baseSize ?: (maxHeight.value * 0.085f).coerceIn(22f, 48f)) * settings.fontScale
+        val edgeFade = if (fadeEdges) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.06f to Color.Black,
+                    0.94f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+            } else Modifier
+        LazyColumn(Modifier.fillMaxSize().then(edgeFade), state = list,
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = maxHeight * 0.6f),
             verticalArrangement = Arrangement.spacedBy((size * 0.55f).dp)) {
             if (lyrics.lines.isEmpty()) item { Text(stringResource(R.string.native_no_lyrics), style = MaterialTheme.typography.titleLarge) }

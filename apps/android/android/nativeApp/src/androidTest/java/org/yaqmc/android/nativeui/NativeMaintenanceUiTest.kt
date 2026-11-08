@@ -56,6 +56,16 @@ class NativeMaintenanceUiTest {
         compose.setContent { NativeApp(model, {}, { _, _ -> }, {}) }
     }
 
+    @Test fun unexpectedBackendErrorsShowLocalizedFeedback() {
+        install("diagnostics")
+        val internalDetail = "provider.guard: fixture request rejected; trace_id=fixture"
+        compose.runOnIdle { model.action { throw CoreFailure("internal.guard", internalDetail) } }
+        compose.waitUntil(5000) { model.message.value?.resource == R.string.native_action_failed }
+        compose.onNodeWithText("Action failed. Please retry.").assertIsDisplayed()
+        compose.onNodeWithText(internalDetail).assertDoesNotExist()
+        capture("copy-audit-error-feedback")
+    }
+
     @Test fun statisticsRangeCancellationAndClearConfirmationPreserveFailedData() {
         val old = CompletableDeferred<JSONObject>()
         var failClear = true
@@ -258,7 +268,7 @@ class NativeMaintenanceUiTest {
     @Test fun updateStatesAreDistinctAndMissingBrowserDoesNotCrash() {
         install("about")
         compose.waitUntil(5000) { model.updateState.value.checked }
-        compose.onNodeWithText("No newer release is available.").assertIsDisplayed()
+        compose.onNodeWithText("Up to date").assertIsDisplayed()
         update = AndroidUpdateResult.Error("offline")
         compose.onNodeWithText("Check for updates").performClick()
         compose.waitUntil(5000) { model.updateState.value.error }
@@ -296,7 +306,7 @@ class NativeMaintenanceUiTest {
         compose.runOnIdle { model.navigate(NativeRoute("about")) }
         compose.waitUntil(5000) { model.updateState.value.checked }
         compose.onNodeWithText("检查更新").assertIsDisplayed()
-        compose.onNodeWithText("当前没有可用的新版本。").assertIsDisplayed()
+        compose.onNodeWithText("已是最新版本").assertIsDisplayed()
         compose.onNodeWithText("Check for updates").assertDoesNotExist()
         capture("feedback-updates-chinese")
     }

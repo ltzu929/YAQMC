@@ -26,14 +26,14 @@ internal fun AccountMembership(account: AccountUi) {
         account.entitlement?.let { membership ->
             Text(stringResource(R.string.native_membership), style = MaterialTheme.typography.titleMedium)
             Text(stringResource(membershipTier(membership.text("tier"))) + " · " + stringResource(membershipState(membership.text("membership"))))
-            val expiry = if (membership.isNull("expiresAtMs")) stringResource(R.string.native_no_expiry)
-                else DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(Date(membership.optLong("expiresAtMs")))
-            Text(stringResource(R.string.native_expires, expiry))
+            if (!membership.isNull("expiresAtMs")) {
+                val expiry = DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(Date(membership.optLong("expiresAtMs")))
+                Text(stringResource(R.string.native_expires, expiry))
+            }
             val secondary = membership.optJSONArray("secondaryEntitlements")
             val labels = if (secondary == null) emptyList() else (0 until secondary.length()).mapNotNull { secondaryEntitlement(secondary.optString(it)) }.map { stringResource(it) }
             if (labels.isNotEmpty()) Text(stringResource(R.string.native_secondary, labels.joinToString(" · ")))
         }
-        if (account.state in setOf("rejected", "cancelled", "expired", "network-error", "protocol-error")) Text(accountLabel(account.state, account.upstreamCode), color = MaterialTheme.colorScheme.error)
     }
 }
 
@@ -42,8 +42,11 @@ internal fun AccountMembership(account: AccountUi) {
 internal fun AccountLibraryNotice(account: AccountUi, model: NativeViewModel) {
     if (account.authenticated) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("library-account-notice")) {
-        Text(accountLabel(account.state, account.upstreamCode))
-        Text(stringResource(if (account.state in setOf("session-expired", "reauthentication-required")) R.string.native_library_reauth else R.string.native_library_login))
+        Text(when (account.state) {
+            "guest" -> stringResource(R.string.native_library_login)
+            "session-expired", "reauthentication-required" -> stringResource(R.string.native_library_reauth)
+            else -> accountLabel(account.state, account.upstreamCode)
+        })
         if (account.state == "restoring-session" || account.loginPending) LinearProgressIndicator(Modifier.fillMaxWidth())
         TextButton(onClick = { model.navigate(NativeRoute("settings")) }) { Text(stringResource(R.string.native_account_settings)) }
     }
@@ -84,7 +87,9 @@ internal fun PlaylistActions(model: NativeViewModel, route: NativeRoute, page: C
         errors[route.id]?.let { Text(it.resolve(), color = MaterialTheme.colorScheme.error) }
     }
     if (renaming) NativeAlertDialog(onDismissRequest = { if (!busy) renaming = false }, title = { Text(stringResource(R.string.native_rename_playlist)) },
-        text = { Column { OutlinedTextField(draft, { draft = it }, singleLine = true, enabled = !busy, isError = !validPlaylistTitle(draft)); Text(stringResource(R.string.native_title_rules)); errors[route.id]?.let { Text(it.resolve(), color = MaterialTheme.colorScheme.error) } } },
+        text = { Column { OutlinedTextField(draft, { draft = it }, singleLine = true, enabled = !busy, isError = !validPlaylistTitle(draft))
+            if (!validPlaylistTitle(draft)) Text(stringResource(R.string.native_title_rules), color = MaterialTheme.colorScheme.error)
+            errors[route.id]?.let { Text(it.resolve(), color = MaterialTheme.colorScheme.error) } } },
         confirmButton = { TextButton(enabled = !busy && validPlaylistTitle(draft), onClick = { model.mutatePlaylist("rename", summary, title = draft) }) { Text(stringResource(R.string.native_confirm)) } },
         dismissButton = { TextButton(enabled = !busy, onClick = { renaming = false }) { Text(stringResource(R.string.native_cancel)) } })
     if (confirmDelete) Confirm(stringResource(R.string.native_confirm_delete_playlist, summary.text("title")), { confirmDelete = false }) { model.mutatePlaylist("delete", summary) }
