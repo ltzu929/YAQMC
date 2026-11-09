@@ -46,8 +46,6 @@ internal fun NativeDiagnostics(model: NativeViewModel) {
     LaunchedEffect(Unit) { model.loadDiagnostics() }
     LazyColumn(Modifier.fillMaxSize().testTag("diagnostics-list"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text(stringResource(R.string.native_diag_title),
-            style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
         if (state.loading || state.busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         if (state.error) item { Column {
             Text(stringResource(R.string.native_load_failed), color = MaterialTheme.colorScheme.error)
@@ -90,8 +88,6 @@ internal fun NativeAbout(model: NativeViewModel) {
     LaunchedEffect(Unit) { model.checkForUpdates() }
     LazyColumn(Modifier.fillMaxSize().testTag("about-list"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text(stringResource(R.string.native_about_title),
-            style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
         item { Text(stringResource(R.string.app_name) + " · " + BuildConfig.VERSION_NAME, style = MaterialTheme.typography.titleMedium) }
         item { Text(stringResource(R.string.native_about_build, BuildConfig.YAQMC_BUILD_COMMIT.take(12))) }
         item { Text(stringResource(R.string.native_about_platform, Build.VERSION.RELEASE,
@@ -145,8 +141,6 @@ internal fun NativeIssueReport(model: NativeViewModel) {
         "other" to R.string.native_issue_other)
     LazyColumn(Modifier.fillMaxSize().testTag("issue-report-list"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text(stringResource(R.string.native_diag_report_issue),
-            style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
         item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             categoryLabels.forEach { (value, label) ->
                 FilterChip(selected = category == value, onClick = { category = value },

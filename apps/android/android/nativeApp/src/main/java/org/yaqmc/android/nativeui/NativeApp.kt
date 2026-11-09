@@ -16,7 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,6 +24,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
@@ -48,7 +47,6 @@ import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import org.json.JSONObject
 import org.yaqmc.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,10 +74,13 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
     val preferences by model.preferences.collectAsStateWithLifecycle()
     val account by model.account.collectAsStateWithLifecycle()
     val route by model.route.collectAsStateWithLifecycle()
+    val selectedRoot by model.rootDestination.collectAsStateWithLifecycle()
     val message by model.message.collectAsStateWithLifecycle()
     val artwork by remember(model) { model.player.map { it.current?.artwork }.distinctUntilChanged() }.collectAsStateWithLifecycle(initialValue = null)
     var shareTrack by remember { mutableStateOf<Track?>(null) }
     val playerPager = rememberPagerState { 2 }
+    val pageStates = rememberSaveableStateHolder()
+    val savedPages = remember { linkedSetOf<String>() }
     var playerPresetLayout by rememberSaveable { mutableStateOf(false) }
     val openShare: (Track) -> Unit = { shareTrack = it }
     val systemDark = isSystemInDarkTheme()
@@ -114,38 +115,49 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                 }).apply { targetContentZIndex = if (targetState.kind == "player") 1f else 0f }
             }) { destination ->
         val playingPage = destination.kind == "player"
+        val listeningPage = playingPage || destination.kind == "queue"
+        val browsingPage = destination.kind !in nativeUtilityDestinations && !listeningPage
+        val pageKey = if (destination.kind == "search") "search:${destination.searchKind}" else "${destination.kind}:${destination.id}:${destination.tab}"
+        LaunchedEffect(pageKey) {
+            savedPages.remove(pageKey)
+            savedPages += pageKey
+            while (savedPages.size > 24) pageStates.removeState(savedPages.first().also { savedPages.remove(it) })
+        }
         Box(Modifier.fillMaxSize().then(if (playingPage) Modifier.testTag("player-surface") else Modifier)) {
-        if (playingPage) PlayerBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
+        if (listeningPage) PlayerBackdrop(preferences.appearance, artwork, Modifier.matchParentSize())
         Scaffold(
             containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snack) },
             topBar = {
                 if (!playingPage) {
-                TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface, scrolledContainerColor = colors.surface), title = { Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = {
+                TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = if (listeningPage) Color.Transparent else colors.background), title = {
+                    if (destination.kind == "search") SearchField(model, destination)
+                    else PageTitle(model, destination)
+                }, navigationIcon = {
                     if (destination.kind !in roots.map { it.first }) IconButton(onClick = { if (!model.back()) model.navigate(NativeRoute(), true) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.native_back))
                     }
                 }, actions = {
-                    IconButton(onClick = { model.navigate(NativeRoute("search"), true) }) { Icon(Icons.Default.Search, stringResource(R.string.native_search)) }
-                    val themeLabel = stringResource(if (dark) R.string.native_use_light else R.string.native_use_dark)
-                    IconButton(onClick = { model.setTheme(preferences.toggledTheme(systemDark)) }, modifier = Modifier.semantics { contentDescription = themeLabel }) {
-                        Text(if (dark) "☀" else "☾", style = MaterialTheme.typography.titleLarge)
-                    }
+                    if (destination.kind in nativeRootDestinations && destination.kind != "search") {
                     val nickname = account.nickname.ifBlank { stringResource(R.string.native_guest) }
                     val accountLabel = stringResource(R.string.native_open_account, nickname)
-                    IconButton(onClick = { model.navigate(NativeRoute("settings")) }, modifier = Modifier.semantics { contentDescription = accountLabel }) {
+                    IconButton(onClick = { model.navigate(NativeRoute("account")) }, modifier = Modifier.testTag("open-account").semantics { contentDescription = accountLabel }) {
                         if (account.avatar.isNotBlank()) AsyncImage(account.avatar, null, Modifier.size(32.dp).clip(RoundedCornerShape(16.dp)), contentScale = ContentScale.Crop)
                         else Icon(Icons.Default.AccountCircle, null)
+                    }
+                    }
+                    if (destination.kind in nativeRootDestinations || destination.kind == "account") IconButton(onClick = { model.navigate(NativeRoute("settings")) }, modifier = Modifier.testTag("open-settings")) {
+                        Icon(Icons.Default.Settings, stringResource(R.string.native_settings))
                     }
                 })
                 }
             },
             bottomBar = {
-                if (!playingPage) {
+                if (browsingPage) {
                 Column {
                     MiniPlayer(model, openShare)
                     if (!wide) NavigationBar(containerColor = colors.surface) { roots.forEach { (kind, label) ->
-                        NavigationBarItem(selected = selectedRoot(destination.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
+                        NavigationBarItem(selected = selectedRoot == kind, onClick = { model.selectRoot(kind) },
                             icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.testTag("nav-$kind"))
                     } }
                 }
@@ -153,14 +165,17 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
             },
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
-                if (wide && !playingPage) NavigationRail(Modifier.fillMaxHeight(), containerColor = colors.surface) { roots.forEach { (kind, label) ->
-                    NavigationRailItem(selected = selectedRoot(destination.kind) == kind, onClick = { model.navigate(NativeRoute(kind), true) },
+                if (wide && browsingPage) NavigationRail(Modifier.fillMaxHeight(), containerColor = colors.surface) { roots.forEach { (kind, label) ->
+                    NavigationRailItem(selected = selectedRoot == kind, onClick = { model.selectRoot(kind) },
                         icon = { NavIcon(kind, label) }, label = { Text(label) }, modifier = Modifier.weight(1f, fill = false).testTag("nav-$kind"))
                 } }
                 Box(Modifier.weight(1f).fillMaxHeight()) {
+                    pageStates.SaveableStateProvider(pageKey) {
                     when (destination.kind) {
                         "library" -> Library(model)
-                        "settings" -> Settings(model, login)
+                        "account" -> Account(model, login)
+                        "settings" -> Settings(model)
+                        "storage-settings" -> StorageSettings(model)
                         "statistics" -> NativeStatistics(model)
                         "diagnostics" -> NativeDiagnostics(model)
                         "issue-report" -> NativeIssueReport(model)
@@ -168,10 +183,12 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
                         "lyric-settings" -> NativeLyricSettings(preferences.lyrics, model::setLyrics) { model.navigate(NativeRoute("lyric-presets")) }
                         "lyric-presets" -> NativeLyricPresets(preferences.lyricPresets, model::setLyricPresets)
                         "appearance-settings" -> NativeAppearanceSettings(preferences.appearance, dark, model::setAppearance,
-                            { model.setAppearance(NativeAppearancePreferences()); model.setTheme("system") }, model::notify)
+                            { model.setAppearance(NativeAppearancePreferences()); model.setTheme("system") }, model::notify,
+                            preferences.theme, model::setTheme)
                         "player" -> NowPlaying(model, openShare, playerPager, playerPresetLayout, { playerPresetLayout = it })
                         "queue" -> Queue(model, openShare)
                         else -> Catalog(model, destination, openShare, reportDrawn)
+                    }
                     }
                 }
             }
@@ -183,6 +200,19 @@ private fun NativeShell(model: NativeViewModel, login: (String) -> Unit, share: 
         shareTrack?.let { SongShareDialog(it, { shareTrack = null }, share) }
         }
     }
+}
+
+@UnstableApi
+@Composable
+private fun PageTitle(model: NativeViewModel, route: NativeRoute) {
+    val page by model.page.collectAsStateWithLifecycle()
+    val queueCount by remember(model) { model.player.map { it.queue.size }.distinctUntilChanged() }.collectAsStateWithLifecycle(initialValue = 0)
+    val title = when {
+        route.kind == "queue" -> stringResource(R.string.native_queue_count, queueCount)
+        route.kind !in nativeRootDestinations && route.kind !in nativeUtilityDestinations && page.loaded -> page.page.title.resolve()
+        else -> titleFor(route.kind).resolve()
+    }
+    Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("page-title"))
 }
 
 @Composable
@@ -205,7 +235,9 @@ internal fun TrackRow(track: Track, model: NativeViewModel, share: (Track) -> Un
         Artwork(track.artwork, Modifier.size(48.dp))
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Text(track.title.ifBlank { stringResource(R.string.native_unknown_song) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
+            Text(listOf(track.artists, track.album).filter(String::isNotBlank).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(formatTime(track.duration), style = MaterialTheme.typography.labelSmall)
         TrackMenu(track, model, share)
@@ -214,38 +246,16 @@ internal fun TrackRow(track: Track, model: NativeViewModel, share: (Track) -> Un
 
 @UnstableApi
 @Composable
-private fun Library(model: NativeViewModel) {
+private fun Account(model: NativeViewModel, login: (String) -> Unit) {
     val account by model.account.collectAsStateWithLifecycle()
-    val destinations = listOf("favorites", "account-playlists", "recent", "statistics").map { it to titleFor(it).resolve() }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text(stringResource(R.string.native_library), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
-        item { Text(account.nickname.ifBlank { stringResource(R.string.native_guest) }, style = MaterialTheme.typography.titleMedium) }
-        item { AccountLibraryNotice(account, model) }
-        destinations.forEach { (kind, title) ->
-            item { ElevatedCard(onClick = { model.navigate(NativeRoute(kind)) }, modifier = Modifier.fillMaxWidth()) { Text(title, Modifier.padding(24.dp), style = MaterialTheme.typography.titleMedium) } }
-        }
-    }
-}
-
-@UnstableApi
-@Composable
-private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
-    val account by model.account.collectAsStateWithLifecycle()
-    val preferences by model.preferences.collectAsStateWithLifecycle()
     val busy by model.accountBusy.collectAsStateWithLifecycle()
-    val quality by model.quality.collectAsStateWithLifecycle()
-    val cache by model.cache.collectAsStateWithLifecycle()
-    val cacheBusy by model.cacheBusy.collectAsStateWithLifecycle()
-    val cacheError by model.cacheError.collectAsStateWithLifecycle()
-    val qualityBusy by model.qualityBusy.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
-    var confirmClear by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { model.cacheStats() }
-    LazyColumn(Modifier.fillMaxSize().testTag("settings-list"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text(stringResource(R.string.native_settings), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
+    LazyColumn(Modifier.fillMaxSize().testTag("account-list"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Artwork(account.avatar, Modifier.size(56.dp)); Spacer(Modifier.width(16.dp))
+                if (account.avatar.isBlank()) Icon(Icons.Default.AccountCircle, null, Modifier.size(56.dp))
+                else AsyncImage(account.avatar, null, Modifier.size(56.dp).clip(RoundedCornerShape(28.dp)), contentScale = ContentScale.Crop)
+                Spacer(Modifier.width(16.dp))
                 Column { Text(account.nickname.ifBlank { stringResource(R.string.native_guest) }, style = MaterialTheme.typography.titleLarge); Text(accountLabel(account.state, account.upstreamCode), style = MaterialTheme.typography.bodySmall) }
             }
         }
@@ -254,7 +264,7 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
                 if (account.state != "authenticated") {
                     Button(enabled = !busy && !account.loginPending, onClick = { login("qq") }) { Text(stringResource(R.string.native_qq_login)) }
                     OutlinedButton(enabled = !busy && !account.loginPending, onClick = { login("wechat") }) { Text(stringResource(R.string.native_wechat_login)) }
-                } else OutlinedButton(enabled = !busy, onClick = { confirmSignOut = true }) { Text(stringResource(R.string.native_sign_out)) }
+                }
             }
         }
         item { AccountMembership(account) }
@@ -271,43 +281,9 @@ private fun Settings(model: NativeViewModel, login: (String) -> Unit) {
             }
         }
         if (account.loginPending) item { TextButton(enabled = !busy, onClick = { model.cancelLogin() }) { Text(stringResource(R.string.native_cancel_login)) } }
-        item { Text(stringResource(R.string.native_appearance), style = MaterialTheme.typography.titleLarge) }
-        item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark)).forEach { (value, label) -> FilterChip(preferences.theme == value, { model.setTheme(value) }, label = { Text(label) }, modifier = Modifier.testTag("theme-$value")) } } }
-        item { OutlinedButton(onClick = { model.navigate(NativeRoute("appearance-settings")) }) { Text(stringResource(R.string.native_appearance_customize)) } }
-        item { Text(stringResource(R.string.native_language), style = MaterialTheme.typography.titleLarge) }
-        item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("system" to stringResource(R.string.native_system), "zh-CN" to stringResource(R.string.native_chinese), "en-US" to stringResource(R.string.native_english)).forEach { (value, label) -> FilterChip(preferences.language == value, { model.setLanguage(value) }, label = { Text(label) }, modifier = Modifier.testTag("language-$value")) } } }
-        item { Text(stringResource(R.string.native_default_quality), style = MaterialTheme.typography.titleLarge) }
-        item { QualityPicker(quality, enabled = !qualityBusy) { model.changeQuality(it) } }
-        item { OutlinedButton(onClick = { model.navigate(NativeRoute("lyric-settings")) }) { Text(stringResource(R.string.native_lyric_settings)) } }
-        item {
-            Text(stringResource(R.string.native_cache_breakdown), style = MaterialTheme.typography.titleLarge)
-            val details = cache
-            if (cacheError) Text(stringResource(R.string.native_load_failed), color = MaterialTheme.colorScheme.error)
-            if (details == null && !cacheError) Text(stringResource(R.string.native_cache_loading))
-            if (details != null) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.native_cache_total, readableBytes(details.totalBytes)))
-                Text(stringResource(R.string.native_cache_media, details.mediaEntries, readableBytes(details.mediaBytes)))
-                Text(stringResource(R.string.native_cache_artwork, details.artworkEntries, readableBytes(details.artworkBytes)))
-                Text(stringResource(R.string.native_cache_metadata, details.metadataEntries))
-                Text(stringResource(R.string.native_cache_lyrics, details.lyricEntries))
-                Text(stringResource(R.string.native_cache_limits, readableBytes(details.mediaLimitBytes), readableBytes(details.artworkLimitBytes)),
-                    style = MaterialTheme.typography.bodySmall)
-            }
-            if (cacheBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { model.cacheStats() }, enabled = !cacheBusy) { Text(stringResource(R.string.native_refresh)) }
-                OutlinedButton(onClick = { confirmClear = true }, enabled = !cacheBusy) { Text(stringResource(R.string.native_clear_cache)) }
-            }
-        }
-        item { OutlinedButton(onClick = { model.navigate(NativeRoute("diagnostics")) }) {
-            Text(stringResource(R.string.native_diag_title))
-        } }
-        item { OutlinedButton(onClick = { model.navigate(NativeRoute("about")) }) {
-            Text(stringResource(R.string.native_about_title))
-        } }
+        if (account.authenticated) item { TextButton(enabled = !busy, onClick = { confirmSignOut = true }) { Text(stringResource(R.string.native_sign_out)) } }
     }
     if (confirmSignOut) Confirm(stringResource(R.string.native_confirm_sign_out), { confirmSignOut = false }) { model.signOut() }
-    if (confirmClear) Confirm(stringResource(R.string.native_confirm_clear_cache), { confirmClear = false }) { model.cacheStats(clear = true) }
 }
 
 @Composable

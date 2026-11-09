@@ -35,7 +35,7 @@ internal fun nativeColorScheme(settings: NativeAppearancePreferences, dark: Bool
     val primary = nativeReadableAccent(settings.primary, base)
     val secondary = nativeReadableAccent(settings.secondary, base)
     val defaults = if (dark) darkColorScheme() else lightColorScheme()
-    return defaults.copy(primary = nativeColor(primary), onPrimary = nativeColor(nativeForeground(primary)),
+    return defaults.copy(primary = nativeColor(primary), onPrimary = nativeColor(nativeForeground(primary)), surfaceTint = nativeColor(primary),
         primaryContainer = nativeColor(settings.primary), onPrimaryContainer = nativeColor(nativeForeground(settings.primary)),
         secondary = nativeColor(secondary), onSecondary = nativeColor(nativeForeground(secondary)),
         secondaryContainer = nativeColor(mixNativeHex(surface, settings.secondary, if (dark) 0.3f else 0.18f)),
@@ -83,11 +83,13 @@ internal fun NativeBackdrop(settings: NativeAppearancePreferences, artwork: Stri
 @Composable
 internal fun NativeAppearanceSettings(
     settings: NativeAppearancePreferences, dark: Boolean, change: (NativeAppearancePreferences) -> Unit, reset: () -> Unit, notify: (Int) -> Unit,
+    theme: String, changeTheme: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var importing by remember { mutableStateOf(false) }
     var resetConfirm by remember { mutableStateOf(false) }
+    var themeDialog by remember { mutableStateOf(false) }
     val current by rememberUpdatedState(settings)
     val assets = remember(context.filesDir) { NativeBackgroundAssets(File(context.filesDir, "native-backgrounds")) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -102,7 +104,7 @@ internal fun NativeAppearanceSettings(
         }
     }
     LazyColumn(Modifier.fillMaxSize().testTag("appearance-settings"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { Text(stringResource(R.string.native_appearance), style = MaterialTheme.typography.headlineMedium) }
+        item { NativeSettingRow(stringResource(R.string.native_theme), nativeThemeLabel(theme), "settings-theme") { themeDialog = true } }
         item { PreferenceSlider(stringResource(R.string.native_interface_scale), settings.fontScale.toFloat(), 80f..130f, "${settings.fontScale}%", steps = 49) { change(settings.copy(fontScale = it.toInt())) } }
         item { PreferenceChoices(stringResource(R.string.native_interface_font), settings.fontFamily, listOf(
             "application" to stringResource(R.string.native_font_application), "system" to stringResource(R.string.native_system),
@@ -132,6 +134,9 @@ internal fun NativeAppearanceSettings(
         item { OutlinedButton(enabled = !importing, onClick = { resetConfirm = true }) { Text(stringResource(R.string.native_appearance_reset)) } }
     }
     if (resetConfirm) Confirm(stringResource(R.string.native_appearance_reset), { resetConfirm = false }, reset)
+    if (themeDialog) NativeChoiceDialog(stringResource(R.string.native_theme), theme,
+        listOf("system" to stringResource(R.string.native_system), "light" to stringResource(R.string.native_light), "dark" to stringResource(R.string.native_dark)),
+        "theme", { themeDialog = false }, changeTheme)
 }
 
 @Composable

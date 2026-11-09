@@ -1,7 +1,9 @@
 package org.yaqmc.android.nativeui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -12,12 +14,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -31,6 +35,7 @@ import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.delay
 import org.yaqmc.android.R
 
+@OptIn(ExperimentalMaterial3Api::class)
 @UnstableApi
 @Composable
 internal fun Catalog(model: NativeViewModel, route: NativeRoute, share: (Track) -> Unit, reportDrawn: () -> Unit) {
@@ -45,24 +50,22 @@ internal fun Catalog(model: NativeViewModel, route: NativeRoute, share: (Track) 
         else -> ""
     }
     val sections = page.sections.filter { it.tab == activeTab || it.tab.isBlank() }
+    val subtitle = page.subtitle.resolve()
     val list = key(route, activeTab) { rememberLazyListState() }
     LaunchedEffect(state.loading, state.error) { if (!state.loading) reportDrawn() }
     LaunchedEffect(activeTab, page.tabs) { if (route.kind == "discover" && activeTab.isNotBlank() && rememberedTab != activeTab) model.selectDiscoverTab(activeTab) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val columns = (maxWidth / 180.dp).toInt().coerceIn(2, 5)
     Column(Modifier.fillMaxSize()) {
-        // Keep input outside the lazy list so typing and result replacement cannot steal focus.
-        if (route.kind == "search") SearchField(model, route)
-        LazyColumn(Modifier.fillMaxSize().testTag("catalog-list"), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item("header") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(page.title.resolve(), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                        if (page.subtitle.resolve().isNotBlank()) Text(page.subtitle.resolve(), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    IconButton(onClick = { model.load(refresh = true) }, enabled = !state.loading && !state.loadingMore) { Icon(Icons.Default.Refresh, stringResource(R.string.native_refresh)) }
-                }
+        if (route.kind == "search" && route.query.isNotBlank()) LazyRow(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(listOf("song", "artist", "album", "playlist")) { kind ->
+                FilterChip(route.searchKind == kind, { model.search(route.query, kind) }, label = { Text(titleFor(kind).resolve()) }, modifier = Modifier.testTag("search-kind-$kind"))
             }
+        }
+        if (state.loading && !state.loaded) LinearProgressIndicator(Modifier.fillMaxWidth())
+        PullToRefreshBox(isRefreshing = state.loading && state.loaded, onRefresh = { model.load(refresh = true) }, modifier = Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.fillMaxSize().testTag("catalog-list"), state = list, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (route.kind !in nativeRootDestinations && subtitle.isNotBlank()) item { Text(subtitle, style = MaterialTheme.typography.bodyMedium) }
             if (accountPage && !account.authenticated) item { AccountLibraryNotice(account, model) }
             if (accountPage && account.authenticated && !account.canRead(route.kind)) item { Text(stringResource(R.string.native_not_supported)) }
             if (page.artwork.isNotBlank()) item { Artwork(page.artwork, Modifier.size(180.dp)) }
@@ -83,7 +86,6 @@ internal fun Catalog(model: NativeViewModel, route: NativeRoute, share: (Track) 
                     OutlinedButton(onClick = { model.addTracks(visibleTracks) }) { Text(stringResource(R.string.native_add_queue)) }
                 }
             }
-            if (state.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             state.error?.let { error -> item { ErrorRetry(error, { model.load(refresh = true) }) } }
             if (page.stale) item {
                 Text(stringResource(R.string.native_stale), color = MaterialTheme.colorScheme.tertiary)
@@ -91,7 +93,7 @@ internal fun Catalog(model: NativeViewModel, route: NativeRoute, share: (Track) 
             }
             page.total?.let { total -> item { Text(stringResource(R.string.native_loaded_total, visibleTracks.size.takeIf { it > 0 } ?: sections.sumOf { it.cards.size }, total)) } }
             sections.forEachIndexed { sectionIndex, section ->
-                item("heading-$sectionIndex") {
+                if (route.kind != "search" && (activeTab.isBlank() || section.tab != activeTab || section.continuation != null)) item("heading-$sectionIndex") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(section.title.resolve(), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         if (section.continuation != null && section.tracks.isNotEmpty()) TextButton(onClick = { model.play(section.tracks, continuation = section.continuation) }) { Text(stringResource(R.string.native_play)) }
@@ -126,48 +128,55 @@ internal fun Catalog(model: NativeViewModel, route: NativeRoute, share: (Track) 
                 }
             }
         }
+        }
     }
     }
 }
 
 @UnstableApi
 @Composable
-private fun SearchField(model: NativeViewModel, route: NativeRoute) {
+internal fun SearchField(model: NativeViewModel, route: NativeRoute) {
     var input by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(route.query)) }
     val focus = remember { FocusRequester() }
     val manager = LocalFocusManager.current
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(Unit) { if (route.query.isBlank()) focus.requestFocus() }
     LaunchedEffect(input.text, input.composition) {
         if (input.composition == null) {
             delay(if (input.text.isBlank()) 0 else 280)
             model.search(input.text)
         }
     }
-    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedTextField(input, { input = it }, Modifier.fillMaxWidth().focusRequester(focus).testTag("search-input"),
-            label = { Text(stringResource(R.string.native_search_music)) }, singleLine = true,
+        TextField(input, { input = it }, Modifier.fillMaxWidth().padding(end = 8.dp).focusRequester(focus).testTag("search-input"),
+            placeholder = { Text(stringResource(R.string.native_search_music)) }, singleLine = true, shape = RoundedCornerShape(28.dp),
+            colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant, unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { model.search(input.text); manager.clearFocus() }),
             leadingIcon = { Icon(Icons.Default.Search, null) },
             trailingIcon = { if (input.text.isNotEmpty()) IconButton(onClick = { input = TextFieldValue("") }) { Icon(Icons.Default.Close, stringResource(R.string.native_clear_search)) } })
-        if (input.text.isNotBlank()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(listOf("song", "artist", "album", "playlist")) { kind ->
-                FilterChip(route.searchKind == kind, { model.search(input.text, kind) }, label = { Text(titleFor(kind).resolve()) }, modifier = Modifier.testTag("search-kind-$kind"))
-            }
-        }
-    }
 }
 
 @UnstableApi
 @Composable
 private fun CatalogCard(card: CatalogItem, model: NativeViewModel, modifier: Modifier = Modifier) {
+    val preparingCard by model.preparingCard.collectAsStateWithLifecycle()
+    val failedCard by model.failedCard.collectAsStateWithLifecycle()
+    val preparing = preparingCard == card.playbackKey
+    val failure = failedCard?.takeIf { it.first == card.playbackKey }?.second
     Column(modifier) {
         Box {
-            Artwork(card.artwork, Modifier.fillMaxWidth().aspectRatio(1f).clickable(enabled = card.navigable) { if (card.continuation != null) model.playCard(card) else model.open(card) })
-            if (card.playable) FilledIconButton(onClick = { model.playCard(card) }, modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)) {
-                Icon(Icons.Default.PlayArrow, stringResource(R.string.native_play_card, card.titleText?.resolve() ?: card.title))
+            Artwork(card.artwork, Modifier.fillMaxWidth().aspectRatio(1f).clickable(enabled = card.navigable && !preparing) { if (card.continuation != null) model.playCard(card) else model.open(card) })
+            if (failure != null) Text(failure.resolve(), Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                .background(MaterialTheme.colorScheme.errorContainer).padding(start = 8.dp, end = 56.dp, top = 8.dp, bottom = 8.dp)
+                .testTag("card-error-${card.playbackKey}"), color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.labelSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (card.playable) FilledIconButton(onClick = { model.playCard(card) }, enabled = !preparing,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).testTag("card-play-${card.playbackKey}")) {
+                if (preparing) CircularProgressIndicator(Modifier.size(22.dp).testTag("card-preparing-${card.playbackKey}"), strokeWidth = 2.dp)
+                else if (failure != null) Icon(Icons.Default.Refresh, stringResource(R.string.native_retry))
+                else Icon(Icons.Default.PlayArrow, stringResource(R.string.native_play_card, card.titleText?.resolve() ?: card.title))
             }
         }
-        Text(card.titleText?.resolve() ?: card.title, Modifier.fillMaxWidth().clickable(enabled = card.navigable) { if (card.continuation != null) model.playCard(card) else model.open(card) }.padding(top = 8.dp),
+        Text(card.titleText?.resolve() ?: card.title, Modifier.fillMaxWidth().clickable(enabled = card.navigable && !preparing) { if (card.continuation != null) model.playCard(card) else model.open(card) }.padding(top = 8.dp),
             maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
         Text(card.subtitleText?.resolve() ?: card.subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }

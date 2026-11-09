@@ -35,6 +35,7 @@ internal data class CatalogItem(
     val continuation: String? = null,
 ) {
     val id: String = json.text("id", json.text("encArea"))
+    val playbackKey: String = "$kind:$id"
     val title: String = json.text("title", json.text("name"))
     val artwork: String = json.optJSONObject("artwork")?.text("src") ?: json.text("cover")
     val subtitle: String = json.optJSONObject("artist")?.text("name")

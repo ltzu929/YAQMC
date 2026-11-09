@@ -73,7 +73,6 @@ internal fun NativeStatistics(model: NativeViewModel) {
         "all-time" to R.string.native_stats_all_time)
     LazyColumn(Modifier.fillMaxSize().testTag("statistics-list"), contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text(stringResource(R.string.native_statistics), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold) }
         item { FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ranges.forEach { (range, label) ->
                 FilterChip(state.range == range, { model.loadStatistics(range) },

@@ -117,7 +117,7 @@ class NativePersonalizationUiTest {
             CompositionLocalProvider(LocalContext provides localized, LocalNativeContext provides localized, LocalConfiguration provides localized.resources.configuration,
                 LocalActivityResultRegistryOwner provides compose.activity) {
             val state by store.state.collectAsState()
-            MaterialTheme { NativeAppearanceSettings(state.appearance, false, store::setAppearance, { store.setAppearance(NativeAppearancePreferences()) }, {}) }
+            MaterialTheme { NativeAppearanceSettings(state.appearance, false, store::setAppearance, { store.setAppearance(NativeAppearancePreferences()) }, {}, state.theme, store::setTheme) }
             }
         }
         compose.onNodeWithTag("appearance-settings").performScrollToNode(hasText("Ocean"))

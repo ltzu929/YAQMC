@@ -3,6 +3,7 @@ package org.yaqmc.android.nativeui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
@@ -18,11 +19,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -43,16 +46,18 @@ internal fun MiniPlayer(model: NativeViewModel, share: (Track) -> Unit) {
     val current = player.current ?: return
     Surface(tonalElevation = 3.dp) {
         Column {
-            Row(Modifier.fillMaxWidth().clickable { model.navigate(NativeRoute("player")) }.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).clickable { model.navigate(NativeRoute("player")) }.testTag("mini-player-open"), verticalAlignment = Alignment.CenterVertically) {
                 Artwork(current.artwork, Modifier.size(44.dp))
                 Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                    Text(current.title.ifBlank { stringResource(R.string.native_unknown_song) }, Modifier.clickable(enabled = current.providerId == "qqmusic") { model.navigate(NativeRoute("song", current.id)) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    EntityLinks(current.artistLinks.take(1).filter { current.providerId == "qqmusic" }, model, compact = true)
+                    Text(current.title.ifBlank { stringResource(R.string.native_unknown_song) }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(current.artists, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     PlaybackStatus(player, compact = true)
                 }
-                Transport("|<", stringResource(R.string.native_previous)) { model.command("player_previous") }
-                Transport(if (player.playing) "Ⅱ" else "▶", stringResource(if (player.playing) R.string.native_pause else R.string.native_play)) { model.command("player_toggle") }
-                Transport(">|", stringResource(R.string.native_next)) { model.command("player_next") }
+                }
+                Transport(R.drawable.ic_player_skip_previous, stringResource(R.string.native_previous)) { model.command("player_previous") }
+                Transport(if (player.playing) R.drawable.ic_player_pause else R.drawable.ic_player_play_arrow, stringResource(if (player.playing) R.string.native_pause else R.string.native_play)) { model.command("player_toggle") }
+                Transport(R.drawable.ic_player_skip_next, stringResource(R.string.native_next)) { model.command("player_next") }
                 TrackMenu(current, model, share, playbackOptions = true)
             }
             if (player.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -62,8 +67,8 @@ internal fun MiniPlayer(model: NativeViewModel, share: (Track) -> Unit) {
 }
 
 @Composable
-internal fun Transport(text: String, label: String, action: () -> Unit) {
-    IconButton(onClick = action, modifier = Modifier.semantics { contentDescription = label }) { Text(text, style = MaterialTheme.typography.titleLarge) }
+internal fun Transport(icon: Int, label: String, action: () -> Unit) {
+    IconButton(onClick = action) { Icon(painterResource(icon), label) }
 }
 
 @Composable
@@ -74,7 +79,7 @@ internal fun PlaybackStatus(player: PlayerState, compact: Boolean = false) {
 }
 
 @Composable
-private fun QualityChoices(current: String, selection: SourceSelection?, select: (String) -> Unit) {
+internal fun QualityChoices(current: String, selection: SourceSelection?, select: (String) -> Unit) {
     NativePlayback.qualities.forEach { value ->
         val capability = selection?.capabilities?.find { it.quality == value }
         DropdownMenuItem(text = {
@@ -204,14 +209,17 @@ internal fun Queue(model: NativeViewModel, share: (Track) -> Unit) {
     LaunchedEffect(player.entryIds, player.currentIndex, busy) {
         if (draggedId != null && (busy || draggedId !in player.upcomingIds)) finishDrag(false)
     }
-    LazyColumn(Modifier.fillMaxSize().testTag("queue-list"), state = list, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item("heading") { Text(stringResource(R.string.native_queue_count, player.queue.size), style = MaterialTheme.typography.headlineMedium) }
+    LazyColumn(Modifier.fillMaxSize().testTag("queue-list"), state = list, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         player.currentEntry?.let { entry ->
-            item("current-heading") { Text(stringResource(R.string.native_now_playing), fontWeight = FontWeight.SemiBold) }
-            item("current") { QueueRow(entry, model, share, true) }
+            item("current") {
+                Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)) {
+                    QueueRow(entry, model, share, true)
+                }
+            }
         }
         item("next-heading") {
-            Text(stringResource(R.string.native_up_next, player.upcoming.size), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.native_up_next, player.upcoming.size), Modifier.padding(start = 8.dp, top = 20.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (player.upcoming.isEmpty()) Text(stringResource(R.string.native_queue_empty), Modifier.padding(vertical = 16.dp))
         }
@@ -222,7 +230,9 @@ internal fun Queue(model: NativeViewModel, share: (Track) -> Unit) {
                 translationY = if (dragging && item != null) dragCenter - item.offset - item.size / 2f else 0f
                 alpha = if (dragging) 0.85f else 1f
             }
-                .background(if (targetId == entry.id || dragging) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface), verticalAlignment = Alignment.CenterVertically) {
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (targetId == entry.id || dragging) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { QueueRow(entry, model, share, false) }
                 val moveLabel = stringResource(R.string.native_move_track, entry.track.title)
                 Box(Modifier.size(48.dp).testTag("queue-drag-${entry.id}").semantics { contentDescription = moveLabel }
                     .pointerInput(entry.id, busy, player.authoritative) {
@@ -233,8 +243,8 @@ internal fun Queue(model: NativeViewModel, share: (Track) -> Unit) {
                         }, onDragCancel = { finishDrag(false) }, onDragEnd = { finishDrag(true) }) { change, delta ->
                             change.consume(); dragCenter += delta.y; updateTarget()
                         }
-                    }, contentAlignment = Alignment.Center) { Text("☰", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Box(Modifier.weight(1f)) { QueueRow(entry, model, share, false) }
+                    }, contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_queue_drag_handle), null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)) }
             }
         }
     }
@@ -244,16 +254,20 @@ internal fun Queue(model: NativeViewModel, share: (Track) -> Unit) {
 @Composable
 private fun QueueRow(entry: QueueItem, model: NativeViewModel, share: (Track) -> Unit, current: Boolean) {
     val track = entry.track
-    Row(Modifier.fillMaxWidth().testTag("queue-row-${entry.id}").padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (current) Artwork(track.artwork, Modifier.size(44.dp))
-        else IconButton(enabled = track.providerId == "qqmusic", onClick = { model.playQueueEntry(entry.id) }, modifier = Modifier.testTag("queue-play-${entry.id}")) { Icon(Icons.Default.PlayArrow, stringResource(R.string.native_play_track, track.title)) }
-        Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            Text(track.title, Modifier.clickable(enabled = track.providerId == "qqmusic") { model.navigate(NativeRoute("song", track.id)) }, maxLines = 1, overflow = TextOverflow.Ellipsis,
+    Row(Modifier.fillMaxWidth().testTag("queue-row-${entry.id}").clickable(enabled = track.providerId == "qqmusic",
+        onClickLabel = if (current) null else stringResource(R.string.native_play_track, track.title)) {
+        if (current) model.navigate(NativeRoute("player")) else model.playQueueEntry(entry.id)
+    }.heightIn(min = 72.dp).padding(start = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Artwork(track.artwork, Modifier.size(48.dp))
+        Column(Modifier.weight(1f).padding(start = 12.dp, end = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (current) Text(stringResource(R.string.native_now_playing), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(track.title, style = MaterialTheme.typography.bodyLarge, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-            if (track.providerId == "qqmusic") EntityLinks(track.artistLinks + listOfNotNull(track.albumLink), model, compact = true)
+            if (track.providerId == "qqmusic") Text(track.artists,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             else Text(stringResource(R.string.native_unsupported_provider), style = MaterialTheme.typography.bodySmall)
         }
-        Text(formatTime(track.duration), style = MaterialTheme.typography.labelSmall)
         TrackMenu(track, model, share, queueEntry = entry)
     }
 }
@@ -322,9 +336,9 @@ internal fun PresetNowPlaying(model: NativeViewModel, share: (Track) -> Unit) {
                 }, modifier = Modifier.semantics { contentDescription = progressLabel })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(formatTime(seeking?.toLong() ?: player.position)); Text(formatTime(player.duration)) }
             FlowRow(itemVerticalAlignment = Alignment.CenterVertically) {
-                Transport("|<", stringResource(R.string.native_previous)) { model.command("player_previous") }
+                Transport(R.drawable.ic_player_skip_previous, stringResource(R.string.native_previous)) { model.command("player_previous") }
                 FilledTonalButton(onClick = { model.command("player_toggle") }) { Text(stringResource(if (player.playing) R.string.native_pause else R.string.native_play)) }
-                Transport(">|", stringResource(R.string.native_next)) { model.command("player_next") }
+                Transport(R.drawable.ic_player_skip_next, stringResource(R.string.native_next)) { model.command("player_next") }
                 IconButton(onClick = { model.navigate(NativeRoute("queue")) }) { Icon(Icons.Default.Menu, stringResource(R.string.native_queue)) }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {

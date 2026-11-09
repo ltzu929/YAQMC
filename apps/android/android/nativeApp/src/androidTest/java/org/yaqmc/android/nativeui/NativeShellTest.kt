@@ -125,8 +125,7 @@ class NativeShellTest {
     @Test fun appearanceAndPicturePickerSurviveLanguageChanges() {
         openSettings()
         val before = compose.runOnIdle { model().player.value }
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasText("Customize appearance"))
-        compose.onNodeWithText("Customize appearance").performClick()
+        compose.onNodeWithTag("settings-appearance").performClick()
         for (language in listOf("en-US", "zh-CN")) {
             compose.runOnIdle { model().setLanguage(language) }
             compose.onNodeWithTag("appearance-settings").assertIsDisplayed()
@@ -168,12 +167,13 @@ class NativeShellTest {
     @Test fun languageAndThemeApplyWithoutChangingPlaybackAndSurviveRecreation() {
         openSettings()
         val before = compose.runOnIdle { model().player.value }
-        compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("language-zh-CN"))
+        compose.onNodeWithTag("settings-language").performClick()
         compose.onNodeWithTag("language-zh-CN").performClick()
-        compose.onNodeWithTag("nav-home").assert(hasText("首页"))
+        compose.onNodeWithTag("page-title").assertTextContains("设置")
+        compose.onNodeWithTag("settings-appearance").performClick()
+        compose.onNodeWithTag("settings-theme").performClick()
         compose.onNodeWithTag("theme-dark").performClick()
-        compose.onNodeWithTag("theme-dark").assertIsSelected()
-        compose.onNodeWithContentDescription("切换为浅色主题").assertIsDisplayed()
+        compose.onNodeWithTag("settings-theme").assertTextContains("深色")
         compose.runOnIdle {
             val bars = WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
             assertFalse(bars.isAppearanceLightStatusBars)
@@ -181,7 +181,7 @@ class NativeShellTest {
         }
         capture("batch1-zh-dark-settings")
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithTag("nav-home").assert(hasText("首页"))
+        compose.onNodeWithTag("appearance-settings").assertIsDisplayed()
         compose.runOnIdle {
             val after = model().player.value
             assertEquals(before.current?.id, after.current?.id)
@@ -190,7 +190,8 @@ class NativeShellTest {
             val reread = NativePreferenceStore(context().getSharedPreferences("native-ui", Context.MODE_PRIVATE)).state.value
             assertEquals(NativePreferences("dark", "zh-CN"), reread)
         }
-        compose.onNodeWithContentDescription("切换为浅色主题").performClick()
+        compose.onNodeWithTag("settings-theme").performClick()
+        compose.onNodeWithTag("theme-light").performClick()
         compose.runOnIdle {
             assertEquals("light", model().preferences.value.theme)
             val bars = WindowCompat.getInsetsController(compose.activity.window, compose.activity.window.decorView)
@@ -237,18 +238,20 @@ class NativeShellTest {
             nativeRootDestinations.forEach { compose.onNodeWithTag("nav-$it").assertIsDisplayed() }
             capture("batch1-en-wide")
             openSettings()
-            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("theme-system"))
+            compose.onNodeWithTag("settings-appearance").performClick()
+            compose.onNodeWithTag("settings-theme").performClick()
             compose.onNodeWithTag("theme-system").performClick()
-            compose.onNodeWithTag("theme-system").assertIsSelected()
-            compose.onNodeWithTag("settings-list").performScrollToNode(hasTestTag("language-system"))
+            compose.runOnIdle { assertEquals("system", model().preferences.value.theme) }
+            back()
+            compose.onNodeWithTag("settings-language").performClick()
             compose.onNodeWithTag("language-system").performClick()
-            compose.onNodeWithTag("language-system").assertIsSelected()
+            compose.runOnIdle { assertEquals("system", model().preferences.value.language) }
         } finally {
             compose.activityRule.scenario.onActivity { it.requestedOrientation = previous }
         }
     }
 
-    private fun openSettings() = compose.onNodeWithContentDescription("Open account settings:", substring = true).performClick()
+    private fun openSettings() = compose.onNodeWithTag("open-settings").performClick()
     private fun readyPlayer(): PlayerState {
         val viewModel = compose.runOnIdle { model() }
         compose.waitUntil(15_000) { viewModel.player.value.revision >= 0 }

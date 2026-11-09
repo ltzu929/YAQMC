@@ -33,6 +33,7 @@ import org.yaqmc.android.core.MobileLoginPolicy
 import org.yaqmc.android.R
 
 internal data class NativeRoute(val kind: String = "home", val id: String = "", val query: String = "", val searchKind: String = "song", val playlist: String = "", val tab: String = "top")
+private data class NativeRootState(val route: NativeRoute, val backStack: List<NativeRoute>)
 internal data class PageState(val page: CatalogPage = CatalogPage(titleFor("home")), val loading: Boolean = false, val error: NativeText? = null, val loadingMore: Boolean = false, val moreError: NativeText? = null, val loaded: Boolean = false)
 
 @UnstableApi
@@ -44,6 +45,9 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     constructor(application: Application) : this(application, NativeCore(application))
     private val _route = MutableStateFlow(NativeRoute())
     val route = _route.asStateFlow()
+    private val _selectedRoot = MutableStateFlow("home")
+    val rootDestination = _selectedRoot.asStateFlow()
+    private val rootStates = mutableMapOf<String, NativeRootState>()
     private val _page = MutableStateFlow(PageState())
     val page = _page.asStateFlow()
     private val _player = MutableStateFlow(PlayerState())
@@ -58,6 +62,12 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     val quality = _quality.asStateFlow()
     private val _qualityBusy = MutableStateFlow(false)
     val qualityBusy = _qualityBusy.asStateFlow()
+    private val _preparingCard = MutableStateFlow<String?>(null)
+    val preparingCard = _preparingCard.asStateFlow()
+    private val _failedCard = MutableStateFlow<Pair<String, NativeText>?>(null)
+    val failedCard = _failedCard.asStateFlow()
+    private var preparingCardJob: Job? = null
+    private var preparationSerial = 0L
     private val _queueBusy = MutableStateFlow(false)
     val queueBusy = _queueBusy.asStateFlow()
     private var continuationNotificationRevision = 0L
@@ -221,6 +231,11 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun navigate(next: NativeRoute, root: Boolean = false) {
         if (next == _route.value && !root) return
+        val nextRoot = selectedRoot(next.kind).takeIf { it in nativeRootDestinations }
+        if (nextRoot != null && nextRoot != _selectedRoot.value) {
+            rootStates[_selectedRoot.value] = NativeRootState(_route.value, backStack.toList())
+        }
+        if (nextRoot != null) _selectedRoot.value = nextRoot
         if (root) backStack.clear() else backStack += _route.value
         _route.value = next
         if (next.kind != "statistics") statisticsRefreshJob?.cancel()
@@ -228,9 +243,27 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         load()
     }
 
+    fun selectRoot(kind: String) {
+        if (kind !in nativeRootDestinations) return
+        if (kind == _selectedRoot.value) {
+            if (_route.value.kind != kind) navigate(backStack.firstOrNull { it.kind == kind } ?: NativeRoute(kind), root = true)
+            return
+        }
+        rootStates[_selectedRoot.value] = NativeRootState(_route.value, backStack.toList())
+        val saved = rootStates[kind]
+        _selectedRoot.value = kind
+        backStack.clear()
+        if (saved != null) backStack += saved.backStack
+        _route.value = saved?.route ?: NativeRoute(kind)
+        if (_route.value.kind != "statistics") statisticsRefreshJob?.cancel()
+        pageNumber = 1
+        load()
+    }
+
     fun back(): Boolean {
         val previous = backStack.removeLastOrNull() ?: return false
         _route.value = previous
+        selectedRoot(previous.kind).takeIf { it in nativeRootDestinations }?.let { _selectedRoot.value = it }
         pageNumber = 1
         load()
         return true
@@ -257,7 +290,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
-        if (target.kind in setOf("library", "settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics", "diagnostics", "about", "issue-report")) return
+        if (target.kind in setOf("library", "account", "settings", "storage-settings", "lyric-settings", "lyric-presets", "appearance-settings", "player", "queue", "statistics", "diagnostics", "about", "issue-report")) return
         if (!refresh && !more) pageCache[target]?.let { cached ->
             pageNumber = cached.second
             _page.value = PageState(page = cached.first, loaded = true)
@@ -320,7 +353,9 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         }
     }
 
-    fun command(method: String, params: JSONObject = JSONObject()) = action {
+    fun command(method: String, params: JSONObject = JSONObject()) = action { executeCommand(method, params) }
+
+    private suspend fun executeCommand(method: String, params: JSONObject) {
         val result = core.invoke(method, params)
         if (result is JSONObject && result.has("queue")) snapshots.trySend(result.toString())
         if (method == "continuation_start") {
@@ -359,27 +394,47 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         }
     }
 
-    fun play(tracks: List<Track>, start: Track? = tracks.firstOrNull(), shuffle: Boolean? = null, continuation: String? = null) {
-        if (tracks.isEmpty()) return
+    fun play(tracks: List<Track>, start: Track? = tracks.firstOrNull(), shuffle: Boolean? = null, continuation: String? = null): Job? {
+        if (tracks.isEmpty()) return null
+        return action { startTracks(tracks, start, shuffle, continuation) }
+    }
+
+    private suspend fun startTracks(tracks: List<Track>, start: Track? = tracks.firstOrNull(), shuffle: Boolean? = null, continuation: String? = null) {
         val request = JSONObject().put("tracks", JSONArray(tracks.map { it.json })).put("startAtId", start?.id)
         if (continuation != null) {
             request.put("providerId", "qqmusic").put("kind", continuation)
             if (continuation == "radar" && start != null) request.put("seedTrackIds", JSONArray(listOf(start.id)))
-            command("continuation_start", JSONObject().put("request", request))
+            executeCommand("continuation_start", JSONObject().put("request", request))
         } else {
             shuffle?.let { request.put("shuffle", it) }
-            command("player_play_tracks", JSONObject().put("request", request))
+            executeCommand("player_play_tracks", JSONObject().put("request", request))
         }
     }
 
-    fun playCard(item: CatalogItem) = action {
-        val page = when {
-            item.json.optJSONArray("tracks") != null -> NativeModels.detail(item.kind, item.json)
-            item.kind == "account-playlist" -> catalog.load(NativeRoute(item.kind, item.id, playlist = item.json.toString()), false, 1, null)
-            else -> catalog.load(NativeRoute(item.kind, item.id), false, 1, null)
+    fun playCard(item: CatalogItem) {
+        if (_preparingCard.value == item.playbackKey) return
+        val serial = ++preparationSerial
+        preparingCardJob?.cancel()
+        _failedCard.value = null
+        _preparingCard.value = item.playbackKey
+        preparingCardJob = action {
+            try {
+                val page = when {
+                    item.json.optJSONArray("tracks") != null -> NativeModels.detail(item.kind, item.json)
+                    item.kind == "account-playlist" -> catalog.load(NativeRoute(item.kind, item.id, playlist = item.json.toString()), false, 1, null)
+                    else -> catalog.load(NativeRoute(item.kind, item.id), false, 1, null)
+                }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (page.tracks.isEmpty()) notify(R.string.native_empty)
+                else startTracks(page.tracks, continuation = item.continuation)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (serial == preparationSerial) _failedCard.value = item.playbackKey to errorText(error, R.string.native_action_failed)
+            } finally {
+                if (serial == preparationSerial) _preparingCard.value = null
+            }
         }
-        if (page.tracks.isEmpty()) notify(R.string.native_empty)
-        else play(page.tracks, continuation = item.continuation)
     }
 
     fun playTrack(tracks: List<Track>, track: Track, continuation: String? = null) {
@@ -393,7 +448,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun favorite(track: Track) {
-        if (!account.value.authenticated) { navigate(NativeRoute("settings")); return }
+        if (!account.value.authenticated) { navigate(NativeRoute("account")); return }
         if (!account.value.canFavorite || !track.writable || track.key in _pendingFavorites.value) return
         val desired = !(_favorites.value[track.key] ?: track.favorite)
         val revision = account.value.revision
@@ -422,7 +477,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun openPicker(track: Track) {
-        if (!account.value.authenticated) { navigate(NativeRoute("settings")); return }
+        if (!account.value.authenticated) { navigate(NativeRoute("account")); return }
         if (!account.value.canWrite(track)) return
         pickerJob?.cancel()
         _playlistErrors.value = emptyMap()
@@ -454,7 +509,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
     }
 
     fun mutatePlaylist(operation: String, summary: JSONObject, track: Track? = null, title: String? = null, collected: Boolean? = null) {
-        if (!account.value.authenticated) { navigate(NativeRoute("settings")); return }
+        if (!account.value.authenticated) { navigate(NativeRoute("account")); return }
         val id = summary.text("id")
         val projected = _playlistSummaries.value[id] ?: summary
         val capability = when (operation) { "rename" -> "canRename"; "delete" -> "canDelete"; "add" -> "canAddTracks"; "remove" -> "canRemoveTracks"; else -> null }
@@ -822,7 +877,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         core.invoke("provider_account_refresh", provider())
         refreshAccount()
         pageCache.clear()
-        if (route.value.kind !in setOf("settings", "library")) load(refresh = true)
+        if (route.value.kind !in setOf("account", "settings", "library")) load(refresh = true)
     }
 
     private fun accountAction(block: suspend () -> Unit): Job? {

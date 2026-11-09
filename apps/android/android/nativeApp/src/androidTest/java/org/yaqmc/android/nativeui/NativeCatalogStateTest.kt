@@ -13,6 +13,56 @@ import org.yaqmc.android.R
 /** Fake Core responses exercise cancellation and write policies without touching a real account. */
 @UnstableApi
 class NativeCatalogStateTest {
+    @Test fun rootSwitchRestoresSearchCategoryAndChildBackStackWithoutAnotherRequest() = runBlocking {
+        val fake = FakeCore { method, _ -> if (method == "provider_search") JSONObject("""{"items":[],"hasMore":false}""") else JSONObject() }
+        withModel(fake) { model ->
+            main { model.search("music", "album") }
+            await { model.page.value.loaded }
+            main { model.navigate(NativeRoute("album", "selected")) }
+            await { model.page.value.loaded }
+            main { model.selectRoot("library"); model.selectRoot("search") }
+            assertEquals(NativeRoute("album", "selected"), model.route.value)
+            assertEquals("search", model.rootDestination.value)
+            main { assertTrue(model.back()) }
+            assertEquals("music", model.route.value.query)
+            assertEquals("album", model.route.value.searchKind)
+            main { model.navigate(NativeRoute("album", "selected")); model.selectRoot("search") }
+            assertEquals(NativeRoute("search", query = "music", searchKind = "album"), model.route.value)
+            main { assertFalse(model.back()) }
+            main { model.selectRoot("search") }
+            assertEquals(1, fake.calls.count { it.first == "provider_search" })
+        }
+    }
+
+    @Test fun cancelledCardCannotClearTheNewPreparationOrPlayItsOldResponse() = runBlocking {
+        val oldStarted = CompletableDeferred<Unit>()
+        val oldRelease = CompletableDeferred<Unit>()
+        val newRelease = CompletableDeferred<Unit>()
+        val fake = FakeCore { method, params ->
+            if (method == "provider_playlist") {
+                val id = params.text("id")
+                if (id == "old") { oldStarted.complete(Unit); withContext(NonCancellable) { withTimeout(5000) { oldRelease.await() } } }
+                else newRelease.await()
+                JSONObject("""{"id":"$id","tracks":[{"id":"$id","title":"$id"}]}""")
+            } else JSONObject()
+        }
+        withModel(fake) { model ->
+            main { model.playCard(CatalogItem("playlist", JSONObject().put("id", "old"))) }
+            oldStarted.await()
+            main { model.playCard(CatalogItem("playlist", JSONObject().put("id", "new"))) }
+            await { fake.calls.count { it.first == "provider_playlist" } == 2 }
+            oldRelease.complete(Unit)
+            delay(100)
+            assertEquals("playlist:new", model.preparingCard.value)
+            assertNull(model.failedCard.value)
+            assertFalse(fake.calls.any { it.first == "player_play_tracks" })
+            newRelease.complete(Unit)
+            await { model.preparingCard.value == null }
+            val play = fake.calls.single { it.first == "player_play_tracks" }
+            assertEquals("new", play.second.getJSONObject("request").text("startAtId"))
+        }
+    }
+
     @Test fun cancelledSearchCannotOverwriteNewerResults() = runBlocking {
         val oldStarted = CompletableDeferred<Unit>()
         val fake = FakeCore { method, params ->

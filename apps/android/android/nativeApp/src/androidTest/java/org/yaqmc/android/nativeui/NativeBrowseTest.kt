@@ -31,12 +31,15 @@ class NativeBrowseTest {
         compose.onNodeWithTag("search-input").performTextInput("Music")
         compose.waitUntil(5000) { model.page.value.page.tracks.isNotEmpty() }
         assertEquals(1, calls.count { it.first == "provider_search" })
+        compose.onNodeWithContentDescription("More actions for Song title").performClick()
+        compose.onNodeWithText("Song details").performClick()
         compose.onNodeWithText("Artist name").performClick()
         compose.waitUntil(5000) { model.route.value.kind == "artist" && model.page.value.loaded }
         compose.onNodeWithTag("catalog-tab-song").performClick()
         compose.waitUntil(5000) { calls.any { it.first == "provider_artist_catalog" && it.second.text("kind") == "song" } }
         compose.onNodeWithTag("catalog-tab-album").performClick()
         compose.waitUntil(5000) { calls.any { it.first == "provider_artist_catalog" && it.second.text("kind") == "album" } }
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         for (kind in listOf("artist", "album", "playlist")) {
             compose.onNodeWithTag("search-kind-$kind").performClick()
@@ -102,7 +105,8 @@ class NativeBrowseTest {
         compose.waitUntil(5000) { model.playlistErrors.value["write"] != null }
         compose.onNode(hasText("Could not complete the action. Please retry.") and hasAnyAncestor(isDialog())).assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithContentDescription("Open account settings:", substring = true).performClick()
+        compose.runOnIdle { model.navigate(NativeRoute("library"), root = true) }
+        compose.onNodeWithTag("open-account").performClick()
         compose.onNodeWithText("Super VIP · Active").assertIsDisplayed()
         compose.onNodeWithText("Additional benefits: Trial · Ad free").assertIsDisplayed()
         capture("batch2-membership-fixture")
@@ -112,7 +116,7 @@ class NativeBrowseTest {
 
     @Test fun loginDeviceLimitShowsActionableFeedbackWithoutAutomaticRetry() {
         val model = installFake(JSONObject("""{"state":"protocol-error","upstreamCode":20279,"capabilities":{}}"""))
-        compose.runOnIdle { model.navigate(NativeRoute("settings")) }
+        compose.runOnIdle { model.navigate(NativeRoute("account")) }
         val message = "QQ Music has reached its device limit. Sign out of another device in QQ Music, then try again."
         compose.onAllNodesWithText(message).assertCountEquals(1)
         compose.onNodeWithText("Sign-in failed. Please retry.").assertDoesNotExist()
@@ -132,6 +136,7 @@ class NativeBrowseTest {
                         "provider_discover" -> JSONObject("""{"featured":[{"id":"f","title":"Feature"}],"charts":[{"id":"c","title":"Chart"}],"newSongs":{"tracks":[$song]},"newAlbums":[{"id":"album","title":"Album name"}],"categories":[{"encArea":"area","title":"Area"}],"newMvs":[{"id":"mv","title":"Display MV","artist":"Artist name"}],"podcasts":[{"id":"pod","title":"Display podcast"}]}""")
                         "provider_search" -> JSONObject().put("items", org.json.JSONArray().put(when (params.text("kind")) { "song" -> song; "artist" -> JSONObject("""{"id":"artist","name":"Artist result"}"""); else -> JSONObject("""{"id":"result","title":"Collection result"}""") })).put("hasMore", false)
                         "provider_artist" -> JSONObject("""{"id":"artist","name":"Artist name","topSongs":[$song],"albums":[]}""")
+                        "provider_song" -> song
                         "provider_add_playlist_track" -> JSONObject("""{"status":"rejected","authRevision":1}""")
                         "provider_artist_catalog" -> JSONObject("""{"items":[],"hasMore":false}""")
                         "provider_account_playlist_tracks" -> JSONObject().put("summary", summary).put("tracks", JSONObject().put("items", org.json.JSONArray().put(song)).put("authRevision", 1))

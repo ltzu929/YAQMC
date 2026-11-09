@@ -13,6 +13,10 @@
     <string name="native_search">搜索</string>
     <string name="native_library">媒体库</string>
     <string name="native_settings">设置</string>
+    <string name="native_settings_playback">播放</string>
+    <string name="native_settings_personalization">个性化</string>
+    <string name="native_settings_maintenance">存储与维护</string>
+    <string name="native_theme">主题</string>
     <string name="native_back">返回</string>
     <string name="native_search_music">搜索音乐</string>
     <string name="native_songs">歌曲</string>
@@ -57,9 +61,7 @@
     <string name="native_language">语言</string>
     <string name="native_chinese">简体中文</string>
     <string name="native_english">English</string>
-    <string name="native_use_light">切换为浅色主题</string>
-    <string name="native_use_dark">切换为深色主题</string>
-    <string name="native_open_account">打开账号设置：%1$s</string>
+    <string name="native_open_account">打开账号：%1$s</string>
     <string name="native_default_quality">默认音质</string>
     <string name="native_clear_cache">清理缓存</string>
     <string name="native_cache_mb">缓存：%1$d MB</string>
@@ -169,7 +171,7 @@
     <string name="native_secondary">附加权益：%1$s</string>
     <string name="native_library_reauth">请重新授权以访问音乐库。</string>
     <string name="native_library_login">登录后访问喜欢的歌曲、歌单和收听历史。</string>
-    <string name="native_account_settings">账号设置</string>
+    <string name="native_account_settings">账号</string>
     <string name="native_rename_playlist">重命名歌单</string>
     <string name="native_add_current">添加当前歌曲</string>
     <string name="native_remove_current">移除当前歌曲</string>
@@ -248,7 +250,6 @@
     <string name="native_lyric_fade">逐字渐变宽度</string>
     <string name="native_lyric_reset">重置歌词设置</string>
     <string name="native_lyrics_follow">跟随播放</string>
-    <string name="native_appearance_customize">自定义外观</string>
     <string name="native_interface_scale">界面字号</string>
     <string name="native_interface_font">界面字体</string>
     <string name="native_font_application">应用字体</string>
@@ -362,7 +363,7 @@
     <string name="native_diag_recent_errors">近期错误</string>
     <string name="native_diag_no_errors">暂无近期错误</string>
     <string name="native_diag_report_issue">前往 GitHub 反馈问题</string>
-    <string name="native_about_title">关于 YAQMC-Android</string>
+    <string name="native_about_title">关于</string>
     <string name="native_about_build">源码提交：%1$s</string>
     <string name="native_about_platform">Android %1$s（API %2$d）· %3$s</string>
     <string name="native_about_repository">项目仓库</string>

@@ -134,7 +134,7 @@ Linux 的 Rust 音频测试需要 ALSA 开发库和可用音频输出，CI 的�
 离线界面回归在 API 30 / 35 的 x86_64 模拟器运行。启动目标模拟器后使用 Studio 的“模拟器离线界面测试”，或在 Gradle 工程目录执行：
 
 ```bash
-./gradlew :nativeApp:connectedDebugAndroidTest -Pyaqmc.offlineUiTests=1 -Pyaqmc.nativeAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest
+./gradlew :nativeApp:connectedDebugAndroidTest -Pyaqmc.offlineUiTests=1 -Pyaqmc.nativeAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest,org.yaqmc.android.nativeui.NativeCatalogStateTest,org.yaqmc.android.nativeui.NativeExperienceUiTest
 ```
 
 该配置使用 `NativeOfflineTestRunner`，不初始化真实 Core。CI 的离线 APK 不包含 Rust Core，只能测试界面，不能日常听歌。真实 x86_64 播放另需安装 Rust target `x86_64-linux-android`，使用 `-Pyaqmc.nativeAbi=x86_64` 构建正常变体。

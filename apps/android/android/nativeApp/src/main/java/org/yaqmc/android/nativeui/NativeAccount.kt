@@ -48,7 +48,7 @@ internal fun AccountLibraryNotice(account: AccountUi, model: NativeViewModel) {
             else -> accountLabel(account.state, account.upstreamCode)
         })
         if (account.state == "restoring-session" || account.loginPending) LinearProgressIndicator(Modifier.fillMaxWidth())
-        TextButton(onClick = { model.navigate(NativeRoute("settings")) }) { Text(stringResource(R.string.native_account_settings)) }
+        TextButton(onClick = { model.navigate(NativeRoute("account")) }) { Text(stringResource(R.string.native_account_settings)) }
     }
 }
 

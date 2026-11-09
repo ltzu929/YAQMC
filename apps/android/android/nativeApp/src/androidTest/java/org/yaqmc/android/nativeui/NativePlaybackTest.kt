@@ -262,7 +262,7 @@ class NativePlaybackTest {
 
     @Test fun playerTransitionKeepsTheSourcePageVisibleUntilItIsCovered() {
         install("library")
-        val source = compose.onNodeWithText("Guest")
+        val source = compose.onNodeWithText("Liked songs")
         source.assertIsDisplayed()
         compose.mainClock.autoAdvance = false
         try {
@@ -540,7 +540,7 @@ class NativePlaybackTest {
         compose.onNodeWithContentDescription("More actions for Current song").performClick()
         compose.onNodeWithText("Play queue").performClick()
         compose.runOnIdle { assertEquals("queue", model.route.value.kind) }
-        compose.onNodeWithTag("queue-play-e3").performClick()
+        compose.onNodeWithTag("queue-row-e3").performClick()
         awaitCall("player_play_queue_entry")
         assertEquals("e3", core.calls.last { it.first == "player_play_queue_entry" }.second.text("entryId"))
         compose.onNodeWithTag("queue-menu-e0").performClick()

@@ -281,7 +281,6 @@ internal fun NativeLyricPresets(settings: NativeLyricPresetPreferences, change: 
         Modifier.fillMaxSize().testTag("lyric-presets"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { Text(stringResource(R.string.native_preset_title), style = MaterialTheme.typography.headlineMedium) }
         item {
             Text(stringResource(R.string.native_preset_select), style = MaterialTheme.typography.titleMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

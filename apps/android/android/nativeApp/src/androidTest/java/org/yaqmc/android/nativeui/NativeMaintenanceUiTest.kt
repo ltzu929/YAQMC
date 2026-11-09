@@ -202,7 +202,7 @@ class NativeMaintenanceUiTest {
             "provider_clear_cache" -> throw CoreFailure("timeout", "")
             else -> JSONObject()
         } }
-        install("settings")
+        install("storage-settings")
         compose.waitUntil(5000) { model.cacheError.value && !model.cacheBusy.value }
         compose.onNodeWithText("Loading cache usage…").assertDoesNotExist()
         fail = false
@@ -290,7 +290,7 @@ class NativeMaintenanceUiTest {
             "state":"authenticated", "revision":1, "profile":{"nickname":"已登录用户"},
             "entitlement":{"tier":"super-vip","membership":"active","expiresAtMs":1893558896000}
         }""") else JSONObject() }
-        install("settings")
+        install("account")
         compose.runOnIdle {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(compose.activity.window, false)
             model.setLanguage("zh-CN")
@@ -298,8 +298,8 @@ class NativeMaintenanceUiTest {
         }
         val inset = androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
             ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.statusBars())?.top ?: 0
-        val heading = compose.onNodeWithText("设置").fetchSemanticsNode().boundsInRoot
-        assertTrue("settings heading clears status bar", heading.top >= inset)
+        val heading = compose.onNodeWithTag("page-title").fetchSemanticsNode().boundsInRoot
+        assertTrue("account heading clears status bar", heading.top >= inset)
         compose.onNodeWithText("已登录用户").assertIsDisplayed()
         compose.onNodeWithText("2030", substring = true).assertIsDisplayed()
         capture("feedback-settings-insets")
