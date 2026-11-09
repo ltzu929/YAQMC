@@ -6,18 +6,20 @@
 
 基于 [YAQMC](https://github.com/YAQMC/YAQMC) 的非官方 Android 客户端，面向希望继续使用 QQ 音乐会员、又想要更简洁听歌体验的用户。
 
-[下载公开预览版](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.4-beta.4) · [版本记录](https://github.com/ltzu929/YAQMC/releases) · [问题反馈](https://github.com/ltzu929/YAQMC/issues)
+[下载安卓版](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.5) · [版本记录](https://github.com/ltzu929/YAQMC/releases) · [问题反馈](https://github.com/ltzu929/YAQMC/issues)
 
 ## 界面预览
 
-|                                                    首页与推荐                                                     |                                                    播放器与歌词                                                     |                                                       我喜欢的音乐                                                        |
-| :---------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------: |
-| [<img src="assets/screenshots/home-zh.png" alt="中文首页与音乐推荐" width="280">](assets/screenshots/home-zh.png) | [<img src="assets/screenshots/player-zh.png" alt="中文播放器与歌词" width="280">](assets/screenshots/player-zh.png) | [<img src="assets/screenshots/favorites-zh.png" alt="中文收藏歌曲列表" width="280">](assets/screenshots/favorites-zh.png) |
+|                                                    首页与推荐                                                     |                                                    播放器与歌词                                                     |                                                     媒体库                                                      |
+| :---------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
+| [<img src="assets/screenshots/home-zh.png" alt="中文首页与音乐推荐" width="280">](assets/screenshots/home-zh.png) | [<img src="assets/screenshots/player-zh.png" alt="中文播放器与歌词" width="280">](assets/screenshots/player-zh.png) | [<img src="assets/screenshots/library-zh.png" alt="中文媒体库" width="280">](assets/screenshots/library-zh.png) |
+
+首页与媒体库使用示例数据。
 
 ## 功能
 
 - QQ 音乐账号登录、会员信息、收藏和歌单管理。
-- 搜索歌曲，浏览推荐、专辑、歌手和音乐库。
+- 搜索歌曲，浏览推荐、专辑、歌手和音乐库，切换页面保留搜索条件与列表位置。
 - 独立播放页，封面与歌词左右滑动切换，支持逐字歌词与外观设置。
 - 播放队列、会员权益范围内的音质选择。
 - 后台播放、系统媒体控制、缓存管理和听歌统计。
@@ -30,7 +32,7 @@
 
 ## 下载与安装
 
-当前提供 **`0.1.4-beta.4` 公开预览版**，下载入口见[发布页面](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.4-beta.4)。
+当前提供 **`0.1.5` 正式版**，下载入口见[发布页面](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.5)。
 
 - 系统：Android 8.0 及以上。
 - 架构：ARM64（`arm64-v8a`）。
