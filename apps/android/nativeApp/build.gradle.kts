@@ -9,7 +9,7 @@ plugins {
   id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val repositoryRoot = rootProject.file("../../..")
+val repositoryRoot = rootProject.file("../..")
 val localProperties = Properties().apply {
   rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
 }
@@ -111,7 +111,7 @@ android {
   sourceSets["main"].apply {
     jniLibs.srcDir(nativeDirectory)
   }
-  sourceSets["test"].resources.srcDir("../../../../crates/yaqmc-protocol/fixtures")
+  sourceSets["test"].resources.srcDir("../../../crates/yaqmc-protocol/fixtures")
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21

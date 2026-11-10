@@ -10,7 +10,7 @@ import {
 } from './android-toolchain.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const androidRoot = path.join(repositoryRoot, 'apps', 'android', 'android');
+const androidRoot = path.join(repositoryRoot, 'apps', 'android');
 const tasks = process.argv.slice(2);
 
 if (tasks.length === 0 || tasks.some((task) => !/^:[a-zA-Z0-9:_-]+$/u.test(task))) {

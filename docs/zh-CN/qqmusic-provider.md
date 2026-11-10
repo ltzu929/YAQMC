@@ -7,7 +7,7 @@
 | 层次         | 职责与入口                                                                                                                                                                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Android 界面 | `NativeViewModel` 协调页面和操作，使用规范化模型展示搜索、详情、账号与音乐库                                                                                                                                                                           |
-| Android 宿主 | [CoreManager](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/core/CoreManager.kt) 管理 Core 与凭据回调；[OAuthActivity](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/OAuthActivity.kt) 承接授权页面      |
+| Android 宿主 | [CoreManager](../../apps/android/nativeApp/src/main/java/org/yaqmc/android/core/CoreManager.kt) 管理 Core 与凭据回调；[OAuthActivity](../../apps/android/nativeApp/src/main/java/org/yaqmc/android/OAuthActivity.kt) 承接授权页面                      |
 | JNI 与 Core  | [yaqmc-android](../../crates/yaqmc-android/src/lib.rs) 桥接调用；Rust Core 管理实际播放、队列、推荐会话与持久化                                                                                                                                        |
 | 提供器接口   | [yaqmc-provider-api](../../crates/yaqmc-provider-api/src/lib.rs) 定义账号、目录、音源、歌词等边界                                                                                                                                                      |
 | QQ 音乐实现  | [adapter.rs](../../crates/yaqmc-provider-qqmusic/src/adapter.rs) 适配接口，[qqmusic.rs](../../crates/yaqmc-provider-qqmusic/src/qqmusic.rs) 协调提供器业务，[qmapi](../../crates/yaqmc-provider-qqmusic/src/qmapi/mod.rs) 接入固定版本的 `qqmusic-api` |
@@ -18,7 +18,7 @@
 
 Android 提供手机 QQ 授权和 QQ / 微信 OAuth 相关入口。手机授权由宿主处理官方 App 跳转与二维码流程；网页授权使用隔离的 Android `WebView`，回调、外部跳转与目标包按授权规则校验。当前宿主不再使用 Electron `BrowserWindow`。
 
-Android 凭据通过 [CredentialStore](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/core/CredentialStore.kt) 与 [CredentialVault](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/core/CredentialVault.kt) 加密保存，Rust 提供器管理会话恢复、续期和请求作用域。账号更换或退出时使旧账号请求和缓存结果失效；界面使用账号信息投影。
+Android 凭据通过 [CredentialStore](../../apps/android/nativeApp/src/main/java/org/yaqmc/android/core/CredentialStore.kt) 与 [CredentialVault](../../apps/android/nativeApp/src/main/java/org/yaqmc/android/core/CredentialVault.kt) 加密保存，Rust 提供器管理会话恢复、续期和请求作用域。账号更换或退出时使旧账号请求和缓存结果失效；界面使用账号信息投影。
 
 新增账号链路时核对登录成功、拒绝、取消、超时、重新授权、冷启动恢复和续期失败等状态；真实账号写入按明确授权执行，结果与界面状态保持一致。
 

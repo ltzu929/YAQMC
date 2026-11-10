@@ -49,7 +49,7 @@
 
 界面采用 Kotlin / Jetpack Compose，底层复用 Rust Core。完整的开发流程、工程结构、构建、测试与发布规范见[开发指南](docs/development.md)。
 
-在已有开发环境中，用 VS Code 打开仓库根目录，在 `apps/android/android` 执行 Gradle 的 `:nativeApp:assembleDebug` 任务即可构建开发版。
+在已有开发环境中，用 VS Code 打开仓库根目录，在 `apps/android` 执行 Gradle 的 `:nativeApp:assembleDebug` 任务即可构建开发版。
 
 开发版使用独立包名和本机调试签名，包含完整 Rust Core，无需维护者的私有密钥。
 

@@ -5,9 +5,9 @@ on:
     branches: [main]
   pull_request:
     paths:
-      - 'apps/android/android/nativeApp/**'
-      - 'apps/android/android/*.kts'
-      - 'apps/android/android/gradle/**'
+      - 'apps/android/nativeApp/**'
+      - 'apps/android/*.kts'
+      - 'apps/android/gradle/**'
       - 'scripts/**'
       - 'crates/**'
       - 'package-lock.json'
@@ -57,7 +57,7 @@ jobs:
         run: |
           echo "YAQMC_RUSTLS_VERIFIER_MAVEN_DIR=$(node --input-type=module -e 'import {resolveRustlsVerifierMaven} from "./scripts/android-toolchain.mjs"; console.log(resolveRustlsVerifierMaven())')" >> "$GITHUB_ENV"
       - name: Compile, test, lint and assemble native Android
-        working-directory: apps/android/android
+        working-directory: apps/android
         run: bash ./gradlew --no-daemon :nativeApp:testDebugUnitTest :nativeApp:lintDebug :nativeApp:assembleDebug :nativeApp:assembleDebugAndroidTest
       - name: Upload offline-only debug and instrumentation APKs
         if: success()
@@ -65,8 +65,8 @@ jobs:
         with:
           name: yaqmc-native-offline-test-apks-${{ github.sha }}
           path: |
-            apps/android/android/nativeApp/build/outputs/apk/debug/
-            apps/android/android/nativeApp/build/outputs/apk/androidTest/debug/
+            apps/android/nativeApp/build/outputs/apk/debug/
+            apps/android/nativeApp/build/outputs/apk/androidTest/debug/
           if-no-files-found: error
       - name: Upload build reports
         if: always()
@@ -74,8 +74,8 @@ jobs:
         with:
           name: android-native-reports-${{ github.sha }}
           path: |
-            apps/android/android/nativeApp/build/reports/
-            apps/android/android/nativeApp/build/test-results/
+            apps/android/nativeApp/build/reports/
+            apps/android/nativeApp/build/test-results/
           if-no-files-found: ignore
 
   emulator-ui:
@@ -117,13 +117,13 @@ jobs:
           target: google_apis
           profile: pixel_6
           disable-animations: true
-          script: cd apps/android/android && bash gradlew --no-daemon :nativeApp:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest,org.yaqmc.android.nativeui.NativeCatalogStateTest,org.yaqmc.android.nativeui.NativeExperienceUiTest
+          script: cd apps/android && bash gradlew --no-daemon :nativeApp:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.yaqmc.android.nativeui.NativePlaybackTest,org.yaqmc.android.nativeui.NativePersonalizationUiTest,org.yaqmc.android.nativeui.NativeMaintenanceUiTest,org.yaqmc.android.nativeui.NativeCatalogStateTest,org.yaqmc.android.nativeui.NativeExperienceUiTest
       - name: Upload UI instrumentation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: android-native-ui-report-api${{ matrix.api-level }}-${{ github.sha }}
           path: |
-            apps/android/android/nativeApp/build/reports/androidTests/
-            apps/android/android/nativeApp/build/outputs/androidTest-results/
+            apps/android/nativeApp/build/reports/androidTests/
+            apps/android/nativeApp/build/outputs/androidTest-results/
           if-no-files-found: ignore

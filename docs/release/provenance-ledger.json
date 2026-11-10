@@ -50,7 +50,7 @@
       "status": "verified",
       "mappings": [
         {
-          "target": "apps/android/android/nativeApp/src/main/res/drawable/ic_player_*.xml",
+          "target": "apps/android/nativeApp/src/main/res/drawable/ic_player_*.xml",
           "relation": "Official filled 24px SVG paths converted to Android VectorDrawable without changing geometry; eight playback icons."
         }
       ],

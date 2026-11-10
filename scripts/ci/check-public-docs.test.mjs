@@ -22,8 +22,7 @@ async function fixture(t, extraFiles = {}, useGit = true) {
   });
   const files = {
     'README.md': `# Android 客户端\n\n仓库版本 0.1.1，当前不维护双语文档。\n${primaryLinks}\n`,
-    '.gitignore':
-      '/AGENTS.md\n/docs/project-plan.md\n/apps/android/android/docs/native-parity.md\n',
+    '.gitignore': '/AGENTS.md\n/docs/project-plan.md\n/apps/android/docs/native-parity.md\n',
     LICENSE: 'Test fixture license',
     'docs/development.md': '# 开发指南\n',
     ...extraFiles,
@@ -68,7 +67,7 @@ test('ignores local planning and agent files even when they exist', async (t) =>
   const root = await fixture(t, {
     'AGENTS.md': '[PROJECT_NAME]\n[本机入口](missing.md)\n',
     'docs/project-plan.md': 'C:\\Users\\example\\notes.md\n',
-    'apps/android/android/docs/native-parity.md': '[截图](missing.png)\n',
+    'apps/android/docs/native-parity.md': '[截图](missing.png)\n',
   });
   assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 2 });
 });
@@ -98,11 +97,11 @@ test('also checks exported source without Git metadata', async (t) => {
 test('checks retained and newly added references without requiring a translated counterpart', async (t) => {
   const root = await fixture(t, {
     'docs/retained.md': '[旧参考](missing.md)\n',
-    'apps/android/android/docs/reference/notes.md': '[新参考](unknown.md)\n',
+    'apps/android/docs/reference/notes.md': '[新参考](unknown.md)\n',
   });
   const { errors } = await checkPublicDocumentation(root);
   assert.deepEqual(errors.sort(), [
-    'apps/android/android/docs/reference/notes.md: missing local link target unknown.md',
+    'apps/android/docs/reference/notes.md: missing local link target unknown.md',
     'docs/retained.md: missing local link target missing.md',
   ]);
 });

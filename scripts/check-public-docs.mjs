@@ -65,7 +65,7 @@ export async function checkPublicDocumentation(root = repositoryRoot) {
     : [
         ...(await collectMarkdown(root)),
         ...(await collectMarkdown(root, 'docs', true)),
-        ...(await collectMarkdown(root, 'apps/android/android/docs', true)),
+        ...(await collectMarkdown(root, 'apps/android/docs', true)),
       ];
   if (!publicFiles) {
     for (const relative of supplementaryDocuments) {

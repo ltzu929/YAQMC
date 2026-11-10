@@ -11,7 +11,7 @@ import { rootVersion } from './ci/android-version.mjs';
 import { verifyNativeApk } from './ci/native-apk-check.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const android = path.join(root, 'apps/android/android');
+const android = path.join(root, 'apps/android');
 const args = new Set(process.argv.slice(2));
 for (const arg of args)
   if (!['--debug', '--benchmark', '--reuse-core'].includes(arg))

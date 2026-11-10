@@ -24,7 +24,7 @@ function fixture(t) {
     // The detached capture process can briefly retain its working directory on Windows.
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
-  const android = path.join(root, 'apps/android/android');
+  const android = path.join(root, 'apps/android');
   mkdirSync(android, { recursive: true });
   mkdirSync(path.join(root, 'scripts'), { recursive: true });
   copyFileSync(

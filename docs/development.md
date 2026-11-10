@@ -83,7 +83,7 @@
 
 构建与测试可直接执行官方命令；需要工程索引、引用分析、依赖源码、语义重构、交互调试或界面检查时，再按需使用 Android Studio 及其可用的 MCP 接口。IDE、命令行和可选脚本复用同一套 Gradle、Cargo 与 SDK 配置及构建任务。
 
-在 `apps/android/android` 目录执行：
+在 `apps/android` 目录执行：
 
 ```bash
 ./gradlew :nativeApp:assembleDebug
@@ -104,7 +104,7 @@ Gradle 从根目录 `package.json` 读取版本，从 Git 读取源码提交，�
 
 需要查看接近发布版的优化结果时可执行 `:nativeApp:assembleBenchmark`，使用相同源码与 release 优化配置、本机调试签名和独立包名 `org.yaqmc.android.benchmark`。输出在 `nativeApp/build/outputs/apk/benchmark/`，无需发行者私钥。
 
-正式版 `org.yaqmc.android` 的构建会检查既有签名指纹，以保证原用户能够覆盖升级。维护者按 [keystore.properties.example](../apps/android/android/keystore.properties.example)配置被忽略的 `keystore.properties`，执行 `:nativeApp:assembleRelease`。自行构建与测试使用 debug 或 benchmark 即可；独立发行 fork 时应配置自己的应用身份、签名与相应校验。
+正式版 `org.yaqmc.android` 的构建会检查既有签名指纹，以保证原用户能够覆盖升级。维护者按 [keystore.properties.example](../apps/android/keystore.properties.example)配置被忽略的 `keystore.properties`，执行 `:nativeApp:assembleRelease`。自行构建与测试使用 debug 或 benchmark 即可；独立发行 fork 时应配置自己的应用身份、签名与相应校验。
 
 从不含 `.git` 的源码归档构建时，增加 `-Pyaqmc.buildCommit=<归档对应的完整提交 SHA>`，或设置 `YAQMC_BUILD_COMMIT`。提交号为 40 位小写十六进制；普通 Git 克隆无需设置。
 
@@ -112,17 +112,17 @@ Gradle 从根目录 `package.json` 读取版本，从 Git 读取源码提交，�
 
 ## 工程结构
 
-| 目录                             | 内容                                      |
-| -------------------------------- | ----------------------------------------- |
-| `apps/android/android/nativeApp` | Kotlin / Compose 界面、Android 宿主和测试 |
-| `crates/yaqmc-android`           | Rust JNI 桥接                             |
-| `crates/yaqmc-core`              | 实际播放、队列、推荐会话与持久化          |
-| `crates/yaqmc-provider-api`      | 音乐提供器的数据结构与接口                |
-| `crates/yaqmc-provider-qqmusic`  | QQ 音乐接入                               |
-| `crates/yaqmc-protocol`          | 通信协议和 JVM 测试使用的契约样本         |
-| `assets`                         | 品牌资源                                  |
-| `scripts`、`.github`             | 可选构建工具和自动检查                    |
-| `docs`                           | 协议、许可证与来源资料                    |
+| 目录                            | 内容                                      |
+| ------------------------------- | ----------------------------------------- |
+| `apps/android/nativeApp`        | Kotlin / Compose 界面、Android 宿主和测试 |
+| `crates/yaqmc-android`          | Rust JNI 桥接                             |
+| `crates/yaqmc-core`             | 实际播放、队列、推荐会话与持久化          |
+| `crates/yaqmc-provider-api`     | 音乐提供器的数据结构与接口                |
+| `crates/yaqmc-provider-qqmusic` | QQ 音乐接入                               |
+| `crates/yaqmc-protocol`         | 通信协议和 JVM 测试使用的契约样本         |
+| `assets`                        | 品牌资源                                  |
+| `scripts`、`.github`            | 可选构建工具和自动检查                    |
+| `docs`                          | 协议、许可证与来源资料                    |
 
 Android Kotlin 源码位于 `nativeApp/src/main/java/org/yaqmc/android/`：
 
@@ -207,7 +207,7 @@ npm run provenance:enforce
 5. **整理用户发布页。** 标签指向已核对的提交，写好简短发布说明并准备 APK。预发布版本使用 Pre-release，正式版按授权设置发布状态；应用发布须有明确授权。
 6. **执行发布并交接。** 推送版本标签，上传 APK 并完成 Release 发布，向用户交付版本、发布链接及本机材料位置。发布后的检查由用户手动完成。
 
-应用内更新与反馈指向本仓库。稳定版默认不订阅预览；预览版可接收同通道更新及后续正式版，规则见 [AndroidUpdateChecker](../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/update/AndroidUpdateChecker.kt)。
+应用内更新与反馈指向本仓库。稳定版默认不订阅预览；预览版可接收同通道更新及后续正式版，规则见 [AndroidUpdateChecker](../apps/android/nativeApp/src/main/java/org/yaqmc/android/update/AndroidUpdateChecker.kt)。
 
 ## 按需参考
 

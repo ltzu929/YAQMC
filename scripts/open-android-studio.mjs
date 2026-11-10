@@ -10,7 +10,7 @@ import {
 } from './android-toolchain.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const android = path.join(root, 'apps/android/android');
+const android = path.join(root, 'apps/android');
 const args = process.argv.slice(2);
 const prepareOnly = args.includes('--prepare-only');
 const executableArgs = args.filter((arg) => arg !== '--prepare-only');
