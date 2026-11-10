@@ -1,6 +1,8 @@
-# QQ Music provider
+# QQ 音乐协议研究账本（历史）
 
-> [简体中文解读](zh-CN/qqmusic-provider.md) | **English protocol ledger**
+> 历史资料：保留 2026-08 的协议观察、固定研究来源及原英文记录。下文的端点、宿主行为、命令和验收状态属于当时的研究范围，包含已退出的桌面实现。
+>
+> 当前 Android 接入结构见[QQ 音乐提供器](zh-CN/qqmusic-provider.md)，开发与检查入口见[开发指南](development.md)。
 
 This document records the compatibility surface validated on 2026-08-12. It is an engineering record, not a
 claim that the endpoints below are a supported public SDK contract.
@@ -19,7 +21,7 @@ YAQMC does not render password fields, inspect credentials typed into the hosted
 bypass DRM or entitlements, or embed private first-party client secrets. OAuth/account code is implemented, but live
 account acceptance remains pending.
 
-## Current endpoint map
+## Historical endpoint map
 
 | Capability            | Compatibility surface                                     | Normalized result              |
 | --------------------- | --------------------------------------------------------- | ------------------------------ |

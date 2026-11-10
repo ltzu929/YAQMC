@@ -1,6 +1,8 @@
-# Official QQ Music interoperability evidence
+# Windows QQ Music interoperability evidence (historical)
 
 > [简体中文](zh-CN/qqmusic-official-interoperability.md) | **English**
+
+> Historical scope: Windows QQ Music 22.52, observed on 2026-08-14. The decisions below apply to that desktop investigation. Current Android integration is described in the [provider guide](zh-CN/qqmusic-provider.md).
 
 This page separates local evidence from reference research. It does not document a stable public QQ Music API.
 

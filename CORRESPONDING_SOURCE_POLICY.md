@@ -38,4 +38,4 @@ Rust 可使用 Cargo 自带的 `vendor --locked --versioned-dirs` 收集精确�
 
 包含 `@applemusic-like-lyrics/core` / `react` `0.5.2` 的历史 Web / 桌面二进制，仍需保留对应的 `AGPL-3.0-only` 声明和首选源码。该版本对应上游提交 `fd7ec2d597daa2a66a37ca5f3214d6757ec17cfa`；历史插件示例按各自锁文件与许可证处理。
 
-旧版发布工作流及 `scripts/ci/corresponding-source.mjs` 已退出，不能作为当前发布已完成源码归档的依据。历史说明可从 [Git 固定提交](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/CORRESPONDING_SOURCE_POLICY.md)回查；当前流程见[开发指南](apps/android/android/docs/development.md#公开预览发布流程)。
+旧版发布工作流及 `scripts/ci/corresponding-source.mjs` 已退出，不能作为当前发布已完成源码归档的依据。历史说明可从 [Git 固定提交](https://github.com/ltzu929/YAQMC/blob/b0b5acf9d91ebb5e677ee6a95b38318faa558e15/CORRESPONDING_SOURCE_POLICY.md)回查；当前流程见[开发指南](docs/development.md#版本与发布)。

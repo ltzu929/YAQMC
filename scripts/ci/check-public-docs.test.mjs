@@ -10,7 +10,7 @@ const temporaryParent = path.resolve(
   import.meta.dirname,
   '../../artifacts/android-native-comparison',
 );
-const primaryLinks = '[开发指南](apps/android/android/docs/development.md)';
+const primaryLinks = '[开发指南](docs/development.md)';
 
 async function fixture(t, extraFiles = {}, useGit = true) {
   await mkdir(temporaryParent, { recursive: true });
@@ -23,9 +23,9 @@ async function fixture(t, extraFiles = {}, useGit = true) {
   const files = {
     'README.md': `# Android 客户端\n\n仓库版本 0.1.1，当前不维护双语文档。\n${primaryLinks}\n`,
     '.gitignore':
-      '/AGENTS.md\n/apps/android/android/docs/project-plan.md\n/apps/android/android/docs/native-parity.md\n',
+      '/AGENTS.md\n/docs/project-plan.md\n/apps/android/android/docs/native-parity.md\n',
     LICENSE: 'Test fixture license',
-    'apps/android/android/docs/development.md': '# 开发指南\n',
+    'docs/development.md': '# 开发指南\n',
     ...extraFiles,
   };
   for (const [relative, content] of Object.entries(files)) {
@@ -46,25 +46,28 @@ test('accepts Chinese-only Android docs without legacy release pages or English 
 });
 
 test('requires the build guide in a checkout without local planning documents', async (t) => {
-  const root = await fixture(t, { 'apps/android/android/docs/development.md': null });
+  const root = await fixture(t, { 'docs/development.md': null });
   const { errors } = await checkPublicDocumentation(root);
-  assert.ok(errors.includes('Missing required file: apps/android/android/docs/development.md'));
+  assert.ok(errors.includes('Missing required file: docs/development.md'));
 });
 
 test('requires the README to expose the build guide', async (t) => {
   const root = await fixture(t, { 'README.md': '# Android\n' });
   const { errors } = await checkPublicDocumentation(root);
-  assert.ok(
-    errors.includes(
-      'README.md: missing primary document link apps/android/android/docs/development.md',
-    ),
-  );
+  assert.ok(errors.includes('README.md: missing primary document link docs/development.md'));
+});
+
+test('checks a relocated guide before the deleted legacy path is staged', async (t) => {
+  const legacyGuide = 'apps/android/android/docs/development.md';
+  const root = await fixture(t, { [legacyGuide]: '# Previous guide\n' });
+  await rm(path.join(root, legacyGuide));
+  assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 2 });
 });
 
 test('ignores local planning and agent files even when they exist', async (t) => {
   const root = await fixture(t, {
     'AGENTS.md': '[PROJECT_NAME]\n[本机入口](missing.md)\n',
-    'apps/android/android/docs/project-plan.md': 'C:\\Users\\example\\notes.md\n',
+    'docs/project-plan.md': 'C:\\Users\\example\\notes.md\n',
     'apps/android/android/docs/native-parity.md': '[截图](missing.png)\n',
   });
   assert.deepEqual(await checkPublicDocumentation(root), { errors: [], checkedDocuments: 2 });
@@ -72,13 +75,11 @@ test('ignores local planning and agent files even when they exist', async (t) =>
 
 test('rejects public links to files that only exist in the ignored local workspace', async (t) => {
   const root = await fixture(t, {
-    'README.md': `${primaryLinks}\n[计划](apps/android/android/docs/project-plan.md)\n`,
-    'apps/android/android/docs/project-plan.md': '# 本机计划\n',
+    'README.md': `${primaryLinks}\n[计划](docs/project-plan.md)\n`,
+    'docs/project-plan.md': '# 本机计划\n',
   });
   const { errors } = await checkPublicDocumentation(root);
-  assert.deepEqual(errors, [
-    'README.md: local link target is not published apps/android/android/docs/project-plan.md',
-  ]);
+  assert.deepEqual(errors, ['README.md: local link target is not published docs/project-plan.md']);
 });
 
 test('accepts directory links when their source files are published', async (t) => {

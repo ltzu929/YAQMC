@@ -4,52 +4,54 @@
 
 **轻量版 QQ 音乐，专注日常听歌。**
 
-基于 [YAQMC](https://github.com/YAQMC/YAQMC) 的非官方 Android 客户端，面向希望继续使用 QQ 音乐会员、又想要更简洁听歌体验的用户。
+继续使用自己的 QQ 音乐账号、会员曲库和歌单，在简洁的 Android 界面里浏览、播放和看歌词。
 
-[下载安卓版](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.5) · [版本记录](https://github.com/ltzu929/YAQMC/releases) · [问题反馈](https://github.com/ltzu929/YAQMC/issues)
+基于 [YAQMC](https://github.com/YAQMC/YAQMC) 开发的非官方客户端，使用 Kotlin / Jetpack Compose 原生界面。
+
+**[下载安卓版](https://github.com/ltzu929/YAQMC/releases/latest)** · [版本记录](https://github.com/ltzu929/YAQMC/releases) · [问题反馈](https://github.com/ltzu929/YAQMC/issues)
 
 ## 界面预览
 
-|                                                    首页与推荐                                                     |                                                    播放器与歌词                                                     |                                                     媒体库                                                      |
-| :---------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------: |
-| [<img src="assets/screenshots/home-zh.png" alt="中文首页与音乐推荐" width="280">](assets/screenshots/home-zh.png) | [<img src="assets/screenshots/player-zh.png" alt="中文播放器与歌词" width="280">](assets/screenshots/player-zh.png) | [<img src="assets/screenshots/library-zh.png" alt="中文媒体库" width="280">](assets/screenshots/library-zh.png) |
+真机截图稍后补充。
 
-首页与媒体库使用示例数据。
+## 核心亮点
 
-## 功能
-
-- QQ 音乐账号登录、会员信息、收藏和歌单管理。
-- 搜索歌曲，浏览推荐、专辑、歌手和音乐库，切换页面保留搜索条件与列表位置。
-- 独立播放页，封面与歌词左右滑动切换，支持逐字歌词与外观设置。
-- 播放队列、会员权益范围内的音质选择。
-- 后台播放、系统媒体控制、缓存管理和听歌统计。
-
-## 后续方向
-
-以 QQ 音乐作为日常主曲库，通过 B 站收藏夹补充 QQ 音乐没有的翻唱、现场等版本。计划读取用户选定的收藏夹，只播放视频中的音频。
-
-**B 站收藏音频尚未接入，当前安装包不包含此功能。**
+- **自己的音乐库**：登录 QQ 音乐账号，查看会员信息、收藏和歌单，选择账号权益内的音质。
+- **直接的浏览与播放**：搜索歌曲、歌手、专辑和歌单，浏览推荐与音乐库，切换入口保留搜索条件和列表位置。
+- **独立播放器**：封面与歌词左右滑动切换，播放队列支持下一首播放、移除和拖动排序。
+- **歌词与外观**：逐字歌词、翻译与罗马音显示，支持歌词预设、配色和背景设置。
+- **日常听歌所需**：后台播放、系统媒体控制、缓存管理和听歌统计。
 
 ## 下载与安装
 
-当前提供 **`0.1.5` 正式版**，下载入口见[发布页面](https://github.com/ltzu929/YAQMC/releases/tag/v0.1.5)。
+在[最新正式版](https://github.com/ltzu929/YAQMC/releases/latest)下载 `.apk` 并安装。希望体验预览版本时，可在[全部版本](https://github.com/ltzu929/YAQMC/releases)中选择标记为 Pre-release 的版本。
 
 - 系统：Android 8.0 及以上。
 - 架构：ARM64（`arm64-v8a`）。
-- 下载并安装发布页中的 `.apk` 文件；版本名称与日期可在该页面查看。
-- 支持覆盖安装，保留登录和本地数据。
+- 更新：本项目发行的后续版本支持覆盖安装，保留登录和本地数据。
+- 版本：发布日期、变化和安装包见对应 Release 页面。
 
-## 从源码构建
+## 使用与反馈
 
-界面使用 Kotlin / Jetpack Compose，底层复用 Rust Core。
+首次使用可从账号入口登录 QQ 音乐，再在媒体库查看收藏和歌单；也可以直接搜索、浏览推荐并播放歌曲。
 
-克隆完整仓库，在 Android Studio 中打开 `apps/android/android`。按[开发指南](apps/android/android/docs/development.md)配置 JDK、Android SDK / NDK 和 Rust 后，运行 `:nativeApp:assembleDebug` 即可生成包含完整 Rust Core 的开发版 APK。
+**歌曲与音质。** 可访问曲目和音质取决于账号会员、地区及原平台版权要求，已有 QQ 音乐会员权益继续由原账号提供。
 
-开发版使用独立包名和本机调试签名，无需维护者的私有密钥。构建命令、依赖版本和测试方法见开发指南。
+**覆盖安装。** 本项目的更新沿用包名和签名；其他发行者的同包名安装包需要核对签名是否匹配。
 
-## 反馈
+使用问题和建议请提交到 [Issues](https://github.com/ltzu929/YAQMC/issues)，附上应用版本、设备与系统版本、复现步骤和实际结果。截图与日志请移除账号凭据和私人信息。
 
-使用问题和建议请提交到 [Issues](https://github.com/ltzu929/YAQMC/issues)。请附上应用版本、系统版本和复现步骤，日志中不要包含账号凭据或私人信息。
+## 后续方向
+
+计划通过 B 站选定收藏夹补充 QQ 音乐没有的翻唱、现场等版本，只播放视频中的音频。这项功能目前仍在规划中。
+
+## 开发
+
+界面采用 Kotlin / Jetpack Compose，底层复用 Rust Core。完整的开发流程、工程结构、构建、测试与发布规范见[开发指南](docs/development.md)。
+
+在已有开发环境中，用 VS Code 打开仓库根目录，在 `apps/android/android` 执行 Gradle 的 `:nativeApp:assembleDebug` 任务即可构建开发版。
+
+开发版使用独立包名和本机调试签名，包含完整 Rust Core，无需维护者的私有密钥。
 
 ## 来源与许可
 

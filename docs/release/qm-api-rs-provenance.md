@@ -1,6 +1,8 @@
-# qm-api-rs provenance
+# qm-api-rs 来源审计记录
 
-Status: **PASS** at production revision
+> 适用范围：2026-09-06 对下述固定提交的来源审计。证据保留原范围，当前依赖以 [manifest](../../crates/yaqmc-provider-qqmusic/Cargo.toml) 和 [Cargo.lock](../../Cargo.lock) 为准，发布要求见[对应源码交付政策](../../CORRESPONDING_SOURCE_POLICY.md)。
+
+Recorded decision: **PASS** at reviewed revision
 `7d0f6e18b1d1d89a06cc5964e9c057acb0926ea5`.
 
 Repository: `https://github.com/YAQMC/qm-api-rs`. The crate declares
@@ -26,8 +28,9 @@ existing QMC source mappings and blob evidence therefore remain applicable.
 Immutable evidence and mappings are recorded in
 [provenance-ledger.json](provenance-ledger.json), including the crate license,
 history, source revisions, file mappings, notices, and reviewed blob hashes.
-The release gate additionally requires the checked-out dependency revision to
-match the Cargo pin and [provider readiness record](provider-readiness.json).
+For a release, compare the resolved dependency revision with the Cargo pin and the
+reviewed revision above. The [provider readiness record](provider-readiness.json)
+retains the historical cutover evidence.
 
 A build or live verification result does not substitute for provenance or
 corresponding-source delivery. Any dependency-pin change requires a new review

@@ -1,61 +1,43 @@
 # QQ 音乐提供器
 
-> **简体中文解读** | [English protocol ledger（唯一精确账本）](../qqmusic-provider.md)
+本文说明当前原生 Android 客户端的接入结构和维护边界。工程入口与全流程检查见[开发指南](../development.md)，依赖的精确版本以 [Cargo manifest](../../crates/yaqmc-provider-qqmusic/Cargo.toml) 和 [Cargo.lock](../../Cargo.lock) 为准。
 
-这份中文页说明边界和当前能力。所有精确 host/path、module/method、请求键、结果码、固定提交、许可证检测
-以及核对日期，以英文 [协议账本](../qqmusic-provider.md)为唯一事实源，避免复制两张高频变化的协议表后
-产生不一致。
+## 实现结构
 
-## 定位
+| 层次         | 职责与入口                                                                                                                                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Android 界面 | `NativeViewModel` 协调页面和操作，使用规范化模型展示搜索、详情、账号与音乐库                                                                                                                                                                           |
+| Android 宿主 | [CoreManager](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/core/CoreManager.kt) 管理 Core 与凭据回调；[OAuthActivity](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/OAuthActivity.kt) 承接授权页面      |
+| JNI 与 Core  | [yaqmc-android](../../crates/yaqmc-android/src/lib.rs) 桥接调用；Rust Core 管理实际播放、队列、推荐会话与持久化                                                                                                                                        |
+| 提供器接口   | [yaqmc-provider-api](../../crates/yaqmc-provider-api/src/lib.rs) 定义账号、目录、音源、歌词等边界                                                                                                                                                      |
+| QQ 音乐实现  | [adapter.rs](../../crates/yaqmc-provider-qqmusic/src/adapter.rs) 适配接口，[qqmusic.rs](../../crates/yaqmc-provider-qqmusic/src/qqmusic.rs) 协调提供器业务，[qmapi](../../crates/yaqmc-provider-qqmusic/src/qmapi/mod.rs) 接入固定版本的 `qqmusic-api` |
 
-腾讯公开 Open Platform 没有为此类桌面客户端提供通用 QQ 音乐目录/播放 API；腾讯云音乐素材是独立商业
-产品。YAQMC 使用腾讯托管的 QQ/微信 OAuth 和当前 QQ 音乐网页兼容接口，因此它是可能随时变化的兼容层，
-不是受支持的第三方 SDK。
+目录搜索和详情、清晰音源、歌词获取及解密、QMC 解密、部分凭据和原始账号写入由固定依赖承担；YAQMC 保留 OAuth / 手机授权编排、权益与音源选择、加密音源请求、写入结果协调、缓存和页面数据映射。具体分工随实际源码维护。
 
-YAQMC 不渲染密码框、不读取腾讯页面中输入的凭据、不导入浏览器 Cookie、不绕过 DRM/会员/地区权益，
-也不嵌入第一方私密客户端 secret。账号功能已实现，但真实账号写入验收仍显式 pending。
+## 账号与授权
 
-## 公开与账号能力
+Android 提供手机 QQ 授权和 QQ / 微信 OAuth 相关入口。手机授权由宿主处理官方 App 跳转与二维码流程；网页授权使用隔离的 Android `WebView`，回调、外部跳转与目标包按授权规则校验。当前宿主不再使用 Electron `BrowserWindow`。
 
-当前规范化能力包括基于 pinned `qm-api-rs` `search_by_type` 的歌曲/歌手/专辑分类搜索、song/album/singer
-typed 详情，以及通过 `singer.get_songs_list/get_album_list` 获取的歌手歌曲和专辑分页。React 与 Electron
-层不拼接上游 API 路由。其余公开能力包括访客歌单、榜单、QRC/LRC、清晰 vkey、账号授权 EVkey、封面
-缓存；账号扩展包括 OAuth、资料、收藏、自建/收藏歌单、条件性最近播放、权益和播放 vkey。
+Android 凭据通过 [CredentialStore](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/core/CredentialStore.kt) 与 [CredentialVault](../../apps/android/android/nativeApp/src/main/java/org/yaqmc/android/core/CredentialVault.kt) 加密保存，Rust 提供器管理会话恢复、续期和请求作用域。账号更换或退出时使旧账号请求和缓存结果失效；界面使用账号信息投影。
 
-QQ 和微信登录在受限制无痕 Electron `BrowserWindow` 打开 `graph.qq.com` 或 `open.weixin.qq.com`，只接受注册的
-`y.qq.com/portal/wx_redirect.html` 回调。Rust 校验 provider 类型、return URL、唯一 CSRF state 和 code，
-再交换会话。OAuth 窗口无账号命令权限、拒绝 popup，也不读取 cookie/password。手机号登录和浏览器
-会话导入不支持。
+新增账号链路时核对登录成功、拒绝、取消、超时、重新授权、冷启动恢复和续期失败等状态；真实账号写入按明确授权执行，结果与界面状态保持一致。
 
-账号 transport 只允许精确审核的腾讯 HTTPS host，禁系统代理和自动重定向，响应 `Set-Cookie` 按秘密处理。
-“参考源码相关、真实验收 pending”不能被宣传成官方或已稳定协议。
+## 目录、播放与歌词
 
-## 身份、权益与音质
+实体使用带提供器与类型的规范身份；原生引用中的必要字段在边界内传递。公开目录信息、账号权限、音源是否存在和实际播放结果分别处理。
 
-规范 ID 带实体前缀，如 `qqmusic:track:<MID>`；原生不透明引用另存数字 ID/media MID，UI 不能替换。
-目录 availability 和播放 capability 分开：有完整权限时进入音质候选；付费歌曲有官方片段时可试听；
-仅目录标注为付费时仍可进入队列，由认证解析器最终允许、回退或拒绝。
+音质候选按账号权益和实际返回结果解析，播放器显示实际音质。加密音源密钥用于原生解码路径，媒体缓存保存密文；请求、解密和可用性选择入口见 [qqmusic.rs](../../crates/yaqmc-provider-qqmusic/src/qqmusic.rs)、[QMC 适配](../../crates/yaqmc-provider-qqmusic/src/qmapi/qmc.rs)和[歌词适配](../../crates/yaqmc-provider-qqmusic/src/qmapi/lyric.rs)。
 
-音质顺序：自动取已授权最高完整音源；标准为 MP3/AAC；高品质先 320k；无损先 FLAC；Hi-Res 使用
-`RS01…flac`；臻品先账号授权 mflac，再向 Hi-Res/无损/高品质/标准/试听回退。实际 vkey/EVkey
-响应决定候选存在，不能只拼文件名。
+歌词规范化后提供逐行、逐字时间和翻译 / 罗马音。界面的时间偏移、定位和跟随行为由相关模型与 Compose 实现共同检查。
 
-加密 `AIM0…mflac` / `F0M0…mflac` 只有当前规范化权益允许时才请求 `GetEVkey/CgiGetEVkey`。空/拒绝
-结果是 unavailable，不是权益证明。ekey 只在原生内存中使用并可清零；缓存保存密文，decoder 读取/seek
-时解密。项目不生成 vkey、ekey、订阅、账号特权或 VMP 签名。
+## 缓存与接口变化
 
-## 研究与许可边界
+元数据、实体、歌词和账号数据使用不同缓存规则，时限与键版本见源码。账号数据按会话隔离，认证错误按实际结果反馈。
 
-协议行为研究使用固定提交并记录 GitHub 检出的许可证。GPL/LGPL 或无许可证仓库只用于定位和独立观察，
-没有复制或 vendoring。Flechazo/qmc 是用户提供的 QMC/mflac 行为与流式解密思路参考，仓库未提供许可证，
-因此 YAQMC 只核对行为并独立实现。实际复用的许可文本见
-[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)，人类致谢见
-[ACKNOWLEDGEMENTS.md](../../ACKNOWLEDGEMENTS.md)。
+上游响应变化时修改提供器边界、解析器和脱敏样本，保留明确的失败与重试行为；规范化接口变化同时核对协议样本、JNI 和 Kotlin 调用。确定性测试使用脱敏样本，真实服务及设备操作的覆盖范围分别记录，检查入口统一使用开发指南。
 
-## 稳定性
+## 历史研究与来源
 
-公开元数据缓存 15 分钟或 24 小时，歌词 30 天；账号页面使用短 TTL 且认证错误不跨会话 stale 回退。
-确定性 fixture 不含秘密。真实 provider ignored tests 覆盖公开搜索、专辑、榜单、歌词、封面、音源、下载、
-解码、真实时钟、暂停、seek 与输出；所有者控制的 OAuth/收藏/歌单矩阵仍待执行。
+[历史协议研究账本](../qqmusic-provider.md)保留 2026-08 的端点观察、请求字段、固定提交和研究来源；[Windows 官方客户端互操作记录](qqmusic-official-interoperability.md)保留当时桌面版本的观察。两者按各自日期和平台使用，当前 Android 行为从上述实现入口核对。
 
-接口变化时应只修改边界 DTO/parser 和脱敏 fixture，不能把上游字段直接推入 React。
+实际复用的来源与许可见[第三方声明](../../THIRD_PARTY_NOTICES.md)、[qm-api-rs 来源记录](../release/qm-api-rs-provenance.md)和[来源台账说明](../release/provenance.md)，致谢见[鸣谢](../../ACKNOWLEDGEMENTS.md)。

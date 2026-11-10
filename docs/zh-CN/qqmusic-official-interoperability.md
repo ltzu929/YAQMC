@@ -1,6 +1,8 @@
-# QQ 音乐官方客户端互操作证据
+# Windows QQ 音乐互操作记录（历史）
 
 > **简体中文** | [English](../qqmusic-official-interoperability.md)
+
+> 适用范围：2026-08-14 的 Windows QQ 音乐 22.52 桌面研究。以下观察与决策保留当时含义；当前 Android 的接入结构见[提供器说明](qqmusic-provider.md)。
 
 本文严格区分本机实证和开源参考，不把观察结果描述成稳定的 QQ 音乐公开 API。
 

@@ -25,7 +25,7 @@ val rustlsVerifierMaven = System.getenv("YAQMC_RUSTLS_VERIFIER_MAVEN_DIR")
     ?.takeIf { it.isNotBlank() }
     ?: localProperties.getProperty("yaqmc.rustlsVerifierMavenDir")
 require(!rustlsVerifierMaven.isNullOrBlank()) {
-    "Set yaqmc.rustlsVerifierMavenDir in local.properties to the pinned rustls-platform-verifier-android Maven directory, then sync Gradle again; see docs/development.md"
+    "Set yaqmc.rustlsVerifierMavenDir in local.properties to the pinned rustls-platform-verifier-android Maven directory, then sync Gradle again; see repository docs/development.md"
 }
 dependencyResolutionManagement.repositories.maven {
     name = "rustlsPlatformVerifier"

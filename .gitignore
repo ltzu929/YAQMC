@@ -20,9 +20,7 @@ release-android/
 
 # Local development notes
 /AGENTS.md
-/apps/android/android/docs/project-plan.md
-/apps/android/android/docs/native-parity.md
-/apps/android/android/docs/项目方向（本机）.md
+/docs/project-plan.md
 
 # Local validation evidence and scratch files
 artifacts/

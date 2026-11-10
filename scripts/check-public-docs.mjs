@@ -5,7 +5,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const primaryDocuments = ['README.md', 'apps/android/android/docs/development.md'];
+const primaryDocuments = ['README.md', 'docs/development.md'];
 const supplementaryDocuments = ['.github/PULL_REQUEST_TEMPLATE.md'];
 const forbiddenContent = [
   {
@@ -60,7 +60,7 @@ export async function checkPublicDocumentation(root = repositoryRoot) {
       errors.push(`Missing required file: ${required}`);
   }
 
-  const documents = publicFiles
+  const candidates = publicFiles
     ? [...publicFiles].filter((relative) => relative.endsWith('.md'))
     : [
         ...(await collectMarkdown(root)),
@@ -69,8 +69,13 @@ export async function checkPublicDocumentation(root = repositoryRoot) {
       ];
   if (!publicFiles) {
     for (const relative of supplementaryDocuments) {
-      if (await exists(path.join(root, relative))) documents.push(relative);
+      if (await exists(path.join(root, relative))) candidates.push(relative);
     }
+  }
+
+  const documents = [];
+  for (const relative of candidates) {
+    if (await exists(path.join(root, relative))) documents.push(relative);
   }
 
   for (const relative of documents) {
