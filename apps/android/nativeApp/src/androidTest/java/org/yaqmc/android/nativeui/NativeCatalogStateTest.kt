@@ -13,6 +13,87 @@ import org.yaqmc.android.R
 /** Fake Core responses exercise cancellation and write policies without touching a real account. */
 @UnstableApi
 class NativeCatalogStateTest {
+    @Test fun startupAccountSnapshotLoadsAccountHomeEvenWhenRestoreEventWasMissed() = runBlocking {
+        val signedIn = java.util.concurrent.atomic.AtomicBoolean(false)
+        val releaseRevalidation = CompletableDeferred<Unit>()
+        val fake = FakeCore { method, _ -> when (method) {
+            "provider_account_snapshot" -> if (signedIn.get()) authenticated() else JSONObject()
+            "provider_account_refresh" -> { releaseRevalidation.await(); JSONObject() }
+            "provider_home" -> {
+                val id = if (signedIn.get()) "account-home" else "guest-home"
+                JSONObject("""{"madeForYou":[{"id":"$id","title":"$id"}]}""")
+            }
+            else -> JSONObject()
+        } }
+        withModel(fake) { model ->
+            signedIn.set(true)
+            main { model.observe() }
+            await { model.page.value.page.sections.flatMap { it.cards }.any { it.id == "account-home" } }
+            assertFalse(fake.calls.last { it.first == "provider_home" }.second.getBoolean("refresh"))
+        }
+    }
+
+    @Test fun restoredAccountUsesCachedHomeWhileManualRefreshStillForcesNetwork() = runBlocking {
+        val signedIn = java.util.concurrent.atomic.AtomicBoolean(false)
+        val accountHomeStarted = CompletableDeferred<Unit>()
+        val releaseAccountHome = CompletableDeferred<Unit>()
+        val fake = FakeCore { method, _ -> when (method) {
+            "provider_account_snapshot" -> if (signedIn.get()) authenticated() else JSONObject()
+            "provider_home" -> {
+                val id = if (signedIn.get()) "account-home" else "guest-home"
+                if (signedIn.get() && !releaseAccountHome.isCompleted) {
+                    accountHomeStarted.complete(Unit)
+                    releaseAccountHome.await()
+                }
+                JSONObject("""{"madeForYou":[{"id":"$id","title":"$id"}]}""")
+            }
+            else -> JSONObject()
+        } }
+        withModel(fake) { model ->
+            signedIn.set(true)
+            main { model.onCoreEvent(1, "account://changed", "{}") }
+            accountHomeStarted.await()
+            assertTrue(model.page.value.loading)
+            assertEquals("guest-home", model.page.value.page.sections.single().cards.single().id)
+            releaseAccountHome.complete(Unit)
+            await { model.page.value.page.sections.flatMap { it.cards }.any { it.id == "account-home" } }
+            val homes = fake.calls.filter { it.first == "provider_home" }
+            assertEquals(2, homes.size)
+            assertFalse(homes.last().second.getBoolean("refresh"))
+            main { model.load(refresh = true) }
+            await { fake.calls.count { it.first == "provider_home" } == 3 && model.page.value.loaded && !model.page.value.loading }
+            assertTrue(fake.calls.last { it.first == "provider_home" }.second.getBoolean("refresh"))
+            main { model.refreshAccountSession() }?.join()
+            await { fake.calls.count { it.first == "provider_home" } == 4 && model.page.value.loaded && !model.page.value.loading }
+            assertFalse(fake.calls.last { it.first == "provider_home" }.second.getBoolean("refresh"))
+        }
+    }
+
+    @Test fun accountRevalidationDoesNotCancelAnInFlightHomeRefresh() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val fake = FakeCore { method, params -> when (method) {
+            "provider_account_snapshot" -> authenticated()
+            "provider_home" -> {
+                val id = if (params.getBoolean("refresh")) {
+                    started.complete(Unit)
+                    release.await()
+                    "fresh-home"
+                } else "cached-home"
+                JSONObject("""{"madeForYou":[{"id":"$id","title":"$id"}]}""")
+            }
+            else -> JSONObject()
+        } }
+        withModel(fake) { model ->
+            main { model.refreshAccount(); model.load(refresh = true) }
+            started.await()
+            main { model.refreshAccountSession() }?.join()
+            assertEquals(2, fake.calls.count { it.first == "provider_home" })
+            release.complete(Unit)
+            await { model.page.value.page.sections.flatMap { it.cards }.any { it.id == "fresh-home" } }
+        }
+    }
+
     @Test fun rootSwitchRestoresSearchCategoryAndChildBackStackWithoutAnotherRequest() = runBlocking {
         val fake = FakeCore { method, _ -> if (method == "provider_search") JSONObject("""{"items":[],"hasMore":false}""") else JSONObject() }
         withModel(fake) { model ->

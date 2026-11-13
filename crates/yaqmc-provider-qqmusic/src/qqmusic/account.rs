@@ -841,7 +841,7 @@ impl QQMusicAccountService {
         request: FavoriteMutationRequest,
     ) -> Result<FavoriteMutationResult, QQMusicError> {
         validate_favorite_request(&request)?;
-        let context = self.auth.capture_account_context().await?;
+        let context = self.auth.capture_account_mutation_context().await?;
         let mutation_key = format!("favorite:{}", request.track_id);
         let cached = {
             let mut state = self.mutations.lock().await;
@@ -1148,7 +1148,7 @@ impl QQMusicAccountService {
     ) -> Result<PlaylistMutationResult, QQMusicError> {
         request.title = validate_playlist_title(&request.title)?;
         validate_operation_id(&request.client_operation_id)?;
-        let context = self.auth.capture_account_context().await?;
+        let context = self.auth.capture_account_mutation_context().await?;
         let fingerprint = PlaylistMutationFingerprint::Create {
             title: request.title.clone(),
         };
@@ -1182,7 +1182,7 @@ impl QQMusicAccountService {
         provider_playlist_id(&request.playlist_id)?;
         request.title = validate_playlist_title(&request.title)?;
         validate_operation_id(&request.client_operation_id)?;
-        let context = self.auth.capture_account_context().await?;
+        let context = self.auth.capture_account_mutation_context().await?;
         let fingerprint = PlaylistMutationFingerprint::Rename {
             playlist_id: request.playlist_id.clone(),
             title: request.title.clone(),
@@ -1232,7 +1232,7 @@ impl QQMusicAccountService {
         provider_playlist_id(&request.playlist_id)?;
         provider_track_id(&request.track_id)?;
         validate_operation_id(&request.client_operation_id)?;
-        let context = self.auth.capture_account_context().await?;
+        let context = self.auth.capture_account_mutation_context().await?;
         let fingerprint = if add {
             PlaylistMutationFingerprint::AddTrack {
                 playlist_id: request.playlist_id.clone(),
@@ -1275,7 +1275,7 @@ impl QQMusicAccountService {
     ) -> Result<PlaylistMutationResult, QQMusicError> {
         provider_playlist_id(&request.playlist_id)?;
         validate_operation_id(&request.client_operation_id)?;
-        let context = self.auth.capture_account_context().await?;
+        let context = self.auth.capture_account_mutation_context().await?;
         let fingerprint = PlaylistMutationFingerprint::Delete {
             playlist_id: request.playlist_id.clone(),
         };
@@ -1313,7 +1313,7 @@ impl QQMusicAccountService {
             .filter(|id| *id > 0)
             .ok_or(QQMusicError::InvalidRequest)?;
         validate_operation_id(&request.client_operation_id)?;
-        let context = self.auth.capture_account_context().await?;
+        let context = self.auth.capture_account_mutation_context().await?;
         let fingerprint = PlaylistMutationFingerprint::Collect {
             playlist_id: request.playlist_id.clone(),
             collected: request.collected,

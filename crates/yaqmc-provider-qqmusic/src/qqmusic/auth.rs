@@ -1155,6 +1155,7 @@ pub(crate) struct QQMusicAuthService {
     active_attempt: Mutex<Option<ActiveAttempt>>,
     owner_signal: StdMutex<Option<OwnerSignal>>,
     lifecycle: Mutex<()>,
+    revalidation: Mutex<()>,
     generation: AtomicU64,
     generation_token: StdMutex<CancellationToken>,
     playback_epoch: Arc<PlaybackEpochClock>,
@@ -1186,6 +1187,7 @@ impl QQMusicAuthService {
             active_attempt: Mutex::new(None),
             owner_signal: StdMutex::new(None),
             lifecycle: Mutex::new(()),
+            revalidation: Mutex::new(()),
             generation: AtomicU64::new(0),
             generation_token: StdMutex::new(CancellationToken::new()),
             playback_epoch: Arc::new(PlaybackEpochClock::default()),
@@ -1200,6 +1202,8 @@ impl QQMusicAuthService {
 
     pub(crate) async fn revalidate(&self) -> Result<AccountSnapshot, QQMusicError> {
         let (generation, cancellation) = self.capture_generation();
+        let _revalidation = self.revalidation.lock().await;
+        self.ensure_generation_current(generation)?;
         let lifecycle = self.lifecycle.lock().await;
         self.ensure_generation_current(generation)?;
         let active_session = { self.active_session.read().await.clone() };
@@ -1223,6 +1227,14 @@ impl QQMusicAuthService {
                 };
             }
         };
+        let snapshot = self.snapshot.read().await.clone();
+        if !matches!(snapshot.account, AccountState::Authenticated { .. }) {
+            return Ok(snapshot);
+        }
+        let epoch = AccountEpoch {
+            generation,
+            scope: session.account_cache_scope.clone(),
+        };
         let now_ms = self.clock.now_ms();
         let mut renewed = false;
         if session.expires_at_ms <= now_ms {
@@ -1245,14 +1257,10 @@ impl QQMusicAuthService {
                 renewed = true;
             }
         }
-        let snapshot = self.snapshot.read().await.clone();
-        if !matches!(snapshot.account, AccountState::Authenticated { .. }) {
-            return Ok(snapshot);
-        }
-        let epoch = AccountEpoch {
-            generation,
-            scope: session.account_cache_scope.clone(),
-        };
+        self.ensure_current(&epoch).await?;
+        // A credential renewal writes to secure storage and must stay under the
+        // lifecycle lock. The ordinary validation request does not need it.
+        drop(lifecycle);
         let validated = match self
             .protocol
             .validate_session(&session, cancellation.clone())
@@ -1260,6 +1268,8 @@ impl QQMusicAuthService {
         {
             Ok(validated) => validated,
             Err(QQMusicError::AuthenticationExpired | QQMusicError::AuthorizationRejected) => {
+                let renewal_lifecycle = self.lifecycle.lock().await;
+                self.ensure_current(&epoch).await?;
                 // Renew an upstream-rejected key before asking for another login,
                 // including revocations that precede the recorded local expiry.
                 match self
@@ -1285,7 +1295,7 @@ impl QQMusicAuthService {
                         confirmed @ (QQMusicError::AuthenticationExpired
                         | QQMusicError::AuthorizationRejected),
                     ) => {
-                        drop(lifecycle);
+                        drop(renewal_lifecycle);
                         self.require_reauthentication_if_current(&epoch).await?;
                         return Err(confirmed);
                     }
@@ -1294,15 +1304,25 @@ impl QQMusicAuthService {
             }
             Err(error) => return Err(error),
         };
+        let _lifecycle = self.lifecycle.lock().await;
         self.ensure_current(&epoch).await?;
         if renewed {
             self.persist_revalidated_session(&mut session).await?;
             self.ensure_current(&epoch).await?;
         }
         *self.active_session.write().await = Some(session);
-        self.storage
-            .delete_provider_cache_kind(ACCOUNT_CACHE_KIND)
-            .map_err(|_| QQMusicError::Storage)?;
+        let account_changed = match &snapshot.account {
+            AccountState::Authenticated {
+                profile,
+                entitlement,
+            } => *profile != validated.profile || *entitlement != validated.entitlement,
+            _ => true,
+        };
+        if account_changed {
+            self.storage
+                .delete_provider_cache_kind(ACCOUNT_CACHE_KIND)
+                .map_err(|_| QQMusicError::Storage)?;
+        }
         if !self
             .publish_authenticated_if_current(generation, validated)
             .await
@@ -1448,6 +1468,17 @@ impl QQMusicAuthService {
             profile,
             entitlement,
         })
+    }
+
+    pub(crate) async fn capture_account_mutation_context(
+        &self,
+    ) -> Result<AuthenticatedAccountContext, QQMusicError> {
+        let (generation, _) = self.capture_generation();
+        let _revalidation = self.revalidation.lock().await;
+        self.ensure_generation_current(generation)?;
+        let context = self.capture_account_context().await?;
+        self.ensure_generation_current(generation)?;
+        Ok(context)
     }
 
     pub(crate) async fn ensure_current(&self, epoch: &AccountEpoch) -> Result<(), QQMusicError> {
@@ -3719,6 +3750,9 @@ mod tests {
         validation_errors: StdMutex<VecDeque<QQMusicError>>,
         oauth_exchange: StdMutex<Option<(OAuthLoginProvider, String)>>,
         refresh_count: AtomicUsize,
+        hold_refresh: AtomicBool,
+        refresh_entered: Notify,
+        refresh_release: Notify,
         refresh_result: StdMutex<Option<Result<qqmusic_api::Credential, QQMusicError>>>,
     }
 
@@ -3739,6 +3773,9 @@ mod tests {
                 validation_errors: StdMutex::new(VecDeque::new()),
                 oauth_exchange: StdMutex::new(None),
                 refresh_count: AtomicUsize::new(0),
+                hold_refresh: AtomicBool::new(false),
+                refresh_entered: Notify::new(),
+                refresh_release: Notify::new(),
                 refresh_result: StdMutex::new(None),
             }
         }
@@ -3871,6 +3908,10 @@ mod tests {
             _cancellation: CancellationToken,
         ) -> Result<qqmusic_api::Credential, QQMusicError> {
             self.refresh_count.fetch_add(1, Ordering::AcqRel);
+            if self.hold_refresh.load(Ordering::Acquire) {
+                self.refresh_entered.notify_one();
+                self.refresh_release.notified().await;
+            }
             assert_eq!(credential.refresh_token, "SYNTHETIC_REFRESH_TOKEN");
             assert_eq!(credential.refresh_key, "SYNTHETIC_REFRESH_KEY");
             self.refresh_result
@@ -4388,6 +4429,64 @@ mod tests {
                     .expect("session JSON");
             assert_eq!(persisted.cookie_header, current.cookie_header);
             assert_eq!(persisted.expires_at_ms, current.expires_at_ms);
+        }
+    }
+
+    #[tokio::test]
+    async fn logout_during_credential_renewal_does_not_restore_credentials() {
+        for locally_expired in [true, false] {
+            let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+            let credentials = Arc::new(RecordingCredentialStore::default());
+            let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+            let (service, _) = auth_service_with_clock(
+                Arc::clone(&protocol),
+                Arc::clone(&credentials),
+                clock.clone(),
+            );
+            let credential = refreshable_login_credential();
+            let candidate = crate::qmapi::credential::session_from_login_credential(
+                &credential,
+                clock.now_ms(),
+            )
+            .expect("login");
+            service
+                .promote_session(service.generation(), CancellationToken::new(), candidate)
+                .await
+                .expect("promote");
+            if locally_expired {
+                clock.advance(3_600_001);
+            } else {
+                protocol.fail_validation(QQMusicError::AuthenticationExpired);
+            }
+            let mut refreshed = credential;
+            refreshed.musickey = "SYNTHETIC_RENEWED_KEY".to_owned();
+            refreshed.musickey_create_time = (clock.now_ms() / 1_000) as i64;
+            *protocol.refresh_result.lock().expect("refresh result") = Some(Ok(refreshed));
+            protocol.hold_refresh.store(true, Ordering::Release);
+            let revalidation = {
+                let service = Arc::clone(&service);
+                tokio::spawn(async move { service.revalidate().await })
+            };
+            wait_for_notification(&protocol.refresh_entered).await;
+            let generation = service.generation();
+            let logout = {
+                let service = Arc::clone(&service);
+                tokio::spawn(async move { service.logout().await })
+            };
+            while service.generation() == generation {
+                tokio::task::yield_now().await;
+            }
+            protocol.refresh_release.notify_one();
+            assert!(matches!(
+                revalidation.await.expect("revalidation task"),
+                Err(QQMusicError::Cancelled)
+            ));
+            logout.await.expect("logout task").expect("logout");
+            assert!(credentials.value(ACTIVE_SESSION).is_none());
+            assert!(credentials
+                .value(crate::qmapi::credential::CREDENTIAL_V2)
+                .is_none());
+            assert_eq!(service.snapshot().await.state_name(), "guest");
         }
     }
 
@@ -5249,6 +5348,172 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn revalidation_does_not_block_existing_account_context() {
+        let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+        let credentials = Arc::new(RecordingCredentialStore::default());
+        credentials.seed(
+            ACTIVE_SESSION,
+            serde_json::to_string(&session("refreshable")).expect("session JSON"),
+        );
+        let service = auth_service(Arc::clone(&protocol), credentials);
+        service.restore().await.expect("restore");
+        protocol.block_validation(2);
+        let revalidation = {
+            let service = Arc::clone(&service);
+            tokio::spawn(async move { service.revalidate().await })
+        };
+        wait_for_notification(&protocol.validation_entered).await;
+
+        let mutation_started = Arc::new(Notify::new());
+        let mutation = {
+            let service = Arc::clone(&service);
+            let started = Arc::clone(&mutation_started);
+            tokio::spawn(async move {
+                started.notify_one();
+                service.capture_account_mutation_context().await
+            })
+        };
+        wait_for_notification(&mutation_started).await;
+        assert!(!mutation.is_finished());
+        let context =
+            tokio::time::timeout(Duration::from_secs(2), service.capture_account_context()).await;
+        protocol.validation_release.notify_one();
+        revalidation
+            .await
+            .expect("revalidation task")
+            .expect("revalidation");
+        mutation
+            .await
+            .expect("mutation task")
+            .expect("mutation context");
+        context
+            .expect("ongoing revalidation must not block playback or library reads")
+            .expect("existing account remains usable");
+    }
+
+    #[tokio::test]
+    async fn logout_during_revalidation_cannot_restore_the_old_account() {
+        let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+        let credentials = Arc::new(RecordingCredentialStore::default());
+        credentials.seed(
+            ACTIVE_SESSION,
+            serde_json::to_string(&session("refreshable")).expect("session JSON"),
+        );
+        let service = auth_service(Arc::clone(&protocol), credentials);
+        service.restore().await.expect("restore");
+        let old_context = service.capture_account_context().await.expect("account");
+        protocol.block_validation(2);
+        let revalidation = {
+            let service = Arc::clone(&service);
+            tokio::spawn(async move { service.revalidate().await })
+        };
+        wait_for_notification(&protocol.validation_entered).await;
+
+        let mutation_started = Arc::new(Notify::new());
+        let mutation = {
+            let service = Arc::clone(&service);
+            let started = Arc::clone(&mutation_started);
+            tokio::spawn(async move {
+                started.notify_one();
+                service.capture_account_mutation_context().await
+            })
+        };
+        wait_for_notification(&mutation_started).await;
+        let logout = tokio::time::timeout(Duration::from_secs(2), service.logout()).await;
+        protocol.validation_release.notify_one();
+        let result = revalidation.await.expect("revalidation task");
+
+        logout
+            .expect("logout must not wait for the network check")
+            .expect("logout");
+        assert!(matches!(result, Err(QQMusicError::Cancelled)));
+        assert!(matches!(
+            mutation.await.expect("mutation task"),
+            Err(QQMusicError::Cancelled)
+        ));
+        assert!(matches!(
+            service.ensure_current(&old_context.epoch).await,
+            Err(QQMusicError::Cancelled)
+        ));
+        assert_eq!(service.snapshot().await.state_name(), "guest");
+        assert!(service.current_session().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn concurrent_revalidations_remain_serialized() {
+        let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+        let credentials = Arc::new(RecordingCredentialStore::default());
+        credentials.seed(
+            ACTIVE_SESSION,
+            serde_json::to_string(&session("refreshable")).expect("session JSON"),
+        );
+        let service = auth_service(Arc::clone(&protocol), credentials);
+        service.restore().await.expect("restore");
+        protocol.block_validation(2);
+        let first = {
+            let service = Arc::clone(&service);
+            tokio::spawn(async move { service.revalidate().await })
+        };
+        wait_for_notification(&protocol.validation_entered).await;
+        let second = {
+            let service = Arc::clone(&service);
+            tokio::spawn(async move { service.revalidate().await })
+        };
+        tokio::task::yield_now().await;
+        assert_eq!(protocol.validation_count.load(Ordering::Acquire), 2);
+        protocol.validation_release.notify_one();
+        first
+            .await
+            .expect("first task")
+            .expect("first revalidation");
+        second
+            .await
+            .expect("second task")
+            .expect("second revalidation");
+        assert_eq!(protocol.validation_count.load(Ordering::Acquire), 3);
+    }
+
+    #[tokio::test]
+    async fn queued_mutation_does_not_capture_a_new_account_generation() {
+        let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+        let credentials = Arc::new(RecordingCredentialStore::default());
+        credentials.seed(
+            ACTIVE_SESSION,
+            serde_json::to_string(&session("refreshable")).expect("session JSON"),
+        );
+        let service = auth_service(protocol, credentials);
+        service.restore().await.expect("restore");
+        let lifecycle = service.lifecycle.lock().await;
+        let started = Arc::new(Notify::new());
+        let mutation = {
+            let service = Arc::clone(&service);
+            let started = Arc::clone(&started);
+            tokio::spawn(async move {
+                started.notify_one();
+                service.capture_account_mutation_context().await
+            })
+        };
+        wait_for_notification(&started).await;
+        while service.revalidation.try_lock().is_ok() {
+            tokio::task::yield_now().await;
+        }
+        let generation = service.generation();
+        let logout = {
+            let service = Arc::clone(&service);
+            tokio::spawn(async move { service.logout().await })
+        };
+        while service.generation() == generation {
+            tokio::task::yield_now().await;
+        }
+        drop(lifecycle);
+        assert!(matches!(
+            mutation.await.expect("mutation task"),
+            Err(QQMusicError::Cancelled)
+        ));
+        logout.await.expect("logout task").expect("logout");
+    }
+
+    #[tokio::test]
     async fn revalidate_refreshes_an_authenticated_snapshot_without_changing_identity_generation() {
         let protocol = Arc::new(FakeProtocol::new(Vec::new()));
         let credentials = Arc::new(RecordingCredentialStore::default());
@@ -5266,6 +5531,48 @@ mod tests {
         assert_eq!(refreshed.revision, restored.revision + 1);
         assert_eq!(service.generation(), generation);
         assert_eq!(protocol.validation_count.load(Ordering::Acquire), 2);
+    }
+
+    #[tokio::test]
+    async fn unchanged_revalidation_retains_account_cache_but_changed_rights_clear_it() {
+        let protocol = Arc::new(FakeProtocol::new(Vec::new()));
+        let credentials = Arc::new(RecordingCredentialStore::default());
+        credentials.seed(
+            ACTIVE_SESSION,
+            serde_json::to_string(&session("refreshable")).expect("session JSON"),
+        );
+        let (service, storage) = auth_service_with_storage(protocol, credentials);
+        service.restore().await.expect("restore");
+        storage
+            .put_json(
+                "qqmusic:account:fixture:home-v5",
+                ACCOUNT_CACHE_KIND,
+                &vec!["cached"],
+                60_000,
+            )
+            .expect("cache");
+
+        service.revalidate().await.expect("unchanged revalidation");
+        assert!(storage
+            .get_json::<Vec<String>>("qqmusic:account:fixture:home-v5", false)
+            .expect("cache read")
+            .is_some());
+
+        if let AccountState::Authenticated { entitlement, .. } =
+            &mut service.snapshot.write().await.account
+        {
+            entitlement.permitted_qualities.clear();
+        } else {
+            panic!("expected authenticated snapshot");
+        }
+        service
+            .revalidate()
+            .await
+            .expect("changed entitlement revalidation");
+        assert!(storage
+            .get_json::<Vec<String>>("qqmusic:account:fixture:home-v5", true)
+            .expect("cache read")
+            .is_none());
     }
 
     #[tokio::test]

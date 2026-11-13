@@ -1100,21 +1100,18 @@ impl QQMusicService {
     }
 
     pub async fn home(&self, refresh: bool) -> Result<HomeFeed, QQMusicError> {
+        let session = self.auth.current_session().await;
+        let (cache_key, _) = home_cache_location(session.as_ref());
+        if !refresh {
+            if let Some(feed) = self.cached_home(&cache_key).await? {
+                return Ok(feed);
+            }
+        }
         let _home_lock = self.home_guard.lock().await;
         let session = self.auth.current_session().await;
         let (cache_key, cache_kind) = home_cache_location(session.as_ref());
         if !refresh {
-            if let Some(feed) = self
-                .storage
-                .get_json::<HomeFeed>(&cache_key, false)
-                .map_err(|_| QQMusicError::Storage)?
-            {
-                tracing::info!(
-                    target: "qqmusic",
-                    songlists = feed.recommended_songlists.len(),
-                    "home feed served from cache"
-                );
-                self.remember_home_songs(&feed).await;
+            if let Some(feed) = self.cached_home(&cache_key).await? {
                 return Ok(feed);
             }
         }
@@ -1136,6 +1133,22 @@ impl QQMusicService {
                 Ok(feed)
             }
         }
+    }
+
+    async fn cached_home(&self, cache_key: &str) -> Result<Option<HomeFeed>, QQMusicError> {
+        let feed = self
+            .storage
+            .get_json::<HomeFeed>(cache_key, false)
+            .map_err(|_| QQMusicError::Storage)?;
+        if let Some(feed) = &feed {
+            tracing::info!(
+                target: "qqmusic",
+                songlists = feed.recommended_songlists.len(),
+                "home feed served from cache"
+            );
+            self.remember_home_songs(feed).await;
+        }
+        Ok(feed)
     }
 
     pub async fn discover(&self, refresh: bool) -> Result<DiscoverFeed, QQMusicError> {
@@ -1222,12 +1235,34 @@ impl QQMusicService {
     }
 
     async fn build_home(&self, session: Option<SessionRecord>) -> Result<HomeFeed, QQMusicError> {
-        let chart = self.client.toplist(DEFAULT_TOPLIST_ID, 18).await?;
-        let first = chart.tracks.first().ok_or(QQMusicError::NotFound)?;
-        let featured_album = match self.album(first.album.id.clone()).await {
-            Ok(album) => album,
-            Err(_) => album_from_songs(&first.album, &first.artists, vec![first.clone()]),
-        };
+        let session = session.map(QQSession::from);
+        let session_ref = session.as_ref();
+        let (
+            (chart, featured_album),
+            guess_result,
+            songlists_result,
+            daily_result,
+            new_songs_result,
+        ) = tokio::try_join!(
+            async {
+                let chart = self.client.toplist(DEFAULT_TOPLIST_ID, 18).await?;
+                let first = chart.tracks.first().ok_or(QQMusicError::NotFound)?;
+                let featured_album = match self.album(first.album.id.clone()).await {
+                    Ok(album) => album,
+                    Err(_) => album_from_songs(&first.album, &first.artists, vec![first.clone()]),
+                };
+                Ok::<_, QQMusicError>((chart, featured_album))
+            },
+            async { Ok::<_, QQMusicError>(self.client.guess_recommend(session_ref, 10).await) },
+            async { Ok::<_, QQMusicError>(self.client.recommend_songlists(session_ref, 6).await) },
+            async {
+                Ok::<_, QQMusicError>(match session_ref {
+                    Some(session) => Some(self.client.daily_songlist(session).await),
+                    None => None,
+                })
+            },
+            async { Ok::<_, QQMusicError>(self.client.new_song_recommend(session_ref, 30).await) },
+        )?;
         let first_half = chart.tracks.iter().take(9).cloned().collect::<Vec<_>>();
         let second_half = chart.tracks.iter().skip(9).cloned().collect::<Vec<_>>();
         let chart_artwork = chart.artwork.clone();
@@ -1270,9 +1305,7 @@ impl QQMusicService {
             .map(|(summary, artists, songs)| album_from_songs(&summary, &artists, songs))
             .collect();
 
-        let session = session.map(QQSession::from);
-        let session_ref = session.as_ref();
-        let guess_tracks = match self.client.guess_recommend(session_ref, 10).await {
+        let guess_tracks = match guess_result {
             Ok(tracks) => tracks,
             Err(error) => {
                 tracing::warn!(target: "qqmusic", %error, "home guess-you-like failed; falling back to new songs");
@@ -1315,22 +1348,20 @@ impl QQMusicService {
                 tracks: guess_tracks,
             }
         });
-        let recommended_songlists = match self.client.recommend_songlists(session_ref, 6).await {
+        let recommended_songlists = match songlists_result {
             Ok(songlists) => songlists,
             Err(error) => {
                 tracing::warn!(target: "qqmusic", %error, "home recommended songlists failed; leaving the section empty");
                 Vec::new()
             }
         };
-        let daily_songlist = match session_ref {
-            Some(session) => match self.client.daily_songlist(session).await {
-                Ok(playlist) if !playlist.tracks.is_empty() => Some(playlist),
-                Ok(_) => None,
-                Err(error) => {
-                    tracing::warn!(target: "qqmusic", %error, "home daily recommendation failed; leaving the section empty");
-                    None
-                }
-            },
+        let daily_songlist = match daily_result {
+            Some(Ok(playlist)) if !playlist.tracks.is_empty() => Some(playlist),
+            Some(Ok(_)) => None,
+            Some(Err(error)) => {
+                tracing::warn!(target: "qqmusic", %error, "home daily recommendation failed; leaving the section empty");
+                None
+            }
             None => None,
         };
         let mut radar_entrance: Vec<(u64, String)> = Vec::new();
@@ -1368,11 +1399,7 @@ impl QQMusicService {
             }
             _ => Vec::new(),
         };
-        let (new_song_disstid, new_song_tracks) = self
-            .client
-            .new_song_recommend(session_ref, 30)
-            .await
-            .unwrap_or_default();
+        let (new_song_disstid, new_song_tracks) = new_songs_result.unwrap_or_default();
         let new_song_songlist = (!new_song_tracks.is_empty()).then(|| {
             let artwork = new_song_tracks
                 .first()
@@ -1896,6 +1923,8 @@ struct QQMusicClient {
     http: Client,
     artwork_http: Client,
     catalog: qqmusic_api::Client,
+    #[cfg(test)]
+    musicu_url: Option<String>,
 }
 
 impl QQMusicClient {
@@ -1920,6 +1949,8 @@ impl QQMusicClient {
             http,
             artwork_http,
             catalog,
+            #[cfg(test)]
+            musicu_url: None,
         })
     }
 
@@ -2918,45 +2949,11 @@ impl QQMusicClient {
             .unwrap_or(&provider.track_id);
         let candidates = source_candidates(&provider.track_id, media_mid);
         let requested_candidates = candidates_for_request(preferred, entitlement, &candidates);
-        let mut encrypted_results = HashMap::new();
-        let mut encrypted_lookup_known = true;
-        if let Some(session) = session {
-            let encrypted_candidates = requested_candidates
-                .iter()
-                .filter(|candidate| candidate.encrypted)
-                .cloned()
-                .collect::<Vec<_>>();
-            if !encrypted_candidates.is_empty() {
-                encrypted_results = match self
-                    .resolve_encrypted_sources(
-                        &provider.track_id,
-                        session,
-                        &encrypted_candidates,
-                        &epoch_guard,
-                        authenticated_transport,
-                    )
-                    .await
-                {
-                    Ok(results) => results,
-                    Err(QQMusicError::Cancelled) => return Err(QQMusicError::Cancelled),
-                    Err(QQMusicError::AuthenticationExpired) => {
-                        return Err(QQMusicError::AuthenticationExpired)
-                    }
-                    Err(error) => {
-                        encrypted_lookup_known = false;
-                        tracing::warn!(
-                            target: "qqmusic",
-                            error = %error,
-                            "encrypted source lookup failed; continuing with clear-source fallback"
-                        );
-                        encrypted_candidates
-                            .iter()
-                            .map(|candidate| (candidate.filename.clone(), None))
-                            .collect()
-                    }
-                };
-            }
-        }
+        let encrypted_candidates = requested_candidates
+            .iter()
+            .filter(|candidate| candidate.encrypted)
+            .cloned()
+            .collect::<Vec<_>>();
         let clear_candidates = requested_candidates
             .iter()
             .filter(|candidate| !candidate.encrypted)
@@ -2974,50 +2971,99 @@ impl QQMusicClient {
             authenticated = session.is_some(),
             "prepared QQ Music playback candidates"
         );
-        #[cfg(not(test))]
-        let qmapi_clear_urls = if filenames.is_empty() {
-            Some(HashMap::new())
-        } else {
-            Some(
-                crate::qmapi::vkey::clear_playable_urls(
-                    &provider.track_id,
-                    media_mid,
-                    &filenames,
-                    session.map(|session| session.uin.as_str()),
-                    session.map(|session| session.cookie_header.as_str()),
-                )
-                .await?,
-            )
-        };
-        #[cfg(test)]
-        let qmapi_clear_urls: Option<HashMap<String, String>> = None;
-        let response: VkeyEnvelope = if qmapi_clear_urls.is_some() || filenames.is_empty() {
-            VkeyEnvelope::default()
-        } else {
-            let song_mids = vec![provider.track_id.clone(); filenames.len()];
-            let song_types = vec![0_u8; filenames.len()];
-            let uin = session.map_or("0", |session| session.uin.as_str());
-            let payload = json!({
-                "comm": { "uin": uin, "format": "json", "ct": 24, "cv": 0 },
-                "req_0": {
-                    "module": "vkey.GetVkeyServer",
-                    "method": "CgiGetVkey",
-                    "param": {
-                        "guid": stable_guid(),
-                        "songmid": song_mids,
-                        "songtype": song_types,
-                        "uin": uin,
-                        "loginflag": 1,
-                        "platform": "20",
-                        "filename": filenames.clone()
+        let encrypted_lookup = async {
+            let mut known = true;
+            let results = if let Some(session) =
+                session.filter(|_| !encrypted_candidates.is_empty())
+            {
+                match self
+                    .resolve_encrypted_sources(
+                        &provider.track_id,
+                        session,
+                        &encrypted_candidates,
+                        &epoch_guard,
+                        authenticated_transport,
+                    )
+                    .await
+                {
+                    Ok(results) => results,
+                    Err(QQMusicError::Cancelled) => return Err(QQMusicError::Cancelled),
+                    Err(QQMusicError::AuthenticationExpired) => {
+                        return Err(QQMusicError::AuthenticationExpired)
+                    }
+                    Err(error) => {
+                        known = false;
+                        tracing::warn!(
+                            target: "qqmusic",
+                            error = %error,
+                            "encrypted source lookup failed; continuing with clear-source fallback"
+                        );
+                        encrypted_candidates
+                            .iter()
+                            .map(|candidate| (candidate.filename.clone(), None))
+                            .collect()
                     }
                 }
-            });
-            self.send_json("playback.resolve", || {
-                self.musicu_request(&payload, session)
-            })
-            .await?
+            } else {
+                HashMap::new()
+            };
+            Ok::<_, QQMusicError>((results, known))
         };
+        let clear_lookup = async {
+            #[cfg(not(test))]
+            let qmapi_clear_urls = if filenames.is_empty() {
+                Some(HashMap::new())
+            } else {
+                Some(
+                    crate::qmapi::vkey::clear_playable_urls(
+                        &provider.track_id,
+                        media_mid,
+                        &filenames,
+                        session.map(|session| session.uin.as_str()),
+                        session.map(|session| session.cookie_header.as_str()),
+                    )
+                    .await?,
+                )
+            };
+            #[cfg(test)]
+            let qmapi_clear_urls: Option<HashMap<String, String>> = None;
+            let response: VkeyEnvelope = if qmapi_clear_urls.is_some() || filenames.is_empty() {
+                VkeyEnvelope::default()
+            } else {
+                let song_mids = vec![provider.track_id.clone(); filenames.len()];
+                let song_types = vec![0_u8; filenames.len()];
+                let uin = session.map_or("0", |session| session.uin.as_str());
+                let payload = json!({
+                    "comm": { "uin": uin, "format": "json", "ct": 24, "cv": 0 },
+                    "req_0": {
+                        "module": "vkey.GetVkeyServer",
+                        "method": "CgiGetVkey",
+                        "param": {
+                            "guid": stable_guid(),
+                            "songmid": song_mids,
+                            "songtype": song_types,
+                            "uin": uin,
+                            "loginflag": 1,
+                            "platform": "20",
+                            "filename": filenames.clone()
+                        }
+                    }
+                });
+                self.send_json("playback.resolve", || {
+                    self.musicu_request(&payload, session)
+                })
+                .await?
+            };
+            Ok::<_, QQMusicError>((qmapi_clear_urls, response))
+        };
+        // Keep the existing error priority: account cancellation or expiry from
+        // the encrypted lookup wins over an earlier clear-lookup failure.
+        let ((mut encrypted_results, encrypted_lookup_known), clear_result) = tokio::try_join!(
+            biased;
+            encrypted_lookup,
+            async { Ok::<_, QQMusicError>(clear_lookup.await) },
+        )?;
+        let (qmapi_clear_urls, response) = clear_result?;
         epoch_guard
             .validate()
             .map_err(|_| QQMusicError::Cancelled)?;
@@ -3295,9 +3341,13 @@ impl QQMusicClient {
     }
 
     fn musicu_request(&self, payload: &Value, session: Option<&QQSession>) -> RequestBuilder {
+        #[cfg(test)]
+        let url = self.musicu_url.as_deref().unwrap_or(QQ_MUSICU_URL);
+        #[cfg(not(test))]
+        let url = QQ_MUSICU_URL;
         let request = self
             .http
-            .post(QQ_MUSICU_URL)
+            .post(url)
             .header(header::REFERER, "https://y.qq.com/")
             .header(header::ORIGIN, "https://y.qq.com")
             .json(payload);
@@ -5525,6 +5575,255 @@ mod tests {
         }
     }
 
+    struct SourceLookupTransport {
+        gate: Option<Arc<tokio::sync::Barrier>>,
+        delay: Duration,
+        code: i64,
+        encrypted_available: bool,
+    }
+
+    #[async_trait::async_trait]
+    impl QqTransport for SourceLookupTransport {
+        async fn execute(
+            &self,
+            request: TransportRequest,
+        ) -> Result<TransportResponse, QQMusicError> {
+            if let Some(gate) = &self.gate {
+                gate.wait().await;
+            }
+            tokio::time::sleep(self.delay).await;
+            let items = if self.encrypted_available {
+                vec![json!({
+                    "filename": "F0M0SANITIZED_MEDIA_MID.mflac",
+                    "result": 0,
+                    "purl": "fixture.mflac?vkey=fixture",
+                    "ekey": "fixture-ekey"
+                })]
+            } else {
+                Vec::new()
+            };
+            Ok(TransportResponse {
+                status: reqwest::StatusCode::OK,
+                final_url: request.url,
+                headers: HeaderMap::new(),
+                body: serde_json::to_vec(&json!({
+                    (QQ_EVKEY_MODULE_KEY): {"code": self.code, "data": {"midurlinfo": items}}
+                }))
+                .expect("encrypted response"),
+            })
+        }
+    }
+
+    async fn source_lookup_test_client(
+        gate: Option<Arc<tokio::sync::Barrier>>,
+        delay: Duration,
+    ) -> (QQMusicClient, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback listener");
+        let address = listener.local_addr().expect("loopback address");
+        let app = Router::new().route(
+            "/musicu",
+            axum::routing::post(move |axum::Json(payload): axum::Json<Value>| {
+                let gate = gate.clone();
+                async move {
+                    if let Some(gate) = gate {
+                        gate.wait().await;
+                    }
+                    tokio::time::sleep(delay).await;
+                    let filenames = payload["req_0"]["param"]["filename"]
+                        .as_array()
+                        .expect("clear candidates");
+                    let items = filenames
+                        .iter()
+                        .map(|name| json!({"result": 0, "purl": format!("{}?vkey=fixture", name.as_str().unwrap())}))
+                        .collect::<Vec<_>>();
+                    axum::Json(json!({
+                        "code": 0,
+                        "req_0": {"code": 0, "data": {
+                            "sip": ["https://isure.stream.qqmusic.qq.com/"],
+                            "midurlinfo": items
+                        }}
+                    }))
+                }
+            }),
+        );
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("source test server")
+        });
+        let mut client = QQMusicClient::new().expect("source test client");
+        client.http = Client::builder().no_proxy().build().expect("local client");
+        client.musicu_url = Some(format!("http://{address}/musicu"));
+        (client, server)
+    }
+
+    fn source_lookup_song() -> Song {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../tests/fixtures/qqmusic/search-song.json"))
+                .expect("search fixture");
+        let raw =
+            serde_json::from_value(fixture.pointer("/data/song/list/0").cloned().expect("song"))
+                .expect("song DTO");
+        normalize_new_song(raw).expect("normalized song")
+    }
+
+    fn source_lookup_entitlement() -> AccountEntitlement {
+        AccountEntitlement {
+            tier: EntitlementTier::Free,
+            membership: MembershipState::Active,
+            expires_at_ms: None,
+            secondary_entitlements: Vec::new(),
+            permitted_qualities: vec![
+                AudioQuality::Standard,
+                AudioQuality::High,
+                AudioQuality::Lossless,
+            ],
+            observed_maximum_quality: Some(AudioQuality::Lossless),
+            restrictions: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn source_lookup_falls_back_to_clear_when_encrypted_is_unavailable() {
+        let (client, server) = source_lookup_test_client(None, Duration::ZERO).await;
+        let session = QQSession {
+            uin: "10001".to_owned(),
+            cookie_header: "qm_keyst=fixture".to_owned(),
+        };
+        for code in [0, 2_000] {
+            let transport = SourceLookupTransport {
+                gate: None,
+                delay: Duration::ZERO,
+                code,
+                encrypted_available: false,
+            };
+            let source = client
+                .resolve_source(
+                    &source_lookup_song(),
+                    AudioQualityPreference::Lossless,
+                    Some(&session),
+                    &source_lookup_entitlement(),
+                    PlaybackEpochGuard::unrestricted(),
+                    &transport,
+                )
+                .await
+                .expect("clear source resolves");
+            assert_eq!(source.quality_label, "lossless-flac");
+            assert!(matches!(source.location, PlaybackLocation::Http { .. }));
+        }
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn source_lookups_start_together_and_preserve_encrypted_priority() {
+        let gate = Arc::new(tokio::sync::Barrier::new(2));
+        let (client, server) =
+            source_lookup_test_client(Some(Arc::clone(&gate)), Duration::ZERO).await;
+        let transport = SourceLookupTransport {
+            gate: Some(gate),
+            delay: Duration::ZERO,
+            code: 0,
+            encrypted_available: true,
+        };
+        let session = QQSession {
+            uin: "10001".to_owned(),
+            cookie_header: "qm_keyst=fixture".to_owned(),
+        };
+        let source = tokio::time::timeout(
+            Duration::from_secs(2),
+            client.resolve_source(
+                &source_lookup_song(),
+                AudioQualityPreference::Lossless,
+                Some(&session),
+                &source_lookup_entitlement(),
+                PlaybackEpochGuard::unrestricted(),
+                &transport,
+            ),
+        )
+        .await
+        .expect("both source requests must start together")
+        .expect("source resolves");
+        assert_eq!(source.quality_label, "lossless-mflac");
+        assert!(matches!(
+            source.location,
+            PlaybackLocation::EncryptedHttp { .. }
+        ));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn source_lookup_expired_account_does_not_wait_for_slow_clear_lookup() {
+        let gate = Arc::new(tokio::sync::Barrier::new(2));
+        let (client, server) =
+            source_lookup_test_client(Some(Arc::clone(&gate)), Duration::from_secs(5)).await;
+        let transport = SourceLookupTransport {
+            gate: Some(gate),
+            delay: Duration::ZERO,
+            code: 1_000,
+            encrypted_available: false,
+        };
+        let session = QQSession {
+            uin: "10001".to_owned(),
+            cookie_header: "qm_keyst=fixture".to_owned(),
+        };
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            client.resolve_source(
+                &source_lookup_song(),
+                AudioQualityPreference::Lossless,
+                Some(&session),
+                &source_lookup_entitlement(),
+                PlaybackEpochGuard::unrestricted(),
+                &transport,
+            ),
+        )
+        .await
+        .expect("expired account must not wait for clear source");
+        assert!(matches!(result, Err(QQMusicError::AuthenticationExpired)));
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn source_lookup_preserves_account_expiry_when_clear_lookup_fails_first() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback listener");
+        let address = listener.local_addr().expect("loopback address");
+        let app = Router::new().route("/musicu", axum::routing::post(|| async { "invalid JSON" }));
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("source test server")
+        });
+        let mut client = QQMusicClient::new().expect("client");
+        client.http = Client::builder().no_proxy().build().expect("local client");
+        client.musicu_url = Some(format!("http://{address}/musicu"));
+        let transport = SourceLookupTransport {
+            gate: None,
+            delay: Duration::from_millis(450),
+            code: 1_000,
+            encrypted_available: false,
+        };
+        let session = QQSession {
+            uin: "10001".to_owned(),
+            cookie_header: "qm_keyst=fixture".to_owned(),
+        };
+        let result = client
+            .resolve_source(
+                &source_lookup_song(),
+                AudioQualityPreference::Lossless,
+                Some(&session),
+                &source_lookup_entitlement(),
+                PlaybackEpochGuard::unrestricted(),
+                &transport,
+            )
+            .await;
+        assert!(matches!(result, Err(QQMusicError::AuthenticationExpired)));
+        server.abort();
+    }
+
     #[tokio::test]
     async fn typed_search_uses_pinned_transport_params_and_maps_each_kind() {
         let transport = Arc::new(TypedSearchTransport::default());
@@ -5537,6 +5836,7 @@ mod tests {
             http: Client::new(),
             artwork_http: Client::new(),
             catalog,
+            musicu_url: None,
         };
 
         let song = client
@@ -5944,7 +6244,80 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn public_catalog_does_not_use_the_account_transport() {
+    async fn home_rebuild_requests_independent_sections_concurrently() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("loopback listener");
+        let address = listener.local_addr().expect("loopback address");
+        let arrivals = Arc::new(AtomicUsize::new(0));
+        let gate = Arc::new(tokio::sync::Barrier::new(3));
+        let app = Router::new().route(
+            "/musicu",
+            axum::routing::post({
+                let arrivals = Arc::clone(&arrivals);
+                move |axum::Json(payload): axum::Json<Value>| {
+                    let arrivals = Arc::clone(&arrivals);
+                    let gate = Arc::clone(&gate);
+                    async move {
+                        let module = payload["req_1"]["module"].as_str().unwrap_or_default();
+                        let bit = match module {
+                            "musicToplist.ToplistInfoServer" => 1,
+                            "newsong.NewSongServer" => 2,
+                            "music.playlist.PlaylistSquare" => 4,
+                            _ => panic!("unexpected home request: {module}"),
+                        };
+                        if arrivals.fetch_or(bit, Ordering::SeqCst) & bit == 0 {
+                            gate.wait().await;
+                        }
+                        let song = json!({ "mid": "fixture", "title": "Fixture song" });
+                        let data = match bit {
+                            1 => json!({ "data": { "title": "Fixture chart" }, "songInfoList": [song] }),
+                            2 => json!({ "songlist": [song] }),
+                            _ => json!({ "List": [{ "Playlist": { "basic": { "tid": 123, "dissname": "Fixture playlist" } } }] }),
+                        };
+                        axum::Json(json!({ "code": 0, "req_1": { "code": 0, "data": data } }))
+                    }
+                }
+            }),
+        );
+        let server =
+            tokio::spawn(
+                async move { axum::serve(listener, app).await.expect("home test server") },
+            );
+        let root = tempfile::tempdir().expect("temp root");
+        let storage = Arc::new(
+            StorageService::open(root.path().join("data"), root.path().join("cache"))
+                .expect("storage"),
+        );
+        let mut service = QQMusicService::new(
+            storage,
+            Arc::new(MemoryCredentialStore::default()),
+            root.path().join("fixtures"),
+        )
+        .expect("service");
+        service.client.http = Client::builder().no_proxy().build().expect("local client");
+        service.client.musicu_url = Some(format!("http://{address}/musicu"));
+
+        let feed = tokio::time::timeout(Duration::from_secs(3), service.home(false))
+            .await
+            .expect("independent requests must reach the server together")
+            .expect("home feed");
+
+        assert_eq!(arrivals.load(Ordering::SeqCst), 7);
+        assert_eq!(feed.guess_songlist.expect("guess section").tracks.len(), 1);
+        assert_eq!(feed.recommended_songlists.len(), 1);
+        assert_eq!(
+            feed.new_song_songlist
+                .expect("new songs section")
+                .tracks
+                .len(),
+            1
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn home_cached_public_catalog_does_not_wait_for_a_rebuild() {
         let root = tempfile::tempdir().expect("temp root");
         let storage = Arc::new(
             StorageService::open(root.path().join("data"), root.path().join("cache"))
@@ -6004,7 +6377,11 @@ mod tests {
         )
         .expect("service");
 
-        let home = service.home(false).await.expect("cached public home");
+        let _rebuild = service.home_guard.lock().await;
+        let home = tokio::time::timeout(Duration::from_secs(1), service.home(false))
+            .await
+            .expect("fresh cached home should not wait for an unrelated rebuild")
+            .expect("cached public home");
 
         assert_eq!(home.featured.album.id, "qqmusic:album:fixture");
         assert_eq!(calls.load(Ordering::Acquire), 0);

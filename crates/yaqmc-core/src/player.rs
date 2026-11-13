@@ -1452,6 +1452,7 @@ impl PlayerService {
         allow_runtime_expiry_retry: bool,
         required_session: Option<u64>,
     ) -> Result<PlayerSnapshot, PlayerError> {
+        let load_started = Instant::now();
         self.runtime_expiry_retry_available
             .store(allow_runtime_expiry_retry, Ordering::Release);
         let (song, start_snapshot, generation, session) = {
@@ -1502,10 +1503,12 @@ impl PlayerService {
         let _ = self.audio.stop();
         self.publish("player.track", &start_snapshot);
 
+        let resolve_started = Instant::now();
         let resolved = match self.resolver.resolve(&song).await {
             Ok(source) => source,
             Err(error) => return self.fail_load(generation, &error).await,
         };
+        let resolve_ms = resolve_started.elapsed().as_millis() as u64;
         if generation != self.load_generation.load(Ordering::Acquire) {
             return Ok(self.snapshot().await);
         }
@@ -1521,6 +1524,7 @@ impl PlayerService {
             resolved = ?failed_selection.resolved_quality, preview = failed_selection.preview,
             "preparing selected playback source");
         let mut source_guard = resolved.epoch_guard.clone();
+        let prepare_started = Instant::now();
         let mut preparation = match self.preparer.prepare(resolved).await {
             Ok(source) => Ok(source),
             Err(PlaybackSourceError::UrlExpired) if allow_runtime_expiry_retry => {
@@ -1642,6 +1646,8 @@ impl PlayerService {
                 .fail_load(generation, &PlaybackSourceError::Cancelled)
                 .await;
         }
+        let prepare_ms = prepare_started.elapsed().as_millis() as u64;
+        let output_started = Instant::now();
         prepared.load_generation = generation;
         let metadata = match self.audio.load(&prepared) {
             Ok(metadata) => metadata,
@@ -1788,6 +1794,15 @@ impl PlayerService {
         };
         self.publish("player.playback", &snapshot);
         self.watch_epoch_invalidation(prepared.epoch_guard);
+        tracing::info!(
+            target: "player.startup",
+            source_resolution_ms = resolve_ms,
+            media_preparation_ms = prepare_ms,
+            output_load_and_recovery_ms = output_started.elapsed().as_millis() as u64,
+            total_ms = load_started.elapsed().as_millis() as u64,
+            autoplay,
+            "playback load completed"
+        );
         Ok(snapshot)
     }
 

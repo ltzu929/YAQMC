@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const BUILD_TOOLS_VERSION = '36.0.0';
-const PACKAGE_NAME = 'org.yaqmc.android';
+const PACKAGE_NAME = 'top.ltzu.yaqmc';
 // Public certificate identity of the existing personal release, not key material.
 export const RELEASE_CERTIFICATE_SHA256 =
   '2ca3123c8223156ed5e40de5c90299a43a354a8ca0ef1ce75a029e68e345097b';

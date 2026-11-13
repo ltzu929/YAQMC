@@ -150,7 +150,9 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (route.value.kind == "statistics") loadStatistics(quiet = true)
         action {
             snapshots.trySend(core.objectResult("player_snapshot").toString())
+            val before = account.value.revision to account.value.state
             refreshAccount()
+            if (before != (account.value.revision to account.value.state) && route.value.kind == "home") load(keepContent = true)
             startAccountRevalidation()
             if (route.value.kind in setOf("favorites", "recent", "account-playlists", "account-playlist")) load(refresh = true)
             _quality.value = core.objectResult("provider_status", provider()).text("preferredQuality", "automatic")
@@ -190,7 +192,8 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
                     refreshAccount()
                     if (before != (account.value.revision to account.value.state)) {
                         pageCache.clear()
-                        if (route.value.kind in setOf("home", "favorites", "recent", "account-playlists", "account-playlist")) load(refresh = true)
+                        val home = route.value.kind == "home"
+                        if (route.value.kind in setOf("home", "favorites", "recent", "account-playlists", "account-playlist")) load(refresh = !home, keepContent = home)
                     }
                 }
             }
@@ -286,7 +289,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun selectDiscoverTab(tab: String) { _discoverTab.value = tab }
 
-    fun load(refresh: Boolean = false, more: Boolean = false) {
+    fun load(refresh: Boolean = false, more: Boolean = false, keepContent: Boolean = false) {
         if (more && (_page.value.loading || _page.value.loadingMore || !_page.value.page.hasMore)) return
         pageJob?.cancel()
         val target = _route.value
@@ -301,7 +304,7 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
         if (!more) pageNumber = 1
         _page.value = when {
             more -> old.copy(loadingMore = true, moreError = null)
-            refresh && old.loaded -> old.copy(loading = true, error = null, loadingMore = false, moreError = null)
+            (refresh || keepContent) && old.loaded -> old.copy(loading = true, error = null, loadingMore = false, moreError = null)
             else -> PageState(CatalogPage(titleFor(target.kind)), loading = true)
         }
         pageJob = viewModelScope.launch {
@@ -874,10 +877,15 @@ internal class NativeViewModel(application: Application, val core: NativeCoreApi
 
     fun refreshAccountSession() = accountAction {
         lastAccountRefreshAt = android.os.SystemClock.elapsedRealtime()
+        val wasAuthenticated = account.value.authenticated
         core.invoke("provider_account_refresh", provider())
         refreshAccount()
         pageCache.clear()
-        if (route.value.kind !in setOf("account", "settings", "library")) load(refresh = true)
+        if (route.value.kind !in setOf("account", "settings", "library")) {
+            val home = route.value.kind == "home"
+            if (home && wasAuthenticated && account.value.authenticated && pageJob?.isActive == true && page.value.loaded) return@accountAction
+            load(refresh = !home, keepContent = home)
+        }
     }
 
     private fun accountAction(block: suspend () -> Unit): Job? {

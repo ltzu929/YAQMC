@@ -60,11 +60,12 @@ val nativeDirectory =
   prebuiltCore?.let { file(it) } ?: layout.buildDirectory.dir("generated/jniLibs").get().asFile
 
 android {
+  // Keep source and JNI names stable; applicationId is the installed app identity.
   namespace = "org.yaqmc.android"
   compileSdk = 36
   ndkVersion = "28.2.13676358"
   defaultConfig {
-    applicationId = "org.yaqmc.android"
+    applicationId = "top.ltzu.yaqmc"
     minSdk = 26
     targetSdk = 36
     versionCode = appVersionCode

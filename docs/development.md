@@ -58,7 +58,7 @@
 
 需要手机体验时给出版本、安装包位置、具体操作和期望结果；使用手机测试前说明预计占用时间、辅助应用和临时设备设置。短测试集中完成，长期后台等观察结合正常使用安排，临时设置按约定恢复。
 
-常规更新沿用 `org.yaqmc.android` 与既有签名，通过覆盖安装保留登录和本地数据。真实账号写入、卸载应用、更换应用身份和数据迁移另需明确授权。
+从 `0.1.6` 起使用 `top.ltzu.yaqmc` 和既有个人签名，作为新应用安装，不迁移旧版登录和本地数据；此后常规更新沿用该包名和签名，通过覆盖安装保留数据。真实账号写入、卸载应用、更换应用身份和数据迁移另需明确授权。
 
 候选包可来自本轮未提交工作区，须记录基础提交及改动快照，标清候选用途；正式发布从审核后提交的干净源码重建。候选验收后的功能调整补充相关验证和验收。
 
@@ -89,7 +89,7 @@
 ./gradlew :nativeApp:assembleDebug
 ```
 
-Windows PowerShell 使用 `./gradlew.bat`。输出为 `nativeApp/build/outputs/apk/debug/nativeApp-debug.apk`，包名 `org.yaqmc.android.debug`，使用 Android SDK 的本机调试签名，可以与发布版并装。
+Windows PowerShell 使用 `./gradlew.bat`。输出为 `nativeApp/build/outputs/apk/debug/nativeApp-debug.apk`，包名 `top.ltzu.yaqmc.debug`，使用 Android SDK 的本机调试签名，可以与发布版并装。
 
 Gradle 从根目录 `package.json` 读取版本，从 Git 读取源码提交，并自动调用 cargo-ndk 构建、打包当前 ABI 的 Rust Core。只改 Kotlin 时复用未变化的 Core；执行 Clean 后会重新编译。Studio 构建不依赖 npm，也无需手动复制 `.so`。
 
@@ -102,9 +102,9 @@ Gradle 从根目录 `package.json` 读取版本，从 Git 读取源码提交，�
 | 模拟器离线界面测试 | 在 x86_64 模拟器执行隔离的界面回归   |
 | 打包 Release APK   | 使用维护者既有签名生成正式 APK       |
 
-需要查看接近发布版的优化结果时可执行 `:nativeApp:assembleBenchmark`，使用相同源码与 release 优化配置、本机调试签名和独立包名 `org.yaqmc.android.benchmark`。输出在 `nativeApp/build/outputs/apk/benchmark/`，无需发行者私钥。
+需要查看接近发布版的优化结果时可执行 `:nativeApp:assembleBenchmark`，使用相同源码与 release 优化配置、本机调试签名和独立包名 `top.ltzu.yaqmc.benchmark`。输出在 `nativeApp/build/outputs/apk/benchmark/`，无需发行者私钥。
 
-正式版 `org.yaqmc.android` 的构建会检查既有签名指纹，以保证原用户能够覆盖升级。维护者按 [keystore.properties.example](../apps/android/keystore.properties.example)配置被忽略的 `keystore.properties`，执行 `:nativeApp:assembleRelease`。自行构建与测试使用 debug 或 benchmark 即可；独立发行 fork 时应配置自己的应用身份、签名与相应校验。
+正式版 `top.ltzu.yaqmc` 的构建会检查既有个人签名指纹，以保证新包名版本之间可以覆盖升级。维护者按 [keystore.properties.example](../apps/android/keystore.properties.example)配置被忽略的 `keystore.properties`，执行 `:nativeApp:assembleRelease`。自行构建与测试使用 debug 或 benchmark 即可；独立发行 fork 时应配置自己的应用身份、签名与相应校验。
 
 从不含 `.git` 的源码归档构建时，增加 `-Pyaqmc.buildCommit=<归档对应的完整提交 SHA>`，或设置 `YAQMC_BUILD_COMMIT`。提交号为 40 位小写十六进制；普通 Git 克隆无需设置。
 
@@ -192,7 +192,7 @@ npm run provenance:enforce
 
 | 材料       | 内容与去向                                                          |
 | ---------- | ------------------------------------------------------------------- |
-| 安装包     | 沿用原包名、签名且版本正确的 APK，作为用户下载附件                  |
+| 安装包     | 使用本版确认的包名、签名且版本正确的 APK，作为用户下载附件          |
 | 发布说明   | 本版新增功能、修复内容、必要的安装说明和反馈入口，写在 Release 页面 |
 | 源码与记录 | 对应源码提交、许可证资料和本次构建记录，已有材料按变化更新          |
 
@@ -202,7 +202,7 @@ npm run provenance:enforce
 
 1. **准备版本。** 明确本次发布范围和通道，完成体验验收与必要检查；同步 `package.json`、`package-lock.json` 及受影响的公开说明。版本格式为 `x.y.z` 或 `x.y.z-alpha.n` / `beta.n` / `rc.n`，同一基础版本按 `alpha < beta < rc < 正式版` 递增。核对工程生成的 versionCode 高于之前交付的安装包，标签使用 `v<version>`。
 2. **审核并固定源码。** 用户审核通过后提交、推送已审内容；读取对应提交的 CI 最终结果。未解决的相关检查失败应先修复，新增功能改动回到实现和验收环节。
-3. **构建正式安装包。** 从该干净提交执行签名 release 构建，保留版本、完整提交号和构建记录。包名、原签名和凭据路径保持连续；签名缺失或不匹配时修正配置后再交付。
+3. **构建正式安装包。** 从该干净提交执行签名 release 构建，保留版本、完整提交号和构建记录。按本版约定核对包名和签名，常规更新保持连续；签名缺失或不匹配时修正配置后再交付。
 4. **整理产物。** 复用构建脚本的版本、包名和签名校验结果，保存 APK、对应源码提交号和构建记录；源码与许可资料按本次变化更新。
 5. **整理用户发布页。** 标签指向已核对的提交，写好简短发布说明并准备 APK。预发布版本使用 Pre-release，正式版按授权设置发布状态；应用发布须有明确授权。
 6. **执行发布并交接。** 推送版本标签，上传 APK 并完成 Release 发布，向用户交付版本、发布链接及本机材料位置。发布后的检查由用户手动完成。

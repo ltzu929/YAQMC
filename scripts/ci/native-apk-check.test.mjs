@@ -10,7 +10,7 @@ import {
 } from './native-apk-check.mjs';
 
 const version = { versionName: '0.1.1', versionCode: 1_019_000 };
-const packageLine = "package: name='org.yaqmc.android' versionCode='1019000' versionName='0.1.1'";
+const packageLine = "package: name='top.ltzu.yaqmc' versionCode='1019000' versionName='0.1.1'";
 const badging = packageLine + "\nsdkVersion:'26'\nnative-code: 'arm64-v8a'\n";
 const files = [
   'AndroidManifest.xml',
@@ -24,7 +24,7 @@ const signature = 'Verifies\nSigner #1 certificate SHA-256 digest: ' + certifica
 test('accepts only a correctly identified native APK with the packaged ARM64 Core', () => {
   const identity = assertNativeApkContents({ badging, files, variant: 'release', version });
   assert.deepEqual(identity, {
-    packageName: 'org.yaqmc.android',
+    packageName: 'top.ltzu.yaqmc',
     versionCode: 1_019_000,
     versionName: '0.1.1',
   });
@@ -32,7 +32,8 @@ test('accepts only a correctly identified native APK with the packaged ARM64 Cor
 
 test('rejects a wrong package, version, or build variant', () => {
   for (const invalid of [
-    { badging: badging.replace('org.yaqmc.android', 'org.yaqmc.android.nativeui') },
+    { badging: badging.replace('top.ltzu.yaqmc', 'top.ltzu.yaqmc.nativeui') },
+    { badging: badging.replace('top.ltzu.yaqmc', 'org.yaqmc.android') },
     { badging: badging.replace('1019000', '1') },
     { badging: badging.replace("versionName='0.1.1'", "versionName='0.1.1-debug'") },
     { badging: 'garbled' },
@@ -146,7 +147,7 @@ test('fails closed for a missing verification tool or failed signature command',
 test('development APKs use explicit separate identities', () => {
   for (const variant of ['debug', 'benchmark']) {
     const developmentBadging = badging
-      .replace("name='org.yaqmc.android'", `name='org.yaqmc.android.${variant}'`)
+      .replace("name='top.ltzu.yaqmc'", `name='top.ltzu.yaqmc.${variant}'`)
       .replace("versionName='0.1.1'", `versionName='0.1.1-native-${variant}'`);
     assertNativeApkContents({ badging: developmentBadging, files, variant, version });
     assert.throws(
